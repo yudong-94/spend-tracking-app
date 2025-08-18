@@ -62,6 +62,11 @@ const Transactions: React.FC = () => {
     return matchesSearch && matchesType && matchesCategory;
   });
 
+    // Sort transactions by date (newest first)
+  const sortedTransactions = [...filteredTransactions].sort((a, b) => {
+    return new Date(b.date).getTime() - new Date(a.date).getTime();
+  });
+  
   // Get unique categories for filter
   const categories = Array.from(new Set(transactions.map(t => t.category))).sort();
 
@@ -132,19 +137,19 @@ const Transactions: React.FC = () => {
         <div className="card-header">
           <div className="flex justify-between items-center">
             <h3 className="text-lg font-medium text-gray-900">
-              {filteredTransactions.length} Transaction{filteredTransactions.length !== 1 ? 's' : ''}
+              {sortedTransactions.length} Transaction{sortedTransactions.length !== 1 ? 's' : ''}
             </h3>
             <div className="text-sm text-gray-500">
               Total: {formatCurrency(
-                filteredTransactions.reduce((sum, t) => sum + t.amount, 0)
+                sortedTransactions.reduce((sum, t) => sum + t.amount, 0)
               )}
             </div>
           </div>
         </div>
         <div className="card-body p-0">
-          {filteredTransactions.length > 0 ? (
+          {sortedTransactions.length > 0 ? (
             <div className="divide-y divide-gray-200">
-              {filteredTransactions.map((transaction) => (
+              {sortedTransactions.map((transaction) => (
                 <div key={transaction.id} className="p-4 hover:bg-gray-50">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-4">
