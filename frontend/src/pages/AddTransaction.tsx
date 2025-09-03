@@ -5,28 +5,7 @@ import { Plus, CheckCircle, AlertCircle } from 'lucide-react';
 import { apiService } from '../services/api';
 import { Transaction } from '@spend-tracking/shared';
 import TransactionForm from '../components/TransactionForm';
-import { createTransaction, Transaction } from "@/lib/api";
-
-export default function AddTransaction() {
-  const [form, setForm] = useState<Transaction>({
-    Date: new Date().toISOString().slice(0, 10),
-    Type: "Expense",
-    Category: "",
-    Amount: 0,
-    Account: "",
-    Description: "",
-  });
-
-  const onSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    await createTransaction(form);
-    alert("Saved!");
-    // optionally reset or navigate
-  };
-
-  // ...your form UI; call setForm on changes
-  return <form onSubmit={onSubmit}>{/* fields */}</form>;
-}
+ 
 
 const AddTransaction: React.FC = () => {
   const navigate = useNavigate();
