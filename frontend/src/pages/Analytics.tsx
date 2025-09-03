@@ -4,6 +4,7 @@ import { fmtUSD } from "@/lib/format";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from "recharts";
+import { COL } from "@/lib/colors"
 
 type Tx = { date: string; type: "income" | "expense"; category: string; amount: number };
 type Point = { month: string; income: number; expense: number; net: number };
@@ -77,7 +78,7 @@ export default function Analytics() {
               <XAxis dataKey="month" />
               <YAxis tickFormatter={(v: number) => fmtUSD(v)} />
               <Tooltip formatter={(v: any) => fmtUSD(Number(v))} />
-              <Bar dataKey="income" />
+              <Bar dataKey="income" fill={COL.income} radius={[4,4,0,0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -93,7 +94,7 @@ export default function Analytics() {
               <XAxis dataKey="month" />
               <YAxis tickFormatter={(v: number) => fmtUSD(v)} />
               <Tooltip formatter={(v: any) => fmtUSD(Number(v))} />
-              <Bar dataKey="expense" />
+              <Bar dataKey="expense" fill={COL.expense} radius={[4,4,0,0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -109,7 +110,7 @@ export default function Analytics() {
               <XAxis dataKey="month" />
               <YAxis tickFormatter={(v: number) => fmtUSD(v)} />
               <Tooltip formatter={(v: any) => fmtUSD(Number(v))} />
-              <Bar dataKey="net" />
+              <Bar dataKey="net" fill={COL.net} radius={[4,4,0,0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>

@@ -4,6 +4,7 @@ import { fmtUSD } from "@/lib/format";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from "recharts";
+import { COL } from "@/lib/colors";
 
 type Summary = { totalIncome: number; totalExpense: number; netCashFlow: number };
 type CatAmt = { category: string; amount: number };
@@ -18,6 +19,11 @@ export default function Dashboard() {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [incomeCats, setIncomeCats] = useState<CatAmt[]>([]);
   const [expenseCats, setExpenseCats] = useState<CatAmt[]>([]);
+  const net = summary?.netCashFlow ?? 0;
+  const netClass =
+    net > 0 ? "text-emerald-600"
+    : net < 0 ? "text-rose-600"
+    : "text-slate-600";
 
   useEffect(() => {
     const period = monthBounds();
@@ -29,9 +35,24 @@ export default function Dashboard() {
   return (
     <div className="space-y-6">
       <section className="grid gap-3 sm:grid-cols-3">
-        <div>Income: <strong>{fmtUSD(summary?.totalIncome ?? 0)}</strong></div>
-        <div>Expense: <strong>{fmtUSD(summary?.totalExpense ?? 0)}</strong></div>
-        <div>Net: <strong>{fmtUSD(summary?.netCashFlow ?? 0)}</strong></div>
+        <div>
+          Income:{" "}
+          <strong className="text-emerald-600">
+            {fmtUSD(summary?.totalIncome ?? 0)}
+          </strong>
+        </div>
+        <div>
+          Expense:{" "}
+          <strong className="text-rose-600">
+            {fmtUSD(summary?.totalExpense ?? 0)}
+          </strong>
+        </div>
+        <div>
+          Net:{" "}
+          <strong className={netClass}>
+            {fmtUSD(net)}
+          </strong>
+        </div>
       </section>
 
       <section className="grid gap-6 lg:grid-cols-2">
@@ -51,7 +72,7 @@ export default function Dashboard() {
                   <XAxis dataKey="name" tick={{ fontSize: 12 }} interval={0} angle={-20} textAnchor="end" height={50}/>
                   <YAxis tickFormatter={(v: number) => fmtUSD(v)} />
                   <Tooltip formatter={(v: any) => fmtUSD(Number(v))} />
-                  <Bar dataKey="amount" />
+                  <Bar dataKey="amount" fill={COL.income} radius={[4,4,0,0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -74,7 +95,7 @@ export default function Dashboard() {
                   <XAxis dataKey="name" tick={{ fontSize: 12 }} interval={0} angle={-20} textAnchor="end" height={50}/>
                   <YAxis tickFormatter={(v: number) => fmtUSD(v)} />
                   <Tooltip formatter={(v: any) => fmtUSD(Number(v))} />
-                  <Bar dataKey="amount" />
+                  <Bar dataKey="amount" fill={COL.expense} radius={[4,4,0,0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
