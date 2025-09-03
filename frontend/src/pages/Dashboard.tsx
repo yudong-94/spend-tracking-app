@@ -11,6 +11,37 @@ import {
 } from 'lucide-react';
 import { apiService } from '../services/api';
 import { formatCurrency, formatDate, getDefaultPeriodFilter } from '@spend-tracking/shared';
+import { useEffect, useState } from "react";
+import { getSummary, getBreakdown } from "@/lib/api";
+
+const monthBounds = (d = new Date()) => {
+  const start = new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0,10);
+  const end = new Date(d.getFullYear(), d.getMonth()+1, 0).toISOString().slice(0,10);
+  return { start, end };
+};
+
+export default function Dashboard() {
+  const [summary, setSummary] = useState<{ totalIncome: number; totalExpense: number; netCashFlow: number }>();
+  const [topExpenses, setTopExpenses] = useState<Array<{ category: string; amount: number }>>([]);
+
+  useEffect(() => {
+    const period = monthBounds();
+    getSummary(period).then(setSummary).catch(console.error);
+    getBreakdown("expense", period).then(setTopExpenses).catch(console.error);
+  }, []);
+
+  return (
+    <div>
+      <section className="grid gap-3 sm:grid-cols-3">
+        <div>Income: {summary?.totalIncome?.toLocaleString()}</div>
+        <div>Expense: {summary?.totalExpense?.toLocaleString()}</div>
+        <div>Net: {summary?.netCashFlow?.toLocaleString()}</div>
+      </section>
+      {/* pass topExpenses to your chart */}
+    </div>
+  );
+}
+
 
 const Dashboard: React.FC = () => {
   const defaultPeriod = getDefaultPeriodFilter();
@@ -254,3 +285,4 @@ const Dashboard: React.FC = () => {
 };
 
 export default Dashboard;
+
