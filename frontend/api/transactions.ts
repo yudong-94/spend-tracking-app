@@ -1,34 +1,93 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { readTable, appendRow } from "./_lib/sheets.js";
 
+type Tx = {
+  id?: string;
+  date: string;             // YYYY-MM-DD
+  type: "income" | "expense";
+  category: string;
+  description?: string;
+  amount: number;
+};
+
+// helper: parse amount safely
+const parseAmount = (v: any) =>
+  typeof v === "number" ? v : v ? Number(String(v).replace(/[^0-9.-]/g, "")) || 0 : 0;
+
+// helper: convert Google serial date or strings to epoch ms
+const toMillis = (v: any) => {
+  if (typeof v === "number") return new Date(Math.round((v - 25569) * 86400 * 1000)).getTime();
+  const t = Date.parse(String(v || ""));
+  return Number.isFinite(t) ? t : NaN;
+};
+
+// normalize any header casing to a canonical Tx
+const normalize = (r: Record<string, any>): Tx => {
+  const get = (k: string) => r[k] ?? r[k.toLowerCase()] ?? r[k.toUpperCase()];
+  const rawDate = get("Date") ?? get("Created At") ?? "";
+  const ms = toMillis(rawDate);
+  const date = Number.isFinite(ms) ? new Date(ms).toISOString().slice(0, 10) : "";
+
+  const rawType = String(get("Type") ?? "").toLowerCase();
+  const type = rawType === "income" ? "income" : "expense";
+
+  return {
+    id: String(get("ID") ?? ""),
+    date,
+    type,
+    category: String(get("Category") ?? "Uncategorized"),
+    description: String(get("Description") ?? ""),
+    amount: parseAmount(get("Amount"))
+  };
+};
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     if (req.method === "GET") {
-      // Optional date filtering: ?start=YYYY-MM-DD&end=YYYY-MM-DD (uses 'Date' column)
-      const rows = await readTable();
-      const { start, end } = req.query as { start?: string; end?: string };
-      const toTime = (d?: string) => (d ? new Date(d).getTime() : undefined);
-      const startMs = toTime(start);
-      const endMs = toTime(end);
-      const filtered = rows.filter((r) => {
-        const t = new Date(r["Date"] || r["date"]).getTime();
-        if (Number.isNaN(t)) return true;
-        if (startMs && t < startMs) return false;
-        if (endMs && t > endMs) return false;
-        return true;
-      });
-      return res.status(200).json(filtered);
+      const { start, end, type, category, q } = (req.query || {}) as {
+        start?: string; end?: string; type?: string; category?: string; q?: string;
+      };
+
+      const startMs = start ? Date.parse(start) : undefined;
+      const endMs = end ? Date.parse(end) : undefined;
+      const typeFilter = type ? String(type).toLowerCase() : undefined;
+      const catFilter = category ? String(category).toLowerCase() : undefined;
+      const qStr = q ? String(q).toLowerCase() : "";
+
+      const raw = await readTable();
+      const rows = raw
+        .map(normalize)
+        .filter(tx => {
+          if (startMs && Date.parse(tx.date) < startMs) return false;
+          if (endMs && Date.parse(tx.date) > endMs) return false;
+          if (typeFilter && tx.type !== typeFilter) return false;
+          if (catFilter && tx.category.toLowerCase() !== catFilter) return false;
+          if (qStr && !(tx.category + " " + (tx.description || "")).toLowerCase().includes(qStr)) return false;
+          return true;
+        })
+        .sort((a, b) => b.date.localeCompare(a.date)); // newest first
+
+      return res.status(200).json(rows);
     }
+
     if (req.method === "POST") {
-      // Expecting keys matching your header row, e.g.:
-      // { Date, Type, Category, Amount, Account, Description }
+      // Accept canonical keys from client and map to your Sheet headers by name.
       const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
-      if (!body?.Date || !body?.Type || !body?.Category || body?.Amount == null) {
-        return res.status(400).json({ error: "Missing required fields" });
-      }
-      await appendRow(body);
+      // Convert back to sheet’s header names:
+      const toSheetRow: Record<string, any> = {
+        ID: body.id || "",
+        Date: body.date,
+        Amount: body.amount,
+        Type: body.type === "income" ? "income" : "expense",
+        Category: body.category,
+        Description: body.description || "",
+        "Created At": new Date().toLocaleString(),
+        "Updated At": new Date().toLocaleString()
+      };
+      await appendRow(toSheetRow);
       return res.status(201).json({ ok: true });
     }
+
     res.setHeader("Allow", "GET, POST");
     return res.status(405).send("Method Not Allowed");
   } catch (e: any) {
