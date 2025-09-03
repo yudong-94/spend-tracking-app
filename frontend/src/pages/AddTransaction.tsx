@@ -1,120 +1,86 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useMutation, useQueryClient } from 'react-query';
-import { Plus, CheckCircle, AlertCircle } from 'lucide-react';
-import { apiService } from '../services/api';
-import { Transaction } from '@spend-tracking/shared';
-import TransactionForm from '../components/TransactionForm';
- 
+// frontend/src/pages/AddTransaction.tsx
+import { useState } from "react";
+import { createTransaction, Transaction } from "@/lib/api";
 
-const AddTransaction: React.FC = () => {
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
-  const [isSuccess, setIsSuccess] = useState(false);
-  const [errorMessage, setErrorMessage] = useState('');
+const makeDefault = (): Transaction => ({
+  Date: new Date().toISOString().slice(0, 10), // YYYY-MM-DD
+  Type: "Expense",
+  Category: "",
+  Amount: 0,
+  Account: "",
+  Description: "",
+});
 
-  const addTransactionMutation = useMutation(
-    (transaction: Omit<Transaction, 'id' | 'createdAt' | 'updatedAt'>) =>
-      apiService.addTransaction(transaction),
-    {
-      onSuccess: (data) => {
-        if (data.success) {
-          setIsSuccess(true);
-          // Invalidate and refetch queries
-          queryClient.invalidateQueries(['dashboard-analytics']);
-          queryClient.invalidateQueries(['recent-transactions']);
-          queryClient.invalidateQueries(['transactions']);
-          
-          // Redirect after a short delay
-          setTimeout(() => {
-            navigate('/');
-          }, 2000);
-        } else {
-          setErrorMessage(data.error || 'Failed to add transaction');
-        }
-      },
-      onError: (error: any) => {
-        setErrorMessage(error.message || 'An unexpected error occurred');
-      },
+export default function AddTransaction() {
+  const [form, setForm] = useState<Transaction>(makeDefault());
+  const [saving, setSaving] = useState(false);
+  const canSubmit =
+    form.Date && form.Type && form.Category && !Number.isNaN(Number(form.Amount));
+
+  const onChange =
+    (field: keyof Transaction) =>
+    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+      const v = e.target.value;
+      setForm((f) => ({
+        ...f,
+        [field]: field === "Amount" ? Number(v) : v,
+      }));
+    };
+
+  const onSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!canSubmit) return;
+    setSaving(true);
+    try {
+      await createTransaction(form);
+      setForm(makeDefault());
+      alert("Saved!");
+    } catch (err) {
+      console.error(err);
+      alert("Failed to save. See console.");
+    } finally {
+      setSaving(false);
     }
-  );
-
-  const handleSubmit = (transaction: Omit<Transaction, 'id' | 'createdAt' | 'updatedAt'>) => {
-    setErrorMessage('');
-    addTransactionMutation.mutate(transaction);
   };
-
-  const handleCancel = () => {
-    navigate('/');
-  };
-
-  if (isSuccess) {
-    return (
-      <div className="max-w-2xl mx-auto">
-        <div className="text-center py-12">
-          <CheckCircle className="mx-auto h-16 w-16 text-success-600 mb-4" />
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">
-            Transaction Added Successfully!
-          </h1>
-          <p className="text-gray-600 mb-6">
-            Your transaction has been saved to your Google Sheets.
-          </p>
-          <div className="text-sm text-gray-500">
-            Redirecting to dashboard...
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
-    <div className="max-w-2xl mx-auto">
-      {/* Page Header */}
-      <div className="mb-8">
-        <div className="flex items-center mb-2">
-          <Plus className="h-8 w-8 text-primary-600 mr-3" />
-          <h1 className="text-2xl font-bold text-gray-900">Add New Transaction</h1>
-        </div>
-        <p className="text-gray-600">
-          Record a new income or expense to track your spending.
-        </p>
+    <form onSubmit={onSubmit} className="space-y-3 max-w-md">
+      <div className="grid gap-1">
+        <label className="text-sm">Date</label>
+        <input type="date" value={form.Date} onChange={onChange("Date")} className="border p-2 rounded" required />
       </div>
 
-      {/* Error Message */}
-      {errorMessage && (
-        <div className="mb-6 p-4 bg-danger-50 border border-danger-200 rounded-md">
-          <div className="flex">
-            <AlertCircle className="h-5 w-5 text-danger-400 mr-2" />
-            <div className="text-sm text-danger-700">
-              {errorMessage}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Transaction Form */}
-      <div className="card">
-        <div className="card-body">
-          <TransactionForm
-            onSubmit={handleSubmit}
-            onCancel={handleCancel}
-            isLoading={addTransactionMutation.isLoading}
-          />
-        </div>
+      <div className="grid gap-1">
+        <label className="text-sm">Type</label>
+        <select value={form.Type} onChange={onChange("Type")} className="border p-2 rounded">
+          <option value="Income">Income</option>
+          <option value="Expense">Expense</option>
+        </select>
       </div>
 
-      {/* Help Text */}
-      <div className="mt-6 text-sm text-gray-500">
-        <p className="mb-2">
-          <strong>Tip:</strong> Be specific with categories to get better insights into your spending patterns.
-        </p>
-        <p>
-          All transactions are automatically synced with your Google Sheets for easy access and backup.
-        </p>
+      <div className="grid gap-1">
+        <label className="text-sm">Category</label>
+        <input value={form.Category} onChange={onChange("Category")} className="border p-2 rounded" placeholder="Groceries, Rent, Salary..." required />
       </div>
-    </div>
+
+      <div className="grid gap-1">
+        <label className="text-sm">Amount</label>
+        <input type="number" step="0.01" value={form.Amount} onChange={onChange("Amount")} className="border p-2 rounded" required />
+      </div>
+
+      <div className="grid gap-1">
+        <label className="text-sm">Account (optional)</label>
+        <input value={form.Account ?? ""} onChange={onChange("Account")} className="border p-2 rounded" />
+      </div>
+
+      <div className="grid gap-1">
+        <label className="text-sm">Description (optional)</label>
+        <textarea value={form.Description ?? ""} onChange={onChange("Description")} className="border p-2 rounded" rows={2} />
+      </div>
+
+      <button type="submit" disabled={!canSubmit || saving} className="px-4 py-2 rounded bg-sky-600 text-white disabled:opacity-50">
+        {saving ? "Saving…" : "Add"}
+      </button>
+    </form>
   );
-};
-
-export default AddTransaction;
-
+}
