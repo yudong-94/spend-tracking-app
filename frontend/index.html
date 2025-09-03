@@ -8,9 +8,18 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#0ea5e9" />
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    <script>
+      if ("serviceWorker" in navigator) {
+        window.addEventListener("load", () => {
+          navigator.serviceWorker.register("/sw.js").catch(console.error);
+        });
+      }
+    </script>
   </body>
 </html>

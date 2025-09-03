@@ -5,6 +5,7 @@ import { Plus, CheckCircle, AlertCircle } from 'lucide-react';
 import { apiService } from '../services/api';
 import { Transaction } from '@spend-tracking/shared';
 import TransactionForm from '../components/TransactionForm';
+ 
 
 const AddTransaction: React.FC = () => {
   const navigate = useNavigate();
@@ -116,3 +117,4 @@ const AddTransaction: React.FC = () => {
 };
 
 export default AddTransaction;
+

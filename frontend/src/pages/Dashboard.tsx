@@ -11,6 +11,15 @@ import {
 } from 'lucide-react';
 import { apiService } from '../services/api';
 import { formatCurrency, formatDate, getDefaultPeriodFilter } from '@spend-tracking/shared';
+ 
+
+const monthBounds = (d = new Date()) => {
+  const start = new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0,10);
+  const end = new Date(d.getFullYear(), d.getMonth()+1, 0).toISOString().slice(0,10);
+  return { start, end };
+};
+
+
 
 const Dashboard: React.FC = () => {
   const defaultPeriod = getDefaultPeriodFilter();
@@ -254,3 +263,4 @@ const Dashboard: React.FC = () => {
 };
 
 export default Dashboard;
+
