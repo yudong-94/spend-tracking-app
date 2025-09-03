@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { readTable, appendRow } from "./_lib/sheets";
+import { readTable, appendRow } from "./_lib/sheets.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
