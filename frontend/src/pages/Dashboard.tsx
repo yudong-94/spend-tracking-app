@@ -1,10 +1,11 @@
+// frontend/src/pages/Dashboard.tsx
 import { useEffect, useState } from "react";
 import { getSummary, getBreakdown } from "@/lib/api";
 import { fmtUSD } from "@/lib/format";
+import { COL } from "@/lib/colors";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from "recharts";
-import { COL } from "@/lib/colors";
 
 type Summary = { totalIncome: number; totalExpense: number; netCashFlow: number };
 type CatAmt = { category: string; amount: number };
@@ -15,93 +16,145 @@ const monthBounds = (d = new Date()) => {
   return { start, end };
 };
 
-export default function Dashboard() {
-  const [summary, setSummary] = useState<Summary | null>(null);
-  const [incomeCats, setIncomeCats] = useState<CatAmt[]>([]);
-  const [expenseCats, setExpenseCats] = useState<CatAmt[]>([]);
+const ytdBounds = () => {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), 0, 1).toISOString().slice(0, 10);
+  const end = now.toISOString().slice(0, 10); // year-to-date (today)
+  return { start, end };
+};
+
+function KPIRow({ summary }: { summary: Summary | null }) {
   const net = summary?.netCashFlow ?? 0;
   const netClass =
-    net > 0 ? "text-emerald-600"
-    : net < 0 ? "text-rose-600"
-    : "text-slate-600";
+    net > 0 ? "text-emerald-600" : net < 0 ? "text-rose-600" : "text-slate-600";
+  return (
+    <section className="grid gap-3 sm:grid-cols-3">
+      <div>
+        Income:{" "}
+        <strong className="text-emerald-600">{fmtUSD(summary?.totalIncome ?? 0)}</strong>
+      </div>
+      <div>
+        Expense:{" "}
+        <strong className="text-rose-600">{fmtUSD(summary?.totalExpense ?? 0)}</strong>
+      </div>
+      <div>
+        Net: <strong className={netClass}>{fmtUSD(net)}</strong>
+      </div>
+    </section>
+  );
+}
+
+function CategoryChart({
+  title,
+  data,
+  color,
+}: {
+  title: string;
+  data: CatAmt[];
+  color: string;
+}) {
+  return (
+    <div className="p-4 rounded-lg border bg-white">
+      <h3 className="font-medium mb-2">{title}</h3>
+      {data.length === 0 ? (
+        <div className="text-sm text-neutral-500">No data yet.</div>
+      ) : (
+        <div className="h-64">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart
+              data={data.map((x) => ({ name: x.category, amount: x.amount }))}
+              margin={{ left: 8, right: 8, top: 8, bottom: 8 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis
+                dataKey="name"
+                tick={{ fontSize: 12 }}
+                interval={0}
+                angle={-20}
+                textAnchor="end"
+                height={50}
+              />
+              <YAxis tickFormatter={(v: number) => fmtUSD(Number(v))} />
+              <Tooltip formatter={(v: any) => fmtUSD(Number(v))} />
+              <Bar dataKey="amount" fill={color} radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function Dashboard() {
+  // This Month
+  const [mSummary, setMSummary] = useState<Summary | null>(null);
+  const [mIncomeCats, setMIncomeCats] = useState<CatAmt[]>([]);
+  const [mExpenseCats, setMExpenseCats] = useState<CatAmt[]>([]);
+
+  // This Year (YTD)
+  const [ySummary, setYSummary] = useState<Summary | null>(null);
+  const [yIncomeCats, setYIncomeCats] = useState<CatAmt[]>([]);
+  const [yExpenseCats, setYExpenseCats] = useState<CatAmt[]>([]);
 
   useEffect(() => {
-    const period = monthBounds();
-    getSummary(period).then(setSummary).catch(console.error);
-    getBreakdown("income", period).then(setIncomeCats).catch(console.error);
-    getBreakdown("expense", period).then(setExpenseCats).catch(console.error);
+    const m = monthBounds();
+    const y = ytdBounds();
+    Promise.all([
+      getSummary(m),
+      getBreakdown("income", m),
+      getBreakdown("expense", m),
+      getSummary(y),
+      getBreakdown("income", y),
+      getBreakdown("expense", y),
+    ])
+      .then(([sm, icm, ecm, sy, icy, ecy]) => {
+        setMSummary(sm);
+        setMIncomeCats(icm);
+        setMExpenseCats(ecm);
+        setYSummary(sy);
+        setYIncomeCats(icy);
+        setYExpenseCats(ecy);
+      })
+      .catch(console.error);
   }, []);
 
   return (
-    <div className="space-y-6">
-      <section className="grid gap-3 sm:grid-cols-3">
-        <div>
-          Income:{" "}
-          <strong className="text-emerald-600">
-            {fmtUSD(summary?.totalIncome ?? 0)}
-          </strong>
-        </div>
-        <div>
-          Expense:{" "}
-          <strong className="text-rose-600">
-            {fmtUSD(summary?.totalExpense ?? 0)}
-          </strong>
-        </div>
-        <div>
-          Net:{" "}
-          <strong className={netClass}>
-            {fmtUSD(net)}
-          </strong>
-        </div>
-      </section>
+    <div className="space-y-8">
+      {/* This Month */}
+      <div className="space-y-4">
+        <h2 className="text-lg font-semibold">This Month</h2>
+        <KPIRow summary={mSummary} />
+        <section className="grid gap-6 lg:grid-cols-2">
+          <CategoryChart
+            title="Income by category (this month)"
+            data={mIncomeCats}
+            color={COL.income}
+          />
+          <CategoryChart
+            title="Expense by category (this month)"
+            data={mExpenseCats}
+            color={COL.expense}
+          />
+        </section>
+      </div>
 
-      <section className="grid gap-6 lg:grid-cols-2">
-        {/* Income categories */}
-        <div className="p-4 rounded-lg border bg-white">
-          <h3 className="font-medium mb-2">Income by category (this month)</h3>
-          {incomeCats.length === 0 ? (
-            <div className="text-sm text-neutral-500">No income yet.</div>
-          ) : (
-            <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={incomeCats.map(x => ({ name: x.category, amount: x.amount }))}
-                  margin={{ left: 8, right: 8, top: 8, bottom: 8 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" tick={{ fontSize: 12 }} interval={0} angle={-20} textAnchor="end" height={50}/>
-                  <YAxis tickFormatter={(v: number) => fmtUSD(v)} />
-                  <Tooltip formatter={(v: any) => fmtUSD(Number(v))} />
-                  <Bar dataKey="amount" fill={COL.income} radius={[4,4,0,0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          )}
-        </div>
-
-        {/* Expense categories */}
-        <div className="p-4 rounded-lg border bg-white">
-          <h3 className="font-medium mb-2">Expense by category (this month)</h3>
-          {expenseCats.length === 0 ? (
-            <div className="text-sm text-neutral-500">No expenses yet.</div>
-          ) : (
-            <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={expenseCats.map(x => ({ name: x.category, amount: x.amount }))}
-                  margin={{ left: 8, right: 8, top: 8, bottom: 8 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" tick={{ fontSize: 12 }} interval={0} angle={-20} textAnchor="end" height={50}/>
-                  <YAxis tickFormatter={(v: number) => fmtUSD(v)} />
-                  <Tooltip formatter={(v: any) => fmtUSD(Number(v))} />
-                  <Bar dataKey="amount" fill={COL.expense} radius={[4,4,0,0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          )}
-        </div>
-      </section>
+      {/* This Year (YTD) */}
+      <div className="space-y-4">
+        <h2 className="text-lg font-semibold">This Year</h2>
+        <KPIRow summary={ySummary} />
+        <section className="grid gap-6 lg:grid-cols-2">
+          <CategoryChart
+            title="Income by category (YTD)"
+            data={yIncomeCats}
+            color={COL.income}
+          />
+          <CategoryChart
+            title="Expense by category (YTD)"
+            data={yExpenseCats}
+            color={COL.expense}
+          />
+        </section>
+      </div>
     </div>
   );
 }
