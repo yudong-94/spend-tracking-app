@@ -65,7 +65,14 @@ export default function AddTransaction() {
 
       <div className="grid gap-1">
         <label className="text-sm">Amount</label>
-        <input type="number" step="0.01" value={form.Amount} onChange={onChange("Amount")} className="border p-2 rounded" required />
+        <input
+          type="text"
+          inputMode="decimal"
+          pattern="[0-9]*[.,]?[0-9]*"
+          value={form.Amount}
+          onChange={(e)=> setForm(f=>({...f, Amount: Number(e.target.value.replace(/[^0-9.]/g,''))||0}))}
+          className="border p-2 rounded"
+        />
       </div>
 
       <div className="grid gap-1">
