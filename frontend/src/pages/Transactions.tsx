@@ -1,38 +1,37 @@
-import { useEffect, useMemo, useState } from "react";
-import { listTransactions } from "@/lib/api";
-
-type Tx = { id?: string; date: string; type: "income"|"expense"; category: string; description?: string; amount: number };
+import { useMemo, useState } from "react";
+import { useDataCache, Tx } from "@/state/data-cache";
+import RefreshButton from "@/components/RefreshButton";
 
 export default function TransactionsPage() {
-  const [rows, setRows] = useState<Tx[]>([]);
-  const [loading, setLoading] = useState(false);
+  const { txns: rows, isLoading: loading } = useDataCache();
   const [q, setQ] = useState("");
   const [type, setType] = useState<"" | "income" | "expense">("");
   const [category, setCategory] = useState("");
 
-  useEffect(() => {
-    setLoading(true);
-    listTransactions({}) // server returns normalized rows
-      .then(setRows)
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, []);
+  // no fetching here – data comes from cache
 
-  const filtered = useMemo(() => {
-    return rows.filter(r => {
-      if (type && r.type !== type) return false;
-      if (category && r.category !== category) return false;
-      if (q && !(r.category + " " + (r.description || "")).toLowerCase().includes(q.toLowerCase())) return false;
-      return true;
-    });
-  }, [rows, q, type, category]);
+  const filtered = useMemo<Tx[]>(() => {
+   return (rows as Tx[]).filter((r: Tx) => {
+       if (type && r.type !== type) return false;
+       if (category && r.category !== category) return false;
+       if (q && !(r.category + " " + (r.description || "")).toLowerCase().includes(q.toLowerCase())) return false;
+       return true;
+     });
+   }, [rows, q, type, category]);
 
-  const total = filtered.reduce((s, r) => s + (r.type === "income" ? r.amount : -r.amount), 0);
+  const total = filtered.reduce((s: number, r: Tx) => s + (r.type === "income" ? r.amount : -r.amount), 0);
 
-  const cats = useMemo(() => Array.from(new Set(rows.map(r => r.category))).sort(), [rows]);
+  const cats = useMemo<string[]>(
+    () => Array.from(new Set((rows as Tx[]).map((r: Tx) => r.category))).sort(),
+    [rows]
+  );
 
   return (
     <div>
+      <div className="flex items-center mb-3">
+        <h2 className="text-xl font-semibold">Transactions</h2>
+       <RefreshButton />
+      </div>
       <h2 className="text-xl font-semibold mb-3">Transactions</h2>
 
       <div className="flex gap-3 mb-3">
@@ -45,7 +44,7 @@ export default function TransactionsPage() {
         </select>
         <select className="border rounded px-3 py-2" value={category} onChange={e => setCategory(e.target.value)}>
           <option value="">All Categories</option>
-          {cats.map(c => <option key={c} value={c}>{c}</option>)}
+          {cats.map((c: string) => <option key={c} value={c}>{c}</option>)}
         </select>
       </div>
 
@@ -68,7 +67,7 @@ export default function TransactionsPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((r, i) => (
+              {filtered.map((r: Tx, i: number) => (
                 <tr key={r.id || i} className="border-b last:border-0">
                   <td className="py-2 pr-4">{r.date}</td>
                   <td className="py-2 pr-4 capitalize">{r.type}</td>

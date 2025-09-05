@@ -1,13 +1,11 @@
 // frontend/src/lib/api.ts
-export type Transaction = {
-    Date: string;                 // "YYYY-MM-DD"
-    Type: "Income" | "Expense";
-    Category: string;
-    Amount: number;
-    Account?: string;
-    Description?: string;
-    // columns H–K are computed in the sheet; you don't send them
-  };
+export type NewTransaction = {
+  date: string;                       // YYYY-MM-DD
+  type: "income" | "expense";
+  category: string;
+  amount: number;
+  description?: string;
+};
   
   type Period = { start?: string; end?: string };
   
@@ -27,11 +25,11 @@ export type Transaction = {
     return res.json() as Promise<any[]>; // array of row objects (keys from header row)
   }
   
-  export async function createTransaction(t: Transaction) {
+export async function createTransaction(tx: NewTransaction) {
     const res = await fetch("/api/transactions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(t),
+      body: JSON.stringify(tx),
     });
     if (!res.ok) throw new Error(`createTransaction failed: ${res.status}`);
     return res.json();

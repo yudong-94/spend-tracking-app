@@ -70,19 +70,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json(rows);
     }
 
-    if (req.method === "POST") {
-      // Accept canonical keys from client and map to your Sheet headers by name.
+  if (req.method === "POST") {
       const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
-      // Convert back to sheet’s header names:
+      // accept lowercase or Sheet-style Title Case
+      const pick = (k: string) => body?.[k] ?? body?.[k[0].toUpperCase() + k.slice(1)];
+      const parseAmount = (v: any) =>
+        typeof v === "number"
+          ? v
+          : v
+          ? Number(String(v).replace(/[^0-9.-]/g, "")) || 0
+          : 0;
+      const typeRaw = String(pick("type") ?? "").toLowerCase();
       const toSheetRow: Record<string, any> = {
-        ID: body.id || "",
-        Date: body.date,
-        Amount: body.amount,
-        Type: body.type === "income" ? "income" : "expense",
-        Category: body.category,
-        Description: body.description || "",
+        ID: pick("id") || "",
+        Date: pick("date"),
+        Amount: parseAmount(pick("amount")),
+        Type: typeRaw === "income" ? "income" : "expense",
+        Category: pick("category"),
+        Description: pick("description") || "",
         "Created At": new Date().toLocaleString(),
-        "Updated At": new Date().toLocaleString()
+        "Updated At": new Date().toLocaleString(),
       };
       await appendRow(toSheetRow);
       return res.status(201).json({ ok: true });

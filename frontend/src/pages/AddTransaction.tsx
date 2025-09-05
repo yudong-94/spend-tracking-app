@@ -1,31 +1,43 @@
 // frontend/src/pages/AddTransaction.tsx
 import { useState } from "react";
-import { createTransaction, Transaction } from "@/lib/api";
+import { createTransaction, NewTransaction } from "@/lib/api";
+import { useDataCache } from "@/state/data-cache";
 
-const makeDefault = (): Transaction => ({
-  Date: new Date().toISOString().slice(0, 10), // YYYY-MM-DD
-  Type: "Expense",
-  Category: "",
-  Amount: 0,
-  Account: "",
-  Description: "",
-});
+const makeDefault = (): NewTransaction => ({
+  date: new Date().toISOString().slice(0, 10),
+  type: "expense",
+  category: "",
+  amount: 0,
+  description: "",
+  });
 
 export default function AddTransaction() {
-  const [form, setForm] = useState<Transaction>(makeDefault());
+  const [form, setForm] = useState<NewTransaction>(makeDefault());
+  const [amountInput, setAmountInput] = useState<string>("0");
   const [saving, setSaving] = useState(false);
+  const { refresh } = useDataCache();
   const canSubmit =
-    form.Date && form.Type && form.Category && !Number.isNaN(Number(form.Amount));
+    form.date && form.type && form.category && Number.isFinite(form.amount);
 
   const onChange =
-    (field: keyof Transaction) =>
+    (field: keyof NewTransaction) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
       const v = e.target.value;
       setForm((f) => ({
         ...f,
-        [field]: field === "Amount" ? Number(v) : v,
+        [field]: v as any,
       }));
     };
+
+  const onAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value;
+    setAmountInput(raw);
+    // allow 1,234.56 or 1234,56 or negatives
+    const cleaned = raw.replace(/[^\d,.\-]/g, "");
+    const normalized = cleaned.replace(/,/g, "."); // unify decimal to dot
+    const val = parseFloat(normalized);
+    setForm((f) => ({ ...f, amount: Number.isFinite(val) ? val : 0 }));
+  };
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,7 +45,10 @@ export default function AddTransaction() {
     setSaving(true);
     try {
       await createTransaction(form);
+      await refresh(); // 🔁 pull fresh data into the cache
       setForm(makeDefault());
+        setAmountInput("0");
+        await refresh(); // pull fresh data into cache
       alert("Saved!");
     } catch (err) {
       console.error(err);
@@ -47,35 +62,38 @@ export default function AddTransaction() {
     <form onSubmit={onSubmit} className="space-y-3 max-w-md">
       <div className="grid gap-1">
         <label className="text-sm">Date</label>
-        <input type="date" value={form.Date} onChange={onChange("Date")} className="border p-2 rounded" required />
+        <input type="date" value={form.date} onChange={onChange("date")} className="border p-2 rounded" required />
       </div>
 
       <div className="grid gap-1">
         <label className="text-sm">Type</label>
-        <select value={form.Type} onChange={onChange("Type")} className="border p-2 rounded">
-          <option value="Income">Income</option>
-          <option value="Expense">Expense</option>
+        <select value={form.type} onChange={(e)=>setForm(f=>({...f, type: e.target.value as "income"|"expense"}))} className="border p-2 rounded">
+         <option value="income">Income</option>
+         <option value="expense">Expense</option>
         </select>
       </div>
 
       <div className="grid gap-1">
         <label className="text-sm">Category</label>
-        <input value={form.Category} onChange={onChange("Category")} className="border p-2 rounded" placeholder="Groceries, Rent, Salary..." required />
+        <input value={form.category} onChange={onChange("category")} className="border p-2 rounded" placeholder="Groceries, Rent, Salary..." required />
       </div>
 
       <div className="grid gap-1">
         <label className="text-sm">Amount</label>
-        <input type="number" step="0.01" value={form.Amount} onChange={onChange("Amount")} className="border p-2 rounded" required />
-      </div>
-
-      <div className="grid gap-1">
-        <label className="text-sm">Account (optional)</label>
-        <input value={form.Account ?? ""} onChange={onChange("Account")} className="border p-2 rounded" />
+        <input
+          type="text"
+          inputMode="decimal"
+          pattern="[0-9]*[.,]?[0-9]*"
+          value={amountInput}
+          onChange={onAmountChange}
+          className="border p-2 rounded"
+          placeholder="0.00"
+       />
       </div>
 
       <div className="grid gap-1">
         <label className="text-sm">Description (optional)</label>
-        <textarea value={form.Description ?? ""} onChange={onChange("Description")} className="border p-2 rounded" rows={2} />
+        <textarea value={form.description ?? ""} onChange={onChange("description")} className="border p-2 rounded" rows={2} />
       </div>
 
       <button type="submit" disabled={!canSubmit || saving} className="px-4 py-2 rounded bg-sky-600 text-white disabled:opacity-50">
