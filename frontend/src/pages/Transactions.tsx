@@ -1,22 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
-import { listTransactions } from "@/lib/api";
+import { useDataCache } from "@/state/data-cache";
+import RefreshButton from "@/components/RefreshButton";
 
 type Tx = { id?: string; date: string; type: "income"|"expense"; category: string; description?: string; amount: number };
 
 export default function TransactionsPage() {
-  const [rows, setRows] = useState<Tx[]>([]);
-  const [loading, setLoading] = useState(false);
+  const { txns: rows, isLoading: loading } = useDataCache();
   const [q, setQ] = useState("");
   const [type, setType] = useState<"" | "income" | "expense">("");
   const [category, setCategory] = useState("");
 
-  useEffect(() => {
-    setLoading(true);
-    listTransactions({}) // server returns normalized rows
-      .then(setRows)
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, []);
+  // no fetching here – data comes from cache
 
   const filtered = useMemo(() => {
     return rows.filter(r => {
@@ -33,6 +27,10 @@ export default function TransactionsPage() {
 
   return (
     <div>
+      <div className="flex items-center mb-3">
+        <h2 className="text-xl font-semibold">Transactions</h2>
+       <RefreshButton />
+      </div>
       <h2 className="text-xl font-semibold mb-3">Transactions</h2>
 
       <div className="flex gap-3 mb-3">

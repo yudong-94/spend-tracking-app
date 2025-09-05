@@ -1,8 +1,9 @@
 // frontend/src/pages/Dashboard.tsx
 import { useEffect, useState } from "react";
-import { getSummary, getBreakdown } from "@/lib/api";
+import { useDataCache } from "@/state/data-cache";
 import { fmtUSD } from "@/lib/format";
 import { COL } from "@/lib/colors";
+import RefreshButton from "@/components/RefreshButton";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from "recharts";
@@ -86,40 +87,22 @@ function CategoryChart({
 }
 
 export default function Dashboard() {
-  // This Month
-  const [mSummary, setMSummary] = useState<Summary | null>(null);
-  const [mIncomeCats, setMIncomeCats] = useState<CatAmt[]>([]);
-  const [mExpenseCats, setMExpenseCats] = useState<CatAmt[]>([]);
-
-  // This Year (YTD)
-  const [ySummary, setYSummary] = useState<Summary | null>(null);
-  const [yIncomeCats, setYIncomeCats] = useState<CatAmt[]>([]);
-  const [yExpenseCats, setYExpenseCats] = useState<CatAmt[]>([]);
-
-  useEffect(() => {
-    const m = monthBounds();
-    const y = ytdBounds();
-    Promise.all([
-      getSummary(m),
-      getBreakdown("income", m),
-      getBreakdown("expense", m),
-      getSummary(y),
-      getBreakdown("income", y),
-      getBreakdown("expense", y),
-    ])
-      .then(([sm, icm, ecm, sy, icy, ecy]) => {
-        setMSummary(sm);
-        setMIncomeCats(icm);
-        setMExpenseCats(ecm);
-        setYSummary(sy);
-        setYIncomeCats(icy);
-        setYExpenseCats(ecy);
-      })
-      .catch(console.error);
-  }, []);
+  const { getSummary, getBreakdown } = useDataCache();
+  const m = monthBounds();
+  const y = ytdBounds();
+  const mSummary = getSummary(m.start, m.end);
+  const mIncomeCats = getBreakdown("income", m.start, m.end);
+  const mExpenseCats = getBreakdown("expense", m.start, m.end);
+  const ySummary = getSummary(y.start, y.end);
+  const yIncomeCats = getBreakdown("income", y.start, y.end);
+  const yExpenseCats = getBreakdown("expense", y.start, y.end);
 
   return (
     <div className="space-y-8">
+      <div className="flex items-center">
+        <div className="text-lg font-semibold">Dashboard</div>
+        <RefreshButton />
+      </div>
       {/* This Month */}
       <div className="space-y-4">
         <h2 className="text-lg font-semibold">This Month</h2>

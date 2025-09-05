@@ -4,6 +4,7 @@ import { BrowserRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from 'react-query';
 import App from './App';
 import './index.css';
+import { DataCacheProvider } from "@/state/data-cache";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -18,7 +19,9 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
+      <DataCacheProvider>
         <App />
+      </DataCacheProvider>
       </BrowserRouter>
     </QueryClientProvider>
   </React.StrictMode>,

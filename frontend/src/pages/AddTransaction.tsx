@@ -1,6 +1,7 @@
 // frontend/src/pages/AddTransaction.tsx
 import { useState } from "react";
 import { createTransaction, Transaction } from "@/lib/api";
+import { useDataCache } from "@/state/data-cache";
 
 const makeDefault = (): Transaction => ({
   Date: new Date().toISOString().slice(0, 10), // YYYY-MM-DD
@@ -13,6 +14,7 @@ const makeDefault = (): Transaction => ({
 
 export default function AddTransaction() {
   const [form, setForm] = useState<Transaction>(makeDefault());
+  const { refresh } = useDataCache();
   const [saving, setSaving] = useState(false);
   const canSubmit =
     form.Date && form.Type && form.Category && !Number.isNaN(Number(form.Amount));
@@ -33,6 +35,7 @@ export default function AddTransaction() {
     setSaving(true);
     try {
       await createTransaction(form);
+      await refresh(); // 🔁 pull fresh data into the cache
       setForm(makeDefault());
       alert("Saved!");
     } catch (err) {

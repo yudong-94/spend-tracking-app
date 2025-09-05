@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { listTransactions } from "@/lib/api";
+import { useDataCache } from "@/state/data-cache";
 import { fmtUSD } from "@/lib/format";
 import { COL } from "@/lib/colors";
+import RefreshButton from "@/components/RefreshButton";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
   LineChart, Line, Legend
@@ -14,14 +15,12 @@ const ym = (d: string) => d.slice(0, 7);
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
 export default function Analytics() {
-  const [all, setAll] = useState<Tx[]>([]);
+  const { txns: all } = useDataCache();
   const [start, setStart] = useState<string>("");
   const [end, setEnd] = useState<string>("");
   const [category, setCategory] = useState<string>("");
 
-  useEffect(() => {
-    listTransactions({}).then(setAll).catch(console.error);
-  }, []);
+  // no fetching here – data comes from cache
 
   const categories = useMemo(
     () => Array.from(new Set(all.map(r => r.category))).sort(),
@@ -98,6 +97,10 @@ const yoyData = useMemo(() => {
 
   return (
     <div className="space-y-6">
+      <div className="flex items-center">
+        <h2 className="text-lg font-semibold">Analytics</h2>
+        <RefreshButton />
+      </div>
       {/* Filters */}
       <div className="flex flex-wrap gap-3 items-end">
         <div className="grid">
