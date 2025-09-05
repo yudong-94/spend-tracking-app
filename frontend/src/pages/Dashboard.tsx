@@ -1,5 +1,4 @@
 // frontend/src/pages/Dashboard.tsx
-import { useEffect, useState } from "react";
 import { useDataCache } from "@/state/data-cache";
 import { fmtUSD } from "@/lib/format";
 import { COL } from "@/lib/colors";

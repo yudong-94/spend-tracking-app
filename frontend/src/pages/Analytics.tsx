@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useDataCache } from "@/state/data-cache";
 import { fmtUSD } from "@/lib/format";
 import { COL } from "@/lib/colors";
@@ -22,14 +22,14 @@ export default function Analytics() {
 
   // no fetching here – data comes from cache
 
-  const categories = useMemo(
-    () => Array.from(new Set(all.map(r => r.category))).sort(),
-    [all]
-  );
+   const categories = useMemo<string[]>(
+     () => Array.from(new Set(all.map((r: Tx) => r.category))).sort(),
+     [all]
+   );
 
   // Existing filtered series for the bar charts (respects start/end + category)
-  const filtered = useMemo(() => {
-    return all.filter(r => {
+  const filtered = useMemo<Tx[]>(() => {
+    return all.filter((r: Tx) => {
       if (start && r.date < start) return false;
       if (end && r.date > end) return false;
       if (category && r.category !== category) return false;
@@ -37,9 +37,9 @@ export default function Analytics() {
     });
   }, [all, start, end, category]);
 
-  const series: Point[] = useMemo(() => {
+  const series: Point[] = useMemo<Point[]>(() => {
     const by = new Map<string, Point>();
-    for (const r of filtered) {
+    for (const r of filtered as Tx[]) {
       const key = ym(r.date);
       const p = by.get(key) ?? { month: key, income: 0, expense: 0, net: 0 };
       if (r.type === "income") p.income += r.amount; else p.expense += r.amount;
@@ -50,7 +50,7 @@ export default function Analytics() {
   }, [filtered]);
 
  // --- YoY cumulative net (Jan..Dec). Ignores start/end; applies category filter.
-const yoyData = useMemo(() => {
+ const yoyData = useMemo(() => {
   const now = new Date();
   const thisYear = now.getFullYear();
   const lastYear = thisYear - 1;
@@ -62,7 +62,7 @@ const yoyData = useMemo(() => {
     [lastYear]: Array(12).fill(0),
   };
 
-  for (const r of all) {
+  for (const r of all as Tx[]) {
     const y = Number(r.date.slice(0, 4));
     if (y !== thisYear && y !== lastYear) continue;
     if (category && r.category !== category) continue;
@@ -115,7 +115,7 @@ const yoyData = useMemo(() => {
           <label className="text-sm">Category</label>
           <select className="border rounded px-3 py-2" value={category} onChange={e => setCategory(e.target.value)}>
             <option value="">All</option>
-            {categories.map(c => <option key={c} value={c}>{c}</option>)}
+            {categories.map((c: string) => <option key={c} value={c}>{c}</option>)}
           </select>
         </div>
       </div>
