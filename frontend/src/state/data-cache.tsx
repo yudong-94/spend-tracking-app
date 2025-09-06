@@ -74,9 +74,7 @@ import React, {
           setCategories(persisted.categories || []);
           setLoading(false);
           const stale = Date.now() - persisted.lastSyncAt > STALE_MS;
-          if (stale || !persisted.categories || persisted.categories.length === 0) {
-            void refresh();
-          }
+          if (stale || !persisted.categories?.length) void refresh();
         } else {
           void refresh();
         }
@@ -86,15 +84,27 @@ import React, {
     const refresh = useCallback(async () => {
         setLoading(true);
         try {
-          const [rows, cats] = await Promise.all([
-            listTransactions({}),
-            listCategories().catch(() => [] as Category[]),
-          ]);
-          setTxns(rows as Tx[]);
-          setCategories(cats as Category[]);
+            const [rows, cats] = await Promise.all([
+                listTransactions({}),
+                listCategories(),
+            ]);
+            setTxns(rows as Tx[]);
+        
+          // If Categories sheet is empty for some reason, derive fallback from txns
+            const fallback =
+            (rows as Tx[])
+                ?.reduce((acc, r) => {
+                const key = `${r.type}:${r.category}`;
+                if (!acc.has(key)) acc.set(key, { id: key, name: r.category, type: r.type });
+                return acc;
+                }, new Map<string, { id: string; name: string; type: "income"|"expense" }>())
+                ?? new Map();
+            const usableCats = (cats as any[])?.length ? (cats as any[]) : Array.from(fallback.values());
+
+          setCategories(usableCats as Category[]);
           const ts = Date.now();
           setLastSyncAt(ts);
-          saveToStorage(rows as Tx[], ts, cats as Category[]);
+          saveToStorage(rows as Tx[], ts, usableCats as Category[]);
         } finally {
           setLoading(false);
         }
