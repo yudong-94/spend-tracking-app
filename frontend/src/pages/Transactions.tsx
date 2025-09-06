@@ -32,8 +32,6 @@ export default function TransactionsPage() {
         <h2 className="text-xl font-semibold">Transactions</h2>
        <RefreshButton />
       </div>
-      <h2 className="text-xl font-semibold mb-3">Transactions</h2>
-
       <div className="flex gap-3 mb-3">
         <input className="border rounded px-3 py-2 flex-1" placeholder="Search by category or description..."
                value={q} onChange={e => setQ(e.target.value)} />
