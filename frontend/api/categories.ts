@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { requireAuth } from "./_lib/auth.js";
 import { getSheetsClient } from "./_lib/sheets.js";
 
 /**
@@ -6,6 +7,9 @@ import { getSheetsClient } from "./_lib/sheets.js";
  * Reads the "Categories" sheet. Header row must contain: ID, Name, Type
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+
+  if (!requireAuth(req, res)) return;
+
   if (req.method !== "GET") return res.status(405).send("Method Not Allowed");
 
   try {

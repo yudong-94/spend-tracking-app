@@ -1,8 +1,12 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { requireAuth } from "./_lib/auth.js";
 import { readTable } from "./_lib/sheets.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
+
+    if (!requireAuth(req, res)) return;
+
     if (req.method !== "GET") {
       res.setHeader("Allow", "GET");
       return res.status(405).send("Method Not Allowed");
