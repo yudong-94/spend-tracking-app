@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { getSheetsClient } from "./_lib/sheets";
+import { getSheetsClient } from "./_lib/sheets.js";
 
 /**
  * GET /api/categories  ->  [{ id, name, type: "income"|"expense" }]
