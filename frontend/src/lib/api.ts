@@ -1,11 +1,12 @@
-const AUTH = import.meta.env.VITE_APP_ACCESS_TOKEN;
+import { AUTH_STORAGE_KEY } from "@/state/auth";
 
 function withAuth(init: RequestInit = {}): RequestInit {
+  const token = typeof window !== "undefined" ? localStorage.getItem(AUTH_STORAGE_KEY) : "";
   return {
     ...init,
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${AUTH}`,
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(init.headers || {}),
     },
   };

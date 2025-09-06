@@ -5,6 +5,8 @@ import { QueryClient, QueryClientProvider } from 'react-query';
 import App from "./App.tsx";
 import './index.css';
 import { DataCacheProvider } from "@/state/data-cache";
+import { AuthProvider } from "./state/auth";
+import AccessGate from "./components/AccessGate";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -19,9 +21,13 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-      <DataCacheProvider>
-        <App />
-      </DataCacheProvider>
+        <DataCacheProvider>
+          <AuthProvider>
+            <AccessGate>
+              <App />
+            </AccessGate>
+          </AuthProvider>
+        </DataCacheProvider>
       </BrowserRouter>
     </QueryClientProvider>
   </React.StrictMode>,
