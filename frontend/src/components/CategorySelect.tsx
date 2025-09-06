@@ -2,32 +2,38 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 export type Cat = { id: string; name: string; type: "income" | "expense" };
 
-function Dot({ type }: { type: "income" | "expense" }) {
+function Dot({ type, size = 8 }: { type: "income" | "expense"; size?: number }) {
   return (
     <span
       className={`inline-block rounded-full align-middle ${
         type === "income" ? "bg-emerald-500" : "bg-rose-500"
       }`}
-      style={{ width: 8, height: 8 }} // 8px = small & tidy
+      style={{ width: size, height: size }}
     />
   );
 }
 
-export default function CategorySelect({
-  value,
-  onChange,
-  options,
-  placeholder = "Category",
-  className = "",
-  disabled = false,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  options: Cat[];              // pass getCategories() here (already sorted exp->inc)
+type BaseProps = {
+  options: Cat[];                 // pass getCategories() or getCategories(type)
   placeholder?: string;
   className?: string;
   disabled?: boolean;
-}) {
+};
+
+type SingleProps = BaseProps & {
+  multiple?: false;
+  value: string;                  // category name
+  onChange: (v: string) => void;
+};
+
+type MultiProps = BaseProps & {
+  multiple: true;
+  value: string[];                // category names
+  onChange: (v: string[]) => void;
+};
+
+export default function CategorySelect(props: SingleProps | MultiProps) {
+  const isMulti = (props as MultiProps).multiple === true;
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const ref = useRef<HTMLDivElement>(null);
@@ -42,32 +48,65 @@ export default function CategorySelect({
     return () => document.removeEventListener("mousedown", onDoc);
   }, []);
 
+  const selectedNames: string[] = useMemo(
+    () => (isMulti ? (props as MultiProps).value : [(props as SingleProps).value].filter(Boolean)),
+    [isMulti, props]
+  );
+
+  const selected = useMemo(
+    () => (!isMulti ? props.options.find((c) => c.name === (props as SingleProps).value) : undefined),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [isMulti, (props as SingleProps).value, props.options]
+  );
+
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
     const arr = !needle
-      ? options
-      : options.filter((c) => c.name.toLowerCase().includes(needle));
-    // options from cache are already expense-first; keep that order
+      ? props.options
+      : props.options.filter((c) => c.name.toLowerCase().includes(needle));
+    // options already come expense-first from cache; preserve order
     return arr;
-  }, [q, options]);
+  }, [q, props.options]);
 
-  const selected = options.find((c) => c.name === value);
+  const isSelected = (name: string) => selectedNames.includes(name);
+
+  const toggleMulti = (name: string) => {
+    if (!isMulti) return;
+    const cur = (props as MultiProps).value;
+    const next = isSelected(name) ? cur.filter((n) => n !== name) : [...cur, name];
+    (props as MultiProps).onChange(next);
+  };
+
+  const pickSingle = (name: string) => {
+    if (isMulti) return;
+    (props as SingleProps).onChange(name);
+    setOpen(false);
+    setQ("");
+  };
 
   return (
-    <div ref={ref} className={`relative ${className}`}>
+    <div ref={ref} className={`relative ${props.className || ""}`}>
       <button
         type="button"
-        disabled={disabled}
+        disabled={props.disabled}
         onClick={() => setOpen((v) => !v)}
-        className={`w-full border rounded px-3 py-2 text-left bg-white disabled:opacity-50`}
+        className="w-full border rounded px-3 py-2 text-left bg-white disabled:opacity-50"
       >
-        {selected ? (
+        {isMulti ? (
+          selectedNames.length ? (
+            <span className="inline-flex items-center gap-2">
+              <span className="text-slate-900">{selectedNames.length} selected</span>
+            </span>
+          ) : (
+            <span className="text-slate-500">{props.placeholder ?? "All Categories"}</span>
+          )
+        ) : selected ? (
           <span className="inline-flex items-center gap-2">
             <Dot type={selected.type} />
             <span>{selected.name}</span>
           </span>
         ) : (
-          <span className="text-slate-500">{placeholder}</span>
+          <span className="text-slate-500">{props.placeholder ?? "Category"}</span>
         )}
       </button>
 
@@ -87,52 +126,99 @@ export default function CategorySelect({
             <Group
               title="Expenses"
               items={filtered.filter((c) => c.type === "expense")}
-              onPick={(n) => {
-                onChange(n);
-                setOpen(false);
-                setQ("");
-              }}
+              renderItem={(c) =>
+                isMulti ? (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => toggleMulti(c.name)}
+                    className="w-full px-3 py-2 text-left hover:bg-slate-50 flex items-center gap-2"
+                  >
+                    <input type="checkbox" readOnly checked={isSelected(c.name)} className="mr-1" />
+                    <Dot type={c.type} />
+                    <span>{c.name}</span>
+                  </button>
+                ) : (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => pickSingle(c.name)}
+                    className="w-full px-3 py-2 text-left hover:bg-slate-50 flex items-center gap-2"
+                  >
+                    <Dot type={c.type} />
+                    <span>{c.name}</span>
+                  </button>
+                )
+              }
             />
             <Group
               title="Income"
               items={filtered.filter((c) => c.type === "income")}
-              onPick={(n) => {
-                onChange(n);
-                setOpen(false);
-                setQ("");
-              }}
+              renderItem={(c) =>
+                isMulti ? (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => toggleMulti(c.name)}
+                    className="w-full px-3 py-2 text-left hover:bg-slate-50 flex items-center gap-2"
+                  >
+                    <input type="checkbox" readOnly checked={isSelected(c.name)} className="mr-1" />
+                    <Dot type={c.type} />
+                    <span>{c.name}</span>
+                  </button>
+                ) : (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => pickSingle(c.name)}
+                    className="w-full px-3 py-2 text-left hover:bg-slate-50 flex items-center gap-2"
+                  >
+                    <Dot type={c.type} />
+                    <span>{c.name}</span>
+                  </button>
+                )
+              }
             />
           </div>
+
+          {isMulti && (
+            <div className="flex justify-between items-center p-2 border-t">
+              <button
+                type="button"
+                className="text-sm text-slate-600 hover:underline"
+                onClick={() => (props as MultiProps).onChange([])}
+              >
+                Clear
+              </button>
+              <button
+                type="button"
+                className="px-2 py-1 rounded bg-slate-900 text-white text-sm"
+                onClick={() => setOpen(false)}
+              >
+                Done
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
   );
 }
 
-function Group({
+function Group<T>({
   title,
   items,
-  onPick,
+  renderItem,
 }: {
   title: string;
-  items: Cat[];
-  onPick: (name: string) => void;
+  items: T[];
+  renderItem: (item: T) => React.ReactNode;
 }) {
   if (!items.length) return null;
   return (
     <div className="py-1">
       <div className="px-3 pb-1 text-xs font-medium text-slate-500">{title}</div>
-      {items.map((c) => (
-        <button
-          key={c.id}
-          type="button"
-          onClick={() => onPick(c.name)}
-          className="w-full px-3 py-2 text-left hover:bg-slate-50 focus:bg-slate-50 flex items-center gap-2"
-        >
-          <Dot type={c.type} />
-          <span>{c.name}</span>
-        </button>
-      ))}
+      {items.map((it) => renderItem(it))}
     </div>
   );
 }

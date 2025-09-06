@@ -6,21 +6,20 @@ import { fmtUSDSigned } from "@/lib/format";
 
 export default function TransactionsPage() {
   const { txns: rows, isLoading: loading, getCategories } = useDataCache();
-  const catOptions = getCategories();
   const [q, setQ] = useState("");
   const [type, setType] = useState<"" | "income" | "expense">("");
-  const [category, setCategory] = useState("");
+  const [categories, setCategories] = useState<string[]>([]);
 
   // no fetching here – data comes from cache
 
   const filtered = useMemo<Tx[]>(() => {
    return (rows as Tx[]).filter((r: Tx) => {
        if (type && r.type !== type) return false;
-       if (category && r.category !== category) return false;
+       if (categories.length && !categories.includes(r.category)) return false;
        if (q && !(r.category + " " + (r.description || "")).toLowerCase().includes(q.toLowerCase())) return false;
        return true;
      });
-   }, [rows, q, type, category]);
+   }, [rows, q, type, categories]);
 
   const total = filtered.reduce(
     (s: number, r: Tx) => s + (r.type === "income" ? r.amount : -r.amount),
@@ -44,11 +43,14 @@ export default function TransactionsPage() {
           <option value="income">Income</option>
           <option value="expense">Expense</option>
         </select>
+        {/* Category select (multi) */}
         <CategorySelect
-          value={category}
-          onChange={setCategory}
-          options={catOptions}
+          multiple
+          value={categories}
+          onChange={setCategories}
+          options={getCategories()}        // expense first, then income
           className="w-56"
+          placeholder="All Categories"
         />
       </div>
 
