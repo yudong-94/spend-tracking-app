@@ -43,7 +43,6 @@ export default function TransactionsPage() {
           <option value="income">Income</option>
           <option value="expense">Expense</option>
         </select>
-        <label className="text-sm">Category</label>
         <select
           className="border rounded px-3 py-2"
           value={category}

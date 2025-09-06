@@ -43,10 +43,10 @@ import React, {
     getMonthlySeries: () => [],
   });
   
-  const LS_KEY = "st-cache-v1";
+  const LS_KEY = "st-cache-v2";
   const STALE_MS = 5 * 60 * 1000; // 5 minutes
   
-  type PersistShape = { txns: Tx[]; lastSyncAt: number };
+  type PersistShape = { txns: Tx[]; lastSyncAt: number; categories: Category[] };
   
   function loadFromStorage(): PersistShape | null {
     try {
@@ -55,8 +55,8 @@ import React, {
       return JSON.parse(raw) as PersistShape;
     } catch { return null; }
   }
-  function saveToStorage(txns: Tx[], lastSyncAt: number) {
-    try { localStorage.setItem(LS_KEY, JSON.stringify({ txns, lastSyncAt })); } catch {}
+  function saveToStorage(txns: Tx[], lastSyncAt: number, categories: Category[]) {
+    try { localStorage.setItem(LS_KEY, JSON.stringify({ txns, lastSyncAt, categories })); } catch {}
   }
   
   export function DataCacheProvider({ children }: { children: React.ReactNode }) {
@@ -67,33 +67,34 @@ import React, {
   
     // Initial hydrate from localStorage, then refresh if stale
     useEffect(() => {
-      const persisted = loadFromStorage();
-      if (persisted) {
-        setTxns(persisted.txns);
-        setLastSyncAt(persisted.lastSyncAt);
-        setLoading(false);
-        // soft refresh if stale
-        if (Date.now() - persisted.lastSyncAt > STALE_MS) {
+        const persisted = loadFromStorage();
+        if (persisted) {
+          setTxns(persisted.txns);
+          setLastSyncAt(persisted.lastSyncAt);
+          setCategories(persisted.categories || []);
+          setLoading(false);
+          const stale = Date.now() - persisted.lastSyncAt > STALE_MS;
+          if (stale || !persisted.categories || persisted.categories.length === 0) {
+            void refresh();
+          }
+        } else {
           void refresh();
         }
-      } else {
-        void refresh();
-      }
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+      }, []);
   
     const refresh = useCallback(async () => {
         setLoading(true);
         try {
           const [rows, cats] = await Promise.all([
             listTransactions({}),
-            listCategories().catch(() => []), // fail-soft if tab missing
+            listCategories().catch(() => [] as Category[]),
           ]);
           setTxns(rows as Tx[]);
           setCategories(cats as Category[]);
           const ts = Date.now();
           setLastSyncAt(ts);
-          saveToStorage(rows as Tx[], ts);
+          saveToStorage(rows as Tx[], ts, cats as Category[]);
         } finally {
           setLoading(false);
         }
@@ -117,10 +118,10 @@ import React, {
     const addLocal = useCallback((tx: Tx) => {
       setTxns(prev => {
         const next = [tx, ...prev].sort((a, b) => a.date.localeCompare(b.date));
-        saveToStorage(next, lastSyncAt ?? Date.now());
+        saveToStorage(next, lastSyncAt ?? Date.now(), categories);
         return next;
       });
-    }, [lastSyncAt]);
+    }, [lastSyncAt, categories]);
   
     const filter = useCallback((start?: string, end?: string) =>
       txns.filter(r => (!start || r.date >= start) && (!end || r.date <= end))
