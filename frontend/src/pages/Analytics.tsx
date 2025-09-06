@@ -15,17 +15,13 @@ const ym = (d: string) => d.slice(0, 7);
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
 export default function Analytics() {
-  const { txns: all } = useDataCache();
+  const { txns: all, getCategories } = useDataCache();
+  const catOptions = getCategories();
   const [start, setStart] = useState<string>("");
   const [end, setEnd] = useState<string>("");
   const [category, setCategory] = useState<string>("");
 
   // no fetching here – data comes from cache
-
-   const categories = useMemo<string[]>(
-     () => Array.from(new Set(all.map((r: Tx) => r.category))).sort(),
-     [all]
-   );
 
   // Existing filtered series for the bar charts (respects start/end + category)
   const filtered = useMemo<Tx[]>(() => {
@@ -112,11 +108,32 @@ export default function Analytics() {
           <input type="date" className="border rounded px-3 py-2" value={end} onChange={e => setEnd(e.target.value)} />
         </div>
         <div className="grid">
-          <label className="text-sm">Category</label>
-          <select className="border rounded px-3 py-2" value={category} onChange={e => setCategory(e.target.value)}>
-            <option value="">All</option>
-            {categories.map((c: string) => <option key={c} value={c}>{c}</option>)}
-          </select>
+        <label className="text-sm">Category</label>
+        <select
+          className="border rounded px-3 py-2"
+          value={category}
+          onChange={(e) => setCategory(e.target.value)}
+        >
+          <option value="">Category</option>
+          <optgroup label="Expenses">
+            {catOptions
+              .filter((c) => c.type === "expense")
+              .map((c) => (
+                <option key={c.id} value={c.name}>
+                  🔴 {c.name}
+                </option>
+              ))}
+          </optgroup>
+          <optgroup label="Income">
+            {catOptions
+              .filter((c) => c.type === "income")
+              .map((c) => (
+                <option key={c.id} value={c.name}>
+                  🟢 {c.name}
+                </option>
+              ))}
+          </optgroup>
+        </select>
         </div>
       </div>
 

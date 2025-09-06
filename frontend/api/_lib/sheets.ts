@@ -27,18 +27,27 @@ export async function getSheetsClient() {
   return { sheets, ...getSheetIds() };
 }
 
-export async function readTable() {
-  const { sheets, spreadsheetId, sheetName } = await getSheetsClient();
-  // Read header
-  const headerRes = await sheets.spreadsheets.values.get({
+/** read the header row for a given sheet name */
+async function readHeadersFor(
+  sheets: ReturnType<typeof google.sheets>["spreadsheets"]["values"],
+  spreadsheetId: string,
+  sheetName: string
+) {
+  const headerRes = await sheets.get({
     spreadsheetId,
     range: `${sheetName}!1:1`,
   });
-  const headers = (headerRes.data.values?.[0] || []).map((h) => String(h).trim());
-  // Read data (A2:Z handles up to column Z; expand if needed)
+  return (headerRes.data.values?.[0] || []).map((h) => String(h).trim());
+}
+
+/** core reader: returns array of objects using row 1 as headers */
+async function readTableCore(sheetName: string) {
+  const { sheets, spreadsheetId } = await getSheetsClient();
+  const headers = await readHeadersFor(sheets.spreadsheets.values, spreadsheetId, sheetName);
   const dataRes = await sheets.spreadsheets.values.get({
     spreadsheetId,
-    range: `${sheetName}!A2:Z`,
+    // generous range in case you add columns later
+    range: `${sheetName}!A2:ZZZ`,
   });
   const rows = dataRes.data.values || [];
   return rows.map((r) => {
@@ -46,6 +55,17 @@ export async function readTable() {
     headers.forEach((h, i) => (obj[h] = r[i] ?? ""));
     return obj;
   });
+}
+
+/** Existing behavior: reads from the default tab (Transactions) */
+export async function readTable() {
+  const { sheetName } = getSheetIds();
+  return readTableCore(sheetName);
+}
+
+/** NEW: read any worksheet by its tab name (e.g., "Categories") */
+export async function readTableByName(sheetName: string) {
+  return readTableCore(sheetName);
 }
 
 export async function appendRow(row: Record<string, any>) {
@@ -59,8 +79,8 @@ export async function appendRow(row: Record<string, any>) {
   const values = headers.map((h) => row[h] ?? "");
   await sheets.spreadsheets.values.append({
     spreadsheetId,
-    range: `${sheetName}!A:Z`,
+    range: `${sheetName}!A:ZZZ`,
     valueInputOption: "USER_ENTERED",
-    requestBody: { values: [values] }
+    requestBody: { values: [values] },
   });
 }

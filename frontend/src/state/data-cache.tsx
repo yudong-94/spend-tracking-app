@@ -1,7 +1,8 @@
 import React, {
     createContext, useCallback, useContext, useEffect, useMemo, useState,
   } from "react";
-  import { listTransactions } from "@/lib/api";
+  import { listTransactions, listCategories } from "@/lib/api";
+  import type { Category } from "@/lib/api";
   
   export type Tx = {
     id?: string;
@@ -17,7 +18,9 @@ import React, {
     isLoading: boolean;
     lastSyncAt?: number;
     refresh: () => Promise<void>;
-    addLocal: (tx: Tx) => void;          // NEW: optimistic local add
+    addLocal: (tx: Tx) => void;
+    categories: Category[];
+    getCategories: (type?: "income"|"expense") => Category[];
     getSummary: (start?: string, end?: string) => {
       totalIncome: number; totalExpense: number; netCashFlow: number;
     };
@@ -33,6 +36,8 @@ import React, {
     lastSyncAt: undefined,
     refresh: async () => {},
     addLocal: () => {},
+    categories: [],
+    getCategories: () => [],
     getSummary: () => ({ totalIncome: 0, totalExpense: 0, netCashFlow: 0 }),
     getBreakdown: () => [],
     getMonthlySeries: () => [],
@@ -58,6 +63,7 @@ import React, {
     const [txns, setTxns] = useState<Tx[]>([]);
     const [isLoading, setLoading] = useState(true);
     const [lastSyncAt, setLastSyncAt] = useState<number | undefined>();
+    const [categories, setCategories] = useState<Category[]>([]);
   
     // Initial hydrate from localStorage, then refresh if stale
     useEffect(() => {
@@ -77,18 +83,36 @@ import React, {
     }, []);
   
     const refresh = useCallback(async () => {
-      setLoading(true);
-      try {
-        const rows = await listTransactions({});
-        setTxns(rows as Tx[]);
-        const ts = Date.now();
-        setLastSyncAt(ts);
-        saveToStorage(rows as Tx[], ts);
-      } finally {
-        setLoading(false);
-      }
-    }, []);
-  
+        setLoading(true);
+        try {
+          const [rows, cats] = await Promise.all([
+            listTransactions({}),
+            listCategories().catch(() => []), // fail-soft if tab missing
+          ]);
+          setTxns(rows as Tx[]);
+          setCategories(cats as Category[]);
+          const ts = Date.now();
+          setLastSyncAt(ts);
+          saveToStorage(rows as Tx[], ts);
+        } finally {
+          setLoading(false);
+        }
+      }, []);
+
+      const sortCats = (a: Category, b: Category) => {
+        if (a.type !== b.type) return a.type === "expense" ? -1 : 1; // expenses first
+        return a.name.localeCompare(b.name);
+      };
+      
+    const getCategories = useCallback(
+        (type?: "income" | "expense") =>
+          (categories || [])
+            .filter((c) => !type || c.type === type)
+            .slice()
+            .sort(sortCats),
+        [categories]
+      );
+      
     // Optimistic local add (used after POST)
     const addLocal = useCallback((tx: Tx) => {
       setTxns(prev => {
@@ -131,9 +155,10 @@ import React, {
     }, [filter]);
   
     const value: Ctx = useMemo(() => ({
-      txns, isLoading, lastSyncAt, refresh, addLocal,
-      getSummary, getBreakdown, getMonthlySeries,
-    }), [txns, isLoading, lastSyncAt, refresh, addLocal, getSummary, getBreakdown, getMonthlySeries]);
+        txns, isLoading, lastSyncAt, refresh, addLocal,
+        categories, getCategories,
+        getSummary, getBreakdown, getMonthlySeries,
+      }), [txns, isLoading, lastSyncAt, refresh, addLocal, categories, getCategories, getSummary, getBreakdown, getMonthlySeries]);
   
     return <DataCacheContext.Provider value={value}>{children}</DataCacheContext.Provider>;
   }

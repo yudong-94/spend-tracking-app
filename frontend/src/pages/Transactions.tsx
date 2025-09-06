@@ -4,7 +4,8 @@ import RefreshButton from "@/components/RefreshButton";
 import { fmtUSDSigned } from "@/lib/format";
 
 export default function TransactionsPage() {
-  const { txns: rows, isLoading: loading } = useDataCache();
+  const { txns: rows, isLoading: loading, getCategories } = useDataCache();
+  const catOptions = getCategories();
   const [q, setQ] = useState("");
   const [type, setType] = useState<"" | "income" | "expense">("");
   const [category, setCategory] = useState("");
@@ -28,11 +29,6 @@ export default function TransactionsPage() {
   const totalClass =
     total > 0 ? "text-emerald-600" : total < 0 ? "text-rose-600" : "text-slate-600";
 
-  const cats = useMemo<string[]>(
-    () => Array.from(new Set((rows as Tx[]).map((r: Tx) => r.category))).sort(),
-    [rows]
-  );
-
   return (
     <div>
       <div className="flex items-center mb-3">
@@ -47,9 +43,31 @@ export default function TransactionsPage() {
           <option value="income">Income</option>
           <option value="expense">Expense</option>
         </select>
-        <select className="border rounded px-3 py-2" value={category} onChange={e => setCategory(e.target.value)}>
+        <label className="text-sm">Category</label>
+        <select
+          className="border rounded px-3 py-2"
+          value={category}
+          onChange={(e) => setCategory(e.target.value)}
+        >
           <option value="">All Categories</option>
-          {cats.map((c: string) => <option key={c} value={c}>{c}</option>)}
+          <optgroup label="Expenses">
+            {catOptions
+              .filter((c) => c.type === "expense")
+              .map((c) => (
+                <option key={c.id} value={c.name}>
+                  🔴 {c.name}
+                </option>
+              ))}
+          </optgroup>
+          <optgroup label="Income">
+            {catOptions
+              .filter((c) => c.type === "income")
+              .map((c) => (
+                <option key={c.id} value={c.name}>
+                  🟢 {c.name}
+                </option>
+              ))}
+          </optgroup>
         </select>
       </div>
 

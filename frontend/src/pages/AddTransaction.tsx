@@ -1,7 +1,7 @@
 // frontend/src/pages/AddTransaction.tsx
 import { useState } from "react";
 import { createTransaction, NewTransaction } from "@/lib/api";
-import { useDataCache } from "@/state/data-cache";
+import { useDataCache } from "@/state/data-cache"; 
 
 const makeDefault = (): NewTransaction => ({
   date: new Date().toISOString().slice(0, 10),
@@ -15,7 +15,8 @@ export default function AddTransaction() {
   const [form, setForm] = useState<NewTransaction>(makeDefault());
   const [amountInput, setAmountInput] = useState<string>("0");
   const [saving, setSaving] = useState(false);
-  const { refresh, addLocal } = useDataCache();
+  const { refresh, addLocal, getCategories } = useDataCache();
+  const catOptions = getCategories(form.type);
   const canSubmit =
     form.date && form.type && form.category && Number.isFinite(form.amount);
 
@@ -84,8 +85,35 @@ export default function AddTransaction() {
 
       <div className="grid gap-1">
         <label className="text-sm">Category</label>
-        <input value={form.category} onChange={onChange("category")} className="border p-2 rounded" placeholder="Groceries, Rent, Salary..." required />
-      </div>
+        <select
+          className="border p-2 rounded"
+          value={form.category}
+          onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
+          required
+        >
+          <option value="">Select a category</option>
+          {form.type === "expense" ? (
+            <>
+             {catOptions.map((c) => (
+               <option key={c.id} value={c.name}>
+                 🔴 {c.name}
+               </option>
+             ))}
+           </>
+         ) : (
+           <>
+             {catOptions.map((c) => (
+               <option key={c.id} value={c.name}>
+                 🟢 {c.name}
+               </option>
+             ))}
+           </>
+         )}
+       </select>
+       <p className="text-xs text-slate-500">
+         Showing {form.type} categories from your “Categories” sheet.
+       </p>
+     </div>
 
       <div className="grid gap-1">
         <label className="text-sm">Amount</label>

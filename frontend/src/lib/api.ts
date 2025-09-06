@@ -51,3 +51,12 @@ export type NewTransaction = {
     if (!res.ok) throw new Error(`getBreakdown failed: ${res.status}`);
     return res.json() as Promise<Array<{ category: string; amount: number }>>;
   }
+
+  export type Category = { id: string; name: string; type: "income" | "expense" };
+
+  export async function listCategories() {
+    const res = await fetch("/api/categories");
+    if (!res.ok) throw new Error(`listCategories failed: ${res.status}`);
+    return res.json() as Promise<Category[]>;
+  }
+  
