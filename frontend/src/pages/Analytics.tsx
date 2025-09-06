@@ -3,6 +3,7 @@ import { useDataCache } from "@/state/data-cache";
 import { fmtUSD } from "@/lib/format";
 import { COL } from "@/lib/colors";
 import RefreshButton from "@/components/RefreshButton";
+import CategorySelect from "@/components/CategorySelect";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
   LineChart, Line, Legend
@@ -109,31 +110,12 @@ export default function Analytics() {
         </div>
         <div className="grid">
         <label className="text-sm">Category</label>
-        <select
-          className="border rounded px-3 py-2"
-          value={category}
-          onChange={(e) => setCategory(e.target.value)}
-        >
-          <option value="">Category</option>
-          <optgroup label="Expenses">
-            {catOptions
-              .filter((c) => c.type === "expense")
-              .map((c) => (
-                <option key={c.id} value={c.name}>
-                  🔴 {c.name}
-                </option>
-              ))}
-          </optgroup>
-          <optgroup label="Income">
-            {catOptions
-              .filter((c) => c.type === "income")
-              .map((c) => (
-                <option key={c.id} value={c.name}>
-                  🟢 {c.name}
-                </option>
-              ))}
-          </optgroup>
-        </select>
+          <CategorySelect
+            value={category}
+            onChange={setCategory}
+            options={catOptions}
+            className="w-56"
+          />
         </div>
       </div>
 

@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useDataCache, Tx } from "@/state/data-cache";
 import RefreshButton from "@/components/RefreshButton";
+import CategorySelect from "@/components/CategorySelect";
 import { fmtUSDSigned } from "@/lib/format";
 
 export default function TransactionsPage() {
@@ -43,31 +44,12 @@ export default function TransactionsPage() {
           <option value="income">Income</option>
           <option value="expense">Expense</option>
         </select>
-        <select
-          className="border rounded px-3 py-2"
+        <CategorySelect
           value={category}
-          onChange={(e) => setCategory(e.target.value)}
-        >
-          <option value="">All Categories</option>
-          <optgroup label="Expenses">
-            {catOptions
-              .filter((c) => c.type === "expense")
-              .map((c) => (
-                <option key={c.id} value={c.name}>
-                  🔴 {c.name}
-                </option>
-              ))}
-          </optgroup>
-          <optgroup label="Income">
-            {catOptions
-              .filter((c) => c.type === "income")
-              .map((c) => (
-                <option key={c.id} value={c.name}>
-                  🟢 {c.name}
-                </option>
-              ))}
-          </optgroup>
-        </select>
+          onChange={setCategory}
+          options={catOptions}
+          className="w-56"
+        />
       </div>
 
       <div className="ml-auto text-sm">

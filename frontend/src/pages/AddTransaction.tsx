@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { createTransaction, NewTransaction } from "@/lib/api";
 import { useDataCache } from "@/state/data-cache"; 
+import CategorySelect from "@/components/CategorySelect";
 
 const makeDefault = (): NewTransaction => ({
   date: new Date().toISOString().slice(0, 10),
@@ -85,31 +86,13 @@ export default function AddTransaction() {
 
       <div className="grid gap-1">
         <label className="text-sm">Category</label>
-        <select
-          className="border p-2 rounded"
-          value={form.category}
-          onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
-          required
-        >
-          <option value="">Select a category</option>
-          {form.type === "expense" ? (
-            <>
-             {catOptions.map((c) => (
-               <option key={c.id} value={c.name}>
-                 🔴 {c.name}
-               </option>
-             ))}
-           </>
-         ) : (
-           <>
-             {catOptions.map((c) => (
-               <option key={c.id} value={c.name}>
-                 🟢 {c.name}
-               </option>
-             ))}
-           </>
-         )}
-       </select>
+          <CategorySelect
+            value={form.category}
+            onChange={(name) => setForm((f) => ({ ...f, category: name }))}
+            options={catOptions}
+            className="w-full"
+            placeholder="Select category"
+          />
        <p className="text-xs text-slate-500">
          Showing {form.type} categories from your “Categories” sheet.
        </p>
