@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { requireAuth } from "./_lib/auth.js"; 
 import { readTable, appendRow } from "./_lib/sheets.js";
 
 type Tx = {
@@ -43,6 +44,9 @@ const normalize = (r: Record<string, any>): Tx => {
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
+
+    if (!requireAuth(req, res)) return;     
+
     if (req.method === "GET") {
       const { start, end, type, category, q } = (req.query || {}) as {
         start?: string; end?: string; type?: string; category?: string; q?: string;

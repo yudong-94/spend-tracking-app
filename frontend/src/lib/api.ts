@@ -1,4 +1,16 @@
-// frontend/src/lib/api.ts
+const AUTH = import.meta.env.VITE_APP_ACCESS_TOKEN;
+
+function withAuth(init: RequestInit = {}): RequestInit {
+  return {
+    ...init,
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${AUTH}`,
+      ...(init.headers || {}),
+    },
+  };
+}
+
 export type NewTransaction = {
   date: string;                       // YYYY-MM-DD
   type: "income" | "expense";
@@ -20,7 +32,7 @@ export type NewTransaction = {
   }
   
   export async function listTransactions(period?: Period) {
-    const res = await fetch(buildUrl("/api/transactions", period));
+    const res = await fetch(buildUrl("/api/transactions", period), withAuth());
     if (!res.ok) throw new Error(`listTransactions failed: ${res.status}`);
     return res.json() as Promise<any[]>; // array of row objects (keys from header row)
   }
@@ -28,17 +40,17 @@ export type NewTransaction = {
   export type CreateTransactionResponse = { ok: true; id: string };
 
   export async function createTransaction(tx: NewTransaction) {
-    const res = await fetch("/api/transactions", {
+    const res = await fetch("/api/transactions", withAuth({
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(tx),
-    });
+    }));
     if (!res.ok) throw new Error(`createTransaction failed: ${res.status}`);
     return res.json() as Promise<CreateTransactionResponse>;
   }
   
   export async function getSummary(period?: Period) {
-    const res = await fetch(buildUrl("/api/summary", period));
+    const res = await fetch(buildUrl("/api/summary", period), withAuth());
     if (!res.ok) throw new Error(`getSummary failed: ${res.status}`);
     return res.json() as Promise<{ totalIncome: number; totalExpense: number; netCashFlow: number }>;
   }
@@ -47,7 +59,7 @@ export type NewTransaction = {
     type: "income" | "expense",
     period?: Period
   ) {
-    const res = await fetch(buildUrl("/api/breakdown", { type, ...period }));
+    const res = await fetch(buildUrl("/api/breakdown", { type, ...period }), withAuth());
     if (!res.ok) throw new Error(`getBreakdown failed: ${res.status}`);
     return res.json() as Promise<Array<{ category: string; amount: number }>>;
   }
@@ -55,7 +67,7 @@ export type NewTransaction = {
   export type Category = { id: string; name: string; type: "income" | "expense" };
 
   export async function listCategories() {
-    const res = await fetch("/api/categories");
+    const res = await fetch("/api/categories", withAuth());
     if (!res.ok) throw new Error(`listCategories failed: ${res.status}`);
     return res.json() as Promise<Category[]>;
   }
