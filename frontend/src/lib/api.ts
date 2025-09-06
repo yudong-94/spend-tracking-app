@@ -25,14 +25,16 @@ export type NewTransaction = {
     return res.json() as Promise<any[]>; // array of row objects (keys from header row)
   }
   
-export async function createTransaction(tx: NewTransaction) {
+  export type CreateTransactionResponse = { ok: true; id: string };
+
+  export async function createTransaction(tx: NewTransaction) {
     const res = await fetch("/api/transactions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(tx),
     });
     if (!res.ok) throw new Error(`createTransaction failed: ${res.status}`);
-    return res.json();
+    return res.json() as Promise<CreateTransactionResponse>;
   }
   
   export async function getSummary(period?: Period) {
@@ -49,3 +51,12 @@ export async function createTransaction(tx: NewTransaction) {
     if (!res.ok) throw new Error(`getBreakdown failed: ${res.status}`);
     return res.json() as Promise<Array<{ category: string; amount: number }>>;
   }
+
+  export type Category = { id: string; name: string; type: "income" | "expense" };
+
+  export async function listCategories() {
+    const res = await fetch("/api/categories");
+    if (!res.ok) throw new Error(`listCategories failed: ${res.status}`);
+    return res.json() as Promise<Category[]>;
+  }
+  

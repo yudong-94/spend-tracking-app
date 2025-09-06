@@ -3,6 +3,7 @@ import { useDataCache } from "@/state/data-cache";
 import { fmtUSD } from "@/lib/format";
 import { COL } from "@/lib/colors";
 import RefreshButton from "@/components/RefreshButton";
+import CategorySelect from "@/components/CategorySelect";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
   LineChart, Line, Legend
@@ -15,27 +16,22 @@ const ym = (d: string) => d.slice(0, 7);
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
 export default function Analytics() {
-  const { txns: all } = useDataCache();
+  const { txns: all, getCategories } = useDataCache();
   const [start, setStart] = useState<string>("");
   const [end, setEnd] = useState<string>("");
-  const [category, setCategory] = useState<string>("");
+  const [categories, setCategories] = useState<string[]>([]);
 
   // no fetching here – data comes from cache
-
-   const categories = useMemo<string[]>(
-     () => Array.from(new Set(all.map((r: Tx) => r.category))).sort(),
-     [all]
-   );
 
   // Existing filtered series for the bar charts (respects start/end + category)
   const filtered = useMemo<Tx[]>(() => {
     return all.filter((r: Tx) => {
       if (start && r.date < start) return false;
       if (end && r.date > end) return false;
-      if (category && r.category !== category) return false;
+      if (categories.length && !categories.includes(r.category)) return false;
       return true;
     });
-  }, [all, start, end, category]);
+  }, [all, start, end, categories]);
 
   const series: Point[] = useMemo<Point[]>(() => {
     const by = new Map<string, Point>();
@@ -65,7 +61,7 @@ export default function Analytics() {
   for (const r of all as Tx[]) {
     const y = Number(r.date.slice(0, 4));
     if (y !== thisYear && y !== lastYear) continue;
-    if (category && r.category !== category) continue;
+    if (categories.length && !categories.includes(r.category)) continue;
     const mIdx = Number(r.date.slice(5, 7)) - 1; // 0..11
     const delta = r.type === "income" ? r.amount : -r.amount;
     monthly[y][mIdx] += delta;
@@ -92,7 +88,7 @@ export default function Analytics() {
     thisYear: cumThis[i],
     lastYear: cumLast[i],
   }));
-}, [all, category]);
+}, [all, categories]);
 
 
   return (
@@ -112,11 +108,15 @@ export default function Analytics() {
           <input type="date" className="border rounded px-3 py-2" value={end} onChange={e => setEnd(e.target.value)} />
         </div>
         <div className="grid">
-          <label className="text-sm">Category</label>
-          <select className="border rounded px-3 py-2" value={category} onChange={e => setCategory(e.target.value)}>
-            <option value="">All</option>
-            {categories.map((c: string) => <option key={c} value={c}>{c}</option>)}
-          </select>
+        <label className="text-sm">Category</label>
+          <CategorySelect
+            multiple
+            value={categories}
+            onChange={setCategories}
+            options={getCategories()}
+            className="w-56"
+            placeholder="All Categories"
+          />
         </div>
       </div>
 

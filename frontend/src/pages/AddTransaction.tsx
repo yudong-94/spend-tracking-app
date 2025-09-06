@@ -1,7 +1,8 @@
 // frontend/src/pages/AddTransaction.tsx
 import { useState } from "react";
 import { createTransaction, NewTransaction } from "@/lib/api";
-import { useDataCache } from "@/state/data-cache";
+import { useDataCache } from "@/state/data-cache"; 
+import CategorySelect from "@/components/CategorySelect";
 
 const makeDefault = (): NewTransaction => ({
   date: new Date().toISOString().slice(0, 10),
@@ -15,7 +16,8 @@ export default function AddTransaction() {
   const [form, setForm] = useState<NewTransaction>(makeDefault());
   const [amountInput, setAmountInput] = useState<string>("0");
   const [saving, setSaving] = useState(false);
-  const { refresh } = useDataCache();
+  const { refresh, addLocal, getCategories } = useDataCache();
+  const catOptions = getCategories(form.type);
   const canSubmit =
     form.date && form.type && form.category && Number.isFinite(form.amount);
 
@@ -44,11 +46,20 @@ export default function AddTransaction() {
     if (!canSubmit) return;
     setSaving(true);
     try {
-      await createTransaction(form);
-      await refresh(); // 🔁 pull fresh data into the cache
+     const { id } = await createTransaction(form);
+     // optimistic local add with the real ID from the server
+     addLocal({
+       id,
+       date: form.date,
+       type: form.type,
+       category: form.category,
+       description: form.description,
+       amount: form.amount,
+     });
       setForm(makeDefault());
-        setAmountInput("0");
-        await refresh(); // pull fresh data into cache
+      setAmountInput("0");
+      // silent refresh to reconcile any server-side changes
+      void refresh();
       alert("Saved!");
     } catch (err) {
       console.error(err);
@@ -75,8 +86,17 @@ export default function AddTransaction() {
 
       <div className="grid gap-1">
         <label className="text-sm">Category</label>
-        <input value={form.category} onChange={onChange("category")} className="border p-2 rounded" placeholder="Groceries, Rent, Salary..." required />
-      </div>
+          <CategorySelect
+            value={form.category}
+            onChange={(name) => setForm((f) => ({ ...f, category: name }))}
+            options={catOptions}
+            className="w-full"
+            placeholder="Select category"
+          />
+       <p className="text-xs text-slate-500">
+         Showing {form.type} categories from your “Categories” sheet.
+       </p>
+     </div>
 
       <div className="grid gap-1">
         <label className="text-sm">Amount</label>
