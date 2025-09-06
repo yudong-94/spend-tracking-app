@@ -1,4 +1,3 @@
-// frontend/src/state/data-cache.tsx
 import React, {
     createContext, useCallback, useContext, useEffect, useMemo, useState,
   } from "react";
@@ -6,7 +5,7 @@ import React, {
   
   export type Tx = {
     id?: string;
-    date: string;                       // YYYY-MM-DD
+    date: string;                         // YYYY-MM-DD
     type: "income" | "expense";
     category: string;
     description?: string;
@@ -18,6 +17,7 @@ import React, {
     isLoading: boolean;
     lastSyncAt?: number;
     refresh: () => Promise<void>;
+    addLocal: (tx: Tx) => void;          // NEW: optimistic local add
     getSummary: (start?: string, end?: string) => {
       totalIncome: number; totalExpense: number; netCashFlow: number;
     };
@@ -32,40 +32,80 @@ import React, {
     isLoading: true,
     lastSyncAt: undefined,
     refresh: async () => {},
+    addLocal: () => {},
     getSummary: () => ({ totalIncome: 0, totalExpense: 0, netCashFlow: 0 }),
     getBreakdown: () => [],
     getMonthlySeries: () => [],
   });
+  
+  const LS_KEY = "st-cache-v1";
+  const STALE_MS = 5 * 60 * 1000; // 5 minutes
+  
+  type PersistShape = { txns: Tx[]; lastSyncAt: number };
+  
+  function loadFromStorage(): PersistShape | null {
+    try {
+      const raw = localStorage.getItem(LS_KEY);
+      if (!raw) return null;
+      return JSON.parse(raw) as PersistShape;
+    } catch { return null; }
+  }
+  function saveToStorage(txns: Tx[], lastSyncAt: number) {
+    try { localStorage.setItem(LS_KEY, JSON.stringify({ txns, lastSyncAt })); } catch {}
+  }
   
   export function DataCacheProvider({ children }: { children: React.ReactNode }) {
     const [txns, setTxns] = useState<Tx[]>([]);
     const [isLoading, setLoading] = useState(true);
     const [lastSyncAt, setLastSyncAt] = useState<number | undefined>();
   
-    const load = useCallback(async () => {
+    // Initial hydrate from localStorage, then refresh if stale
+    useEffect(() => {
+      const persisted = loadFromStorage();
+      if (persisted) {
+        setTxns(persisted.txns);
+        setLastSyncAt(persisted.lastSyncAt);
+        setLoading(false);
+        // soft refresh if stale
+        if (Date.now() - persisted.lastSyncAt > STALE_MS) {
+          void refresh();
+        }
+      } else {
+        void refresh();
+      }
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+  
+    const refresh = useCallback(async () => {
       setLoading(true);
       try {
         const rows = await listTransactions({});
         setTxns(rows as Tx[]);
-        setLastSyncAt(Date.now());
+        const ts = Date.now();
+        setLastSyncAt(ts);
+        saveToStorage(rows as Tx[], ts);
       } finally {
         setLoading(false);
       }
     }, []);
   
-    useEffect(() => { void load(); }, [load]);
+    // Optimistic local add (used after POST)
+    const addLocal = useCallback((tx: Tx) => {
+      setTxns(prev => {
+        const next = [tx, ...prev].sort((a, b) => a.date.localeCompare(b.date));
+        saveToStorage(next, lastSyncAt ?? Date.now());
+        return next;
+      });
+    }, [lastSyncAt]);
   
-    const filter = useCallback((start?: string, end?: string) => {
-      return txns.filter(r => (!start || r.date >= start) && (!end || r.date <= end));
-    }, [txns]);
+    const filter = useCallback((start?: string, end?: string) =>
+      txns.filter(r => (!start || r.date >= start) && (!end || r.date <= end))
+    , [txns]);
   
     const getSummary: Ctx["getSummary"] = useCallback((start, end) => {
       const rows = filter(start, end);
       let income = 0, expense = 0;
-      for (const r of rows) {
-        if (r.type === "income") income += r.amount;
-        else expense += r.amount;
-      }
+      for (const r of rows) r.type === "income" ? income += r.amount : expense += r.amount;
       return { totalIncome: income, totalExpense: expense, netCashFlow: income - expense };
     }, [filter]);
   
@@ -81,9 +121,9 @@ import React, {
       const rows = filter(start, end).filter(r => !category || r.category === category);
       const by = new Map<string, { month: string; income: number; expense: number; net: number }>();
       for (const r of rows) {
-        const m = r.date.slice(0, 7); // YYYY-MM
+        const m = r.date.slice(0, 7);
         const p = by.get(m) ?? { month: m, income: 0, expense: 0, net: 0 };
-        if (r.type === "income") p.income += r.amount; else p.expense += r.amount;
+        r.type === "income" ? (p.income += r.amount) : (p.expense += r.amount);
         p.net = p.income - p.expense;
         by.set(m, p);
       }
@@ -91,15 +131,12 @@ import React, {
     }, [filter]);
   
     const value: Ctx = useMemo(() => ({
-      txns, isLoading, lastSyncAt,
-      refresh: load,
+      txns, isLoading, lastSyncAt, refresh, addLocal,
       getSummary, getBreakdown, getMonthlySeries,
-    }), [txns, isLoading, lastSyncAt, load, getSummary, getBreakdown, getMonthlySeries]);
+    }), [txns, isLoading, lastSyncAt, refresh, addLocal, getSummary, getBreakdown, getMonthlySeries]);
   
     return <DataCacheContext.Provider value={value}>{children}</DataCacheContext.Provider>;
   }
   
   export const useDataCache = () => useContext(DataCacheContext);
-  
-  // ensure this file is treated as a module in any TS config
   export {};

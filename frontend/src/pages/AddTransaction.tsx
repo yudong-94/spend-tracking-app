@@ -15,7 +15,7 @@ export default function AddTransaction() {
   const [form, setForm] = useState<NewTransaction>(makeDefault());
   const [amountInput, setAmountInput] = useState<string>("0");
   const [saving, setSaving] = useState(false);
-  const { refresh } = useDataCache();
+  const { refresh, addLocal } = useDataCache();
   const canSubmit =
     form.date && form.type && form.category && Number.isFinite(form.amount);
 
@@ -45,10 +45,18 @@ export default function AddTransaction() {
     setSaving(true);
     try {
       await createTransaction(form);
-      await refresh(); // 🔁 pull fresh data into the cache
+      // optimistic local add
+      addLocal({
+        date: form.date,
+        type: form.type,
+        category: form.category,
+        description: form.description,
+        amount: form.amount,
+      });
       setForm(makeDefault());
-        setAmountInput("0");
-        await refresh(); // pull fresh data into cache
+      setAmountInput("0");
+      // silent refresh to reconcile any server-side changes
+      void refresh();
       alert("Saved!");
     } catch (err) {
       console.error(err);
