@@ -70,30 +70,56 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json(rows);
     }
 
-  if (req.method === "POST") {
-      const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
-      // accept lowercase or Sheet-style Title Case
-      const pick = (k: string) => body?.[k] ?? body?.[k[0].toUpperCase() + k.slice(1)];
-      const parseAmount = (v: any) =>
-        typeof v === "number"
-          ? v
-          : v
-          ? Number(String(v).replace(/[^0-9.-]/g, "")) || 0
-          : 0;
-      const typeRaw = String(pick("type") ?? "").toLowerCase();
-      const toSheetRow: Record<string, any> = {
-        ID: pick("id") || "",
-        Date: pick("date"),
-        Amount: parseAmount(pick("amount")),
-        Type: typeRaw === "income" ? "income" : "expense",
-        Category: pick("category"),
-        Description: pick("description") || "",
-        "Created At": new Date().toLocaleString(),
-        "Updated At": new Date().toLocaleString(),
-      };
-      await appendRow(toSheetRow);
-      return res.status(201).json({ ok: true });
-    }
+    if (req.method === "POST") {
+        const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
+      
+        // accept lowercase or Title Case keys
+        const pick = (k: string) => body?.[k] ?? body?.[k[0].toUpperCase() + k.slice(1)];
+        const parseAmount = (v: any) =>
+          typeof v === "number"
+            ? v
+            : v
+            ? Number(String(v).replace(/[^0-9.-]/g, "")) || 0
+            : 0;
+      
+        const date = pick("date");
+        const amount = parseAmount(pick("amount"));
+        const typeRaw = String(pick("type") ?? "").toLowerCase();
+        const type = typeRaw === "income" ? "income" : "expense";
+        const category = pick("category");
+        const description = pick("description") || "";
+      
+        // --- Generate ID if not provided
+        let id: string | undefined = pick("id");
+        if (!id) {
+          const rows = await readTable(); // existing helper
+          let max = 0;
+          for (const r of rows) {
+            const raw = (r["ID"] ?? r["id"] ?? "") as string;
+            const m = String(raw).match(/spend-(\d+)/i);
+            if (m) {
+              const n = parseInt(m[1], 10);
+              if (Number.isFinite(n) && n > max) max = n;
+            }
+          }
+          id = `spend-${max + 1}`;
+        }
+      
+        const now = new Date();
+        const toSheetRow: Record<string, any> = {
+          ID: id,
+          Date: date,
+          Amount: amount,
+          Type: type,
+          Category: category,
+          Description: description,
+          "Created At": now.toLocaleString(),
+          "Updated At": now.toLocaleString(),
+        };
+      
+        await appendRow(toSheetRow);
+        return res.status(201).json({ ok: true, id }); // <-- return ID to client
+      }
 
     res.setHeader("Allow", "GET, POST");
     return res.status(405).send("Method Not Allowed");

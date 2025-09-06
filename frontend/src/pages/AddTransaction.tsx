@@ -44,15 +44,16 @@ export default function AddTransaction() {
     if (!canSubmit) return;
     setSaving(true);
     try {
-      await createTransaction(form);
-      // optimistic local add
-      addLocal({
-        date: form.date,
-        type: form.type,
-        category: form.category,
-        description: form.description,
-        amount: form.amount,
-      });
+     const { id } = await createTransaction(form);
+     // optimistic local add with the real ID from the server
+     addLocal({
+       id,
+       date: form.date,
+       type: form.type,
+       category: form.category,
+       description: form.description,
+       amount: form.amount,
+     });
       setForm(makeDefault());
       setAmountInput("0");
       // silent refresh to reconcile any server-side changes

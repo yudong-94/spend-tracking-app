@@ -25,14 +25,16 @@ export type NewTransaction = {
     return res.json() as Promise<any[]>; // array of row objects (keys from header row)
   }
   
-export async function createTransaction(tx: NewTransaction) {
+  export type CreateTransactionResponse = { ok: true; id: string };
+
+  export async function createTransaction(tx: NewTransaction) {
     const res = await fetch("/api/transactions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(tx),
     });
     if (!res.ok) throw new Error(`createTransaction failed: ${res.status}`);
-    return res.json();
+    return res.json() as Promise<CreateTransactionResponse>;
   }
   
   export async function getSummary(period?: Period) {
