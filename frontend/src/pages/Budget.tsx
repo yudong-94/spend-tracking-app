@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { getBudget, createBudgetOverride } from "@/lib/api";
 import RefreshButton from "@/components/RefreshButton";
 import { fmtUSD } from "@/lib/format";
@@ -35,6 +35,25 @@ export default function Budget() {
     { label: "Remaining", value: fmtUSD(data?.totalRemaining ?? 0) },
   ];
 
+  const METHOD_TEXT: Record<string, string> = {
+    "last-month": "Last month (fixed)",
+    "avg-12": "Average of last 12 complete months",
+    "derived": "Derived remainder (Misc.)",
+    "override-total": "Manual TOTAL override", // shown at top as a note; included here for completeness
+  };
+  const methodLabel = (s?: string) => METHOD_TEXT[s || ""] || "-";
+
+  // Show actuals only up to *today* when viewing the current month.
+  const seriesForChart = useMemo(() => {
+    if (!data?.series?.length) return [];
+    const now = new Date();
+    const thisMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    if (data.month !== thisMonthKey) return data.series; // historical month -> show full series
+    const today = now.getDate();
+    // Recharts breaks the line on null/undefined, so null out future points
+    return data.series.map((p: any) => (p.day <= today ? p : { ...p, cumActual: null }));
+  }, [data]);
+
   const rows = data?.rows ?? [];
 
   return (
@@ -66,7 +85,7 @@ export default function Budget() {
         <div className="text-sm font-medium mb-3">Cumulative actual vs budget</div>
         <div style={{ width: "100%", height: 300 }}>
           <ResponsiveContainer>
-            <LineChart data={data?.series || []}>
+            <LineChart data={seriesForChart}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="day" />
               <YAxis tickFormatter={(v: number) => fmtUSD(v)} width={80} />
@@ -75,6 +94,9 @@ export default function Budget() {
               <ReferenceLine y={totalBudget} stroke="#111827" strokeDasharray="6 6" ifOverflow="extendDomain" />
             </LineChart>
           </ResponsiveContainer>
+          <div className="mt-1 text-xs text-slate-500">
+          Actuals are shown through today; the line does not project future days.
+          </div>
         </div>
       </div>
 
@@ -89,6 +111,7 @@ export default function Budget() {
                 <th className="py-2 pr-4">Budget</th>
                 <th className="py-2 pr-4">Actual</th>
                 <th className="py-2 pr-4">Remaining</th>
+                <th className="py-2 px-3 w-1/5">Methodology</th>
                 <th className="py-2">Usage</th>
               </tr>
             </thead>
@@ -103,6 +126,7 @@ export default function Budget() {
                     <td className="py-2 pr-4">{fmtUSD(r.budget)}</td>
                     <td className="py-2 pr-4">{fmtUSD(r.actual)}</td>
                     <td className="py-2 pr-4">{fmtUSD(r.remaining)}</td>
+                    <td className="py-2 px-3 text-slate-500">{methodLabel(r.source)}</td>
                     <td className="py-2">
                       <div className="h-2 w-40 bg-slate-200 rounded">
                         <div className={`h-2 rounded ${color}`} style={{ width: `${pct * 100}%` }} />
@@ -143,7 +167,7 @@ function AdjustTotalCard({ onSaved }: { onSaved: () => void }) {
   return (
     <div className="rounded-lg border bg-white p-4">
       <div className="flex items-center justify-between">
-        <div className="text-sm font-medium">Adjust TOTAL (this month)</div>
+        <div className="text-sm font-medium">Adjust Budget (this month)</div>
         <button
           type="button"
           className="px-3 py-1.5 rounded bg-slate-900 text-white text-sm"

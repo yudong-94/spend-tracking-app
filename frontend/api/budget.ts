@@ -34,11 +34,10 @@ function daysInMonth(d: Date) {
 function isSameMonth(d: Date, y: number, m: number) {
   return d.getFullYear() === y && d.getMonth() === m;
 }
-function median(nums: number[]) {
-  const arr = [...nums].filter((n) => Number.isFinite(n)).sort((a, b) => a - b);
+function average(nums: number[]) {
+  const arr = nums.filter((n) => Number.isFinite(n));
   if (!arr.length) return 0;
-  const mid = Math.floor(arr.length / 2);
-  return arr.length % 2 ? arr[mid] : (arr[mid - 1] + arr[mid]) / 2;
+  return arr.reduce((s, n) => s + n, 0) / arr.length;
 }
 function num(n: any) {
   const v = typeof n === "number" ? n : Number(String(n).replace(/,/g, ""));
@@ -117,9 +116,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return total - specials;
     });
 
-    const baseMedian = median(exSpecialsValues);
+    const baseAvg = average(exSpecialsValues);
 
-    // Rent last month; fallback to median of last 3 months if 0
+    // Rent last month; fallback to average of last 3 months if 0
     const lastMonthCats = byMonthByCat.get(lastCompleteKey) || new Map();
     let rentLM = 0;
     for (const [cat, v] of lastMonthCats.entries()) {
@@ -138,7 +137,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
         rentSeries.push(v);
       }
-      rentLM = median(rentSeries);
+      rentLM = average(rentSeries);
     }
 
     // Read a manual TOTAL override from Budgets tab (optional).
@@ -178,7 +177,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         console.error("read Budgets tab failed", e);
     }
 
-    const totalBudget = baseMedian + rentLM + manualTotal
+    const totalBudget = baseAvg + rentLM + manualTotal
 
     // Category budgets for display
     const coreBudgets: Record<string, number> = {};
@@ -188,7 +187,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const map = byMonthByCat.get(mk) || new Map();
         vals.push(map.get(cat) || 0);
       }
-      coreBudgets[cat] = median(vals);
+      coreBudgets[cat] = average(vals);
     }
 
     // Misc
@@ -246,7 +245,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         category: c,
         budget: coreBudgets[c],
         actual: coreActual[c],
-        source: "median-12" as const,
+        source: "avg-12" as const,
       })),
       { category: "Miscellaneous", budget: miscBudget, actual: miscActual, source: "derived" as const },
     ].map((r) => ({ ...r, remaining: Math.max(0, r.budget - r.actual) }));
