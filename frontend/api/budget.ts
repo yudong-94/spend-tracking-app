@@ -52,34 +52,6 @@ const SPECIALS = new Set(["rent", "travel", "tax return", "credit card fee"]);
 const CORE5 = ["Food", "Grocery", "Clothes", "Utility", "Daily Necessities"] as const;
 
 // -------------------- Budgets sheet I/O (header-agnostic) --------------------
-async function readBudgetOverrides() {
-  const { sheets, spreadsheetId } = await getSheetsClient();
-
-  const hdrRes = await sheets.spreadsheets.values.get({
-    spreadsheetId,
-    range: `${BUDGETS_SHEET}!1:1`,
-  });
-  const headers = (hdrRes.data.values?.[0] ?? []).map(String);
-  const H = headers.map((h) => lower(h));
-
-  const iMonth = H.findIndex((h) => h.startsWith("month"));
-  const iAmount = H.findIndex((h) => h === "amount");
-  const iNotes = H.findIndex((h) => h.startsWith("note")); // Notes/Note
-
-  const rowsRes = await sheets.spreadsheets.values.get({
-    spreadsheetId,
-    range: `${BUDGETS_SHEET}!A2:Z`,
-  });
-  const rows = rowsRes.data.values ?? [];
-
-  return rows
-    .map((r) => ({
-      month: iMonth >= 0 ? norm(r[iMonth]) : "",
-      amount: iAmount >= 0 ? num(r[iAmount]) : 0,
-      notes: iNotes >= 0 ? norm(r[iNotes]) : "",
-    }))
-    .filter((r) => r.month);
-}
 
 async function appendBudgetOverride(monthKey: string, amount: number, notes: string) {
   const { sheets, spreadsheetId } = await getSheetsClient();
@@ -211,11 +183,54 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       rentLM = average(rent3);
     }
 
-    // Manual TOTAL override from Budgets tab (uses first row for the month, if any)
-    const overrides = await readBudgetOverrides();
-    const overrideRow = overrides.find((r) => r.month === targetMonthKey);
-    const manualTotal = overrideRow?.amount || 0;
-    const manualNote = overrideRow?.notes || "";
+    // Manual TOTAL override from Budgets tab (sum up all the overrides of the current month)
+
+    let manualTotal = 0;
+    let manualItems: Array<{ amount: number; notes: string }> = [];
+    let manualNote = ""; // keep for backward-compatible display
+    
+    try {
+      const { sheets, spreadsheetId } = await getSheetsClient();
+      const resp = await sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range: `${BUDGETS_SHEET}!A1:C`,
+      });
+    
+      const vals = resp.data.values || [];
+      if (vals.length) {
+        const headers = vals[0].map((h) => String(h).trim().toLowerCase());
+        const rows = vals.slice(1).map((r) => {
+          const o: Record<string, string> = {};
+          headers.forEach((h, i) => (o[h] = r[i] ?? ""));
+          return o;
+        });
+    
+        for (const r of rows) {
+          const m = String(
+            r["month"] || r["month (yyyy-mm)"] || r["month yyyy-mm"] || ""
+          ).trim();
+    
+          if (m === targetMonthKey) {
+            const amt = Number(String(r["amount"] ?? "").replace(/,/g, ""));
+            if (Number.isFinite(amt) && amt !== 0) {
+              manualTotal += amt;
+              manualItems.push({
+                amount: amt,
+                notes: String(r["notes"] || r["note"] || ""),
+              });
+            }
+          }
+        }
+    
+        // Back-compat: collapse notes to a single line if you still show it near the top
+        manualNote = manualItems
+          .map((i) => i.notes)
+          .filter(Boolean)
+          .join(" • ");
+      }
+    } catch (e) {
+      console.error("read Budgets tab failed", e);
+    }
 
     // Final TOTAL budget
     const totalBudget = baseAvg + rentLM + manualTotal;
@@ -299,6 +314,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       totalRemaining: Math.max(0, totalBudget - totalActualMTD),
       manualTotal,
       manualNote,
+      manualItems,
       overAllocated,
       series,
       rows,

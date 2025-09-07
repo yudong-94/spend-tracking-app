@@ -4,7 +4,24 @@ import RefreshButton from "@/components/RefreshButton";
 import { fmtUSD } from "@/lib/format";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 
-type BudgetResp = Awaited<ReturnType<typeof getBudget>>;
+type BudgetResp = {
+    month: string;
+    totalBudget: number;
+    totalActualMTD: number;
+    totalRemaining: number;
+    manualTotal: number;
+    manualNote: string;
+    manualItems?: Array<{ amount: number; notes: string }>; // <-- add
+    overAllocated: boolean;
+    series: Array<{ day: number; cumActual: number }>;
+    rows: Array<{
+      category: string;
+      budget: number;
+      actual: number;
+      remaining: number;
+      source: "avg-12" | "last-month" | "derived";
+    }>;
+  };
 
 export default function Budget() {
   const [data, setData] = useState<BudgetResp | null>(null);
@@ -165,6 +182,26 @@ export default function Budget() {
         onClose={() => setShowAdjust(false)}
         onSuccess={fetchIt /* or refresh() – the function you use to re-fetch budgets */}
       />
+      {(data?.manualItems?.length ?? 0) > 0 && (
+        <div className="rounded-lg border p-4 mt-4">
+            <div className="text-sm font-medium mb-2">Adjustments this month</div>
+            <ul className="space-y-1">
+            {data!.manualItems!.map((it, i) => {
+                const sign = it.amount >= 0 ? "+" : "−";
+                const abs = Math.abs(it.amount);
+                return (
+                <li key={i} className="flex justify-between text-sm">
+                    <span className="text-slate-600">{it.notes || "—"}</span>
+                    <span className="font-medium">
+                    {sign}
+                    {fmtUSD(abs)}
+                    </span>
+                </li>
+                );
+            })}
+            </ul>
+        </div>
+        )}
     </div>
   );
 }
