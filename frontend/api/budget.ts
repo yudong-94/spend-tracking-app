@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { readTable, readBudgets } from "./_lib/sheets.js";
+import { readTable, getSheetsClient } from "./_lib/sheets.js";
 
 const AUTH = process.env.APP_ACCESS_TOKEN || process.env.VITE_APP_ACCESS_TOKEN;
 
@@ -141,17 +141,45 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       rentLM = median(rentSeries);
     }
 
-    // Manual TOTAL override for target month
-    const budgets = await readBudgets();
-    const manualRow = budgets.find(
-      (b) =>
-        String(b["Category"] || "").trim().toLowerCase() === "total" &&
-        String(b["Month (YYYY-MM)"] || "").trim() === targetMonthKey
-    );
-    const manualTotal = manualRow ? num(manualRow["Amount"]) : 0;
-    const manualNote = manualRow ? String(manualRow["Notes"] || "") : "";
+    // Read a manual TOTAL override from Budgets tab (optional).
+    // Accept either "Month" or "Month (YYYY-MM)" as the header.
+    const budgetsTab = process.env.GOOGLE_SHEETS_BUDGETS_TAB || "Budgets";
+    let manualTotal = 0;
+    let manualNote = "";
+    try {
+        const { sheets, spreadsheetId } = await getSheetsClient();
+        const resp = await sheets.spreadsheets.values.get({
+            spreadsheetId,
+        range: `${budgetsTab}!A1:C`,
+        });
+        const vals = resp.data.values || [];
+        if (vals.length) {
+            const headers = vals[0].map((h) => String(h).trim().toLowerCase());
+            const rows = vals.slice(1).map((r) => {
+                const o: Record<string, string> = {};
+                headers.forEach((h, i) => (o[h] = r[i] ?? ""));
+                return o;
+            });
+            const rec = rows.find((r) => {
+                const m =
+                    (r["month"] ||
+                    r["month (yyyy-mm)"] ||
+                    r["month yyyy-mm"] ||
+                    "").trim();
+                return m === targetMonthKey;
+            });
+            if (rec) {
+                const amt = (rec["amount"] || "").toString().replace(/,/g, "");
+                manualTotal = Number(amt) || 0;
+                manualNote = String(rec["notes"] || rec["note"] || "");
+        }
+        }
+    } catch (e) {
+        console.error("read Budgets tab failed", e);
+    }
 
-    const totalBudget = baseMedian + rentLM + manualTotal;
+    const computed = baseMedian + rentLM;
+    const totalBudget = manualTotal > 0 ? manualTotal : computed;
 
     // Category budgets for display
     const coreBudgets: Record<string, number> = {};
@@ -163,14 +191,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       coreBudgets[cat] = median(vals);
     }
-    const travelBudget = 0; // travel covered via TOTAL override
 
     // Misc
     const miscBudgetRaw =
       totalBudget -
       rentLM -
-      Object.values(coreBudgets).reduce((a, b) => a + b, 0) -
-      travelBudget;
+      Object.values(coreBudgets).reduce((a, b) => a + b, 0) 
     const overAllocated = miscBudgetRaw < 0;
     const miscBudget = Math.max(0, miscBudgetRaw);
 
