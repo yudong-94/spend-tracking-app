@@ -1,91 +1,59 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
-type Props = {
-  value: number;                           // numeric cents not required; plain number OK
-  onChange: (v: number) => void;           // will pass a Number (NaN -> 0)
-  id?: string;
-  name?: string;
-  placeholder?: string;
-  className?: string;
-};
-
-/**
- * Controlled currency input.
- * - Lets user type freely (digits + one ".")
- * - Keeps <= 2 decimals
- * - Formats with thousands separators on every change
- * - Stores the numeric value via onChange
- */
 export default function CurrencyInput({
   value,
   onChange,
-  id,
-  name,
-  placeholder,
+  placeholder = "",
   className = "border p-2 rounded",
-}: Props) {
-  const [text, setText] = useState<string>("");
+}: {
+  value: number;
+  onChange: (v: number) => void;
+  placeholder?: string;
+  className?: string;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [raw, setRaw] = useState<string>("");
 
-  // format helper
-  const fmt = useMemo(
-    () =>
-      new Intl.NumberFormat("en-US", {
-        useGrouping: true,
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 2,
-      }),
-    []
-  );
+  // render helper
+  const formatNice = (n: number) =>
+    Number.isFinite(n)
+      ? n.toLocaleString(undefined, {
+          minimumFractionDigits: n % 1 ? 2 : 0,
+          maximumFractionDigits: 2,
+        })
+      : "";
 
-  // sync external numeric -> text
+  // keep internal string in sync when parent value changes (but don't fight the user while typing)
   useEffect(() => {
-    if (Number.isFinite(value)) {
-      setText(formatFromNumber(value));
+    if (document.activeElement !== inputRef.current) {
+      setRaw(value ? formatNice(value) : "");
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value]);
 
-  function normalize(raw: string): { num: number; display: string } {
-    // keep digits and a single "."
-    const cleaned = raw.replace(/[^0-9.]/g, "");
+  // parse "1,234.56" or "1.234,56" → 1234.56
+  const parseToNumber = (s: string): number => {
+    const cleaned = s.replace(/[^\d.,-]/g, "").replace(/,/g, ".");
+    // collapse extra dots (1.2.3 -> 1.23)
     const parts = cleaned.split(".");
-    const int = parts[0].replace(/^0+(?=\d)/, "") || "0";
-    const dec = parts[1] ? parts[1].slice(0, 2) : "";
-    const num = Number(int + (dec ? "." + dec : ""));
-    const display = dec === "" ? fmt.format(Number(int)) : `${fmt.format(Number(int))}.${dec}`;
-    return { num: Number.isFinite(num) ? num : 0, display };
-  }
-
-  function formatFromNumber(n: number): string {
-    const [i, d] = n.toString().split(".");
-    if (d) return `${fmt.format(Number(i))}.${d.slice(0, 2)}`;
-    return fmt.format(n);
-  }
+    const normalized = parts.length > 2 ? parts[0] + "." + parts.slice(1).join("") : cleaned;
+    const n = Number(normalized);
+    return Number.isFinite(n) ? n : 0;
+  };
 
   return (
     <input
-      id={id}
-      name={name}
-      type="text"
+      ref={inputRef}
       inputMode="decimal"
-      placeholder={placeholder ?? "0.00"}
+      placeholder={placeholder}
       className={className}
-      value={text}
+      value={raw}
       onChange={(e) => {
-        const { num, display } = normalize(e.target.value);
-        setText(display);
-        onChange(num);
+        const s = e.target.value;
+        setRaw(s);
+        onChange(parseToNumber(s));
       }}
-      onBlur={() => {
-        // ensure two decimals on blur
-        const n = Number.isFinite(value) ? value : 0;
-        const fixed = n.toLocaleString("en-US", {
-          useGrouping: true,
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
-        });
-        setText(fixed);
-      }}
+      onFocus={() => setRaw(value ? String(value) : "")}
+      onBlur={() => setRaw(value ? formatNice(value) : "")}
     />
   );
 }

@@ -1,10 +1,10 @@
+// frontend/src/pages/AddTransaction.tsx
 import { useMemo, useState } from "react";
 import { useDataCache } from "@/state/data-cache";
 import CurrencyInput from "@/components/CurrencyInput";
 import CategorySelect from "@/components/CategorySelect";
 import { createTransaction } from "@/lib/api";
 
-// Explicit local form type to avoid TS drift with API types
 type FormTx = {
   Date: string;
   Type: "income" | "expense";
@@ -15,8 +15,14 @@ type FormTx = {
 };
 
 export default function AddTransaction() {
-  // NOTE: categories isn't used directly here (CategorySelect reads from its own context/logic)
   const { categories, txns, refresh } = useDataCache();
+
+  // Sort: expenses A→Z, then income A→Z
+  const sortedOptions = useMemo(() => {
+    const exp = categories.filter((c) => c.type === "expense").sort((a, b) => a.name.localeCompare(b.name));
+    const inc = categories.filter((c) => c.type === "income").sort((a, b) => a.name.localeCompare(b.name));
+    return [...exp, ...inc];
+  }, [categories]);
 
   const [form, setForm] = useState<FormTx>({
     Date: new Date().toISOString().slice(0, 10),
@@ -27,36 +33,38 @@ export default function AddTransaction() {
     Description: "",
   });
 
-  // Build quick presets = latest 6 distinct categories you've used
+  // Quick presets: last 6 used categories; fallback to first 6 expense cats if no history
   const presets = useMemo(() => {
+    const recent: Array<{ name: string; type: "income" | "expense" }> = [];
     const seen = new Set<string>();
-    const out: Array<{ name: string; type: "income" | "expense" }> = [];
 
     for (const r of txns as any[]) {
       const name = String(r?.Category ?? "").trim();
-      const type = String(r?.Type ?? "").trim().toLowerCase();
+      const type = String(r?.Type ?? "").trim().toLowerCase() as "income" | "expense";
       if (!name || (type !== "income" && type !== "expense")) continue;
       if (!seen.has(name)) {
         seen.add(name);
-        out.push({ name, type: type as "income" | "expense" });
+        recent.push({ name, type });
       }
-      if (out.length >= 6) break;
+      if (recent.length >= 6) break;
     }
-    return out;
-  }, [txns]);
+
+    if (recent.length) return recent;
+
+    // fallback – top expense categories A→Z
+    return sortedOptions
+      .filter((c) => c.type === "expense")
+      .slice(0, 6)
+      .map((c) => ({ name: c.name, type: c.type }));
+  }, [txns, sortedOptions]);
 
   const setType = (t: "income" | "expense") => setForm((f) => ({ ...f, Type: t }));
   const setCategory = (name: string) => setForm((f) => ({ ...f, Category: name }));
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Normalize to 2 decimals; keep key exactly "Amount" to match your sheet header
-    const Amount = Math.round((form.Amount || 0) * 100) / 100;
-
-    // Cast to any to satisfy API param typing while keeping the correct sheet keys
-    await createTransaction({ ...form, Amount } as any);
-
-    // Optimistic reset + refresh cache
+    const Amount = Math.round((form.Amount || 0) * 100) / 100; // 2dp
+    await createTransaction({ ...form, Amount } as any); // keep "Amount" (capital A) for sheet
     setForm((f) => ({ ...f, Amount: 0, Description: "" }));
     refresh?.();
     alert("Saved!");
@@ -81,7 +89,7 @@ export default function AddTransaction() {
         {/* Type (segmented) */}
         <div className="grid gap-1">
           <label className="text-sm">Type</label>
-          <div className="inline-flex border rounded overflow-hidden">
+          <div className="inline-flex w-fit border rounded overflow-hidden">
             <button
               type="button"
               onClick={() => setType("expense")}
@@ -127,13 +135,13 @@ export default function AddTransaction() {
           </div>
         )}
 
-        {/* Category (pill, single-select) */}
+        {/* Category (single-select) */}
         <div className="grid gap-1">
           <label className="text-sm">Category</label>
           <CategorySelect
-            multiple={false}                 // single select
-            options={categories}             // <-- REQUIRED
-            value={form.Category}            // <-- string, not string[]
+            multiple={false}
+            options={sortedOptions}
+            value={form.Category}
             onChange={(name: string) => setCategory(name)}
             placeholder="Choose a category…"
           />
