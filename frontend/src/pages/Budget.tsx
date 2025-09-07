@@ -56,12 +56,20 @@ export default function Budget() {
 
   const rows = data?.rows ?? [];
 
+  const [showAdjust, setShowAdjust] = useState(false);
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-semibold">Budget</h2>
         <RefreshButton onClick={fetchIt} label={loading ? "Refreshing..." : "Refresh"} />
       </div>
+
+      {err ? (
+        <div className="text-sm px-3 py-2 rounded border bg-rose-50 border-rose-200 text-rose-700">
+          Error loading budget: {err}
+        </div>
+      ) : null}
 
       {data?.manualTotal ? (
         <div className="text-sm px-3 py-2 rounded border bg-amber-50 border-amber-200">
@@ -144,65 +152,106 @@ export default function Budget() {
       </div>
 
       {/* Adjust TOTAL override */}
-      <AdjustTotalCard onSaved={fetchIt} />
-      {err ? <div className="text-rose-600 text-sm">{err}</div> : null}
+      <button
+        type="button"
+        className="px-3 py-2 rounded bg-slate-900 text-white"
+        onClick={() => setShowAdjust(true)}
+      >
+        Add adjustment
+      </button>
+
+      <AdjustBudgetModal
+        open={showAdjust}
+        onClose={() => setShowAdjust(false)}
+        onSuccess={fetchIt /* or refresh() – the function you use to re-fetch budgets */}
+      />
     </div>
   );
 }
 
-function AdjustTotalCard({ onSaved }: { onSaved: () => void }) {
-  const [open, setOpen] = useState(false);
-  const [amount, setAmount] = useState<number>(0);
-  const [notes, setNotes] = useState("");
-
-  const onSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    await createBudgetOverride({ amount, notes });
-    setOpen(false);
-    setAmount(0);
-    setNotes("");
-    onSaved();
-  };
-
-  return (
-    <div className="rounded-lg border bg-white p-4">
-      <div className="flex items-center justify-between">
-        <div className="text-sm font-medium">Adjust Budget (this month)</div>
-        <button
-          type="button"
-          className="px-3 py-1.5 rounded bg-slate-900 text-white text-sm"
-          onClick={() => setOpen((v) => !v)}
-        >
-          {open ? "Close" : "Add adjustment"}
-        </button>
+function AdjustBudgetModal({
+    open,
+    onClose,
+    onSuccess, // call to refresh data after save
+  }: {
+    open: boolean;
+    onClose: () => void;
+    onSuccess: () => Promise<void> | void;
+  }) {
+    const [amount, setAmount] = useState<string>("");
+    const [notes, setNotes] = useState<string>("");
+    const [saving, setSaving] = useState(false);
+    const parsed = Number((amount || "").toString().replace(/,/g, ""));
+  
+    if (!open) return null;
+  
+    async function handleSave(e: React.FormEvent) {
+      e.preventDefault();
+      if (!Number.isFinite(parsed)) {
+        alert("Please enter a valid amount.");
+        return;
+      }
+      setSaving(true);
+      try {
+        await createBudgetOverride({ amount: parsed, notes });
+        await onSuccess(); // refresh budgets
+        onClose();
+      } catch (err) {
+        console.error(err);
+        alert("Failed to save the adjustment.");
+      } finally {
+        setSaving(false);
+      }
+    }
+  
+    return (
+      <div className="fixed inset-0 z-50 bg-black/20 flex items-start justify-center p-6">
+        <div className="w-full max-w-3xl rounded-lg bg-white shadow-lg">
+          <div className="flex items-center justify-between p-4 border-b">
+            <h3 className="text-base font-semibold">Adjust Budget (this month)</h3>
+            <button
+              type="button"
+              className="px-3 py-1.5 rounded bg-slate-900 text-white"
+              onClick={onClose}
+              disabled={saving}
+            >
+              Close
+            </button>
+          </div>
+  
+          <form onSubmit={handleSave} className="p-4 space-y-4">
+            <div>
+              <label className="block text-sm mb-1">Amount</label>
+              <input
+                className="w-full border rounded px-3 py-2"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                placeholder="e.g. 500"
+                inputMode="decimal"
+              />
+            </div>
+  
+            <div>
+              <label className="block text-sm mb-1">Notes (optional)</label>
+              <input
+                className="w-full border rounded px-3 py-2"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="What is this adjustment for?"
+              />
+            </div>
+  
+            <div className="pt-2">
+              <button
+                type="submit"
+                className="px-4 py-2 rounded bg-slate-900 text-white disabled:opacity-50"
+                disabled={saving || !Number.isFinite(parsed)}
+              >
+                {saving ? "Saving…" : "Save"}
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
-      {open && (
-        <form onSubmit={onSubmit} className="grid gap-3 mt-3">
-          <div className="grid gap-1">
-            <label className="text-sm">Amount</label>
-            <input
-              type="number"
-              step="0.01"
-              className="border p-2 rounded"
-              value={amount}
-              onChange={(e) => setAmount(Number(e.target.value || 0))}
-            />
-          </div>
-          <div className="grid gap-1">
-            <label className="text-sm">Notes (optional)</label>
-            <input
-              type="text"
-              className="border p-2 rounded"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="e.g., Expected travel this month"
-            />
-          </div>
-          <div>
-            <button className="bg-slate-900 text-white rounded px-4 py-2">Save</button>
-          </div>
-        </form>
-      )}
-    </div>
-  );
-}
+    );
+  }

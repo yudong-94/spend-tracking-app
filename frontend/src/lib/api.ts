@@ -107,7 +107,7 @@ export async function getBudget(month?: string) {
         budget: number;
         actual: number;
         remaining: number;
-        source: "median-12" | "last-month" | "derived";
+        source: "avg-12" | "last-month" | "derived";
       }>;
     }>;
   }
