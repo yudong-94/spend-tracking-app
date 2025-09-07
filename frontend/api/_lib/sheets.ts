@@ -84,3 +84,65 @@ export async function appendRow(row: Record<string, any>) {
     requestBody: { values: [values] },
   });
 }
+
+/** Read any sheet into array of objects (header row determines keys). */
+export async function readSheetAsObjects(sheetName: string) {
+  const { sheets, spreadsheetId } = await getSheetsClient();
+
+  const headerRes = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: `${sheetName}!1:1`,
+  });
+  const headers = (headerRes.data.values?.[0] || []).map((h) => String(h).trim());
+
+  const dataRes = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: `${sheetName}!A2:Z`,
+  });
+  const rows = dataRes.data.values || [];
+  return rows.map((r) => {
+    const obj: Record<string, string> = {};
+    headers.forEach((h, i) => (obj[h] = r[i] ?? ""));
+    return obj;
+  });
+}
+
+/** Append a row object to a specific sheet (maps by header order). */
+export async function appendRowToSheet(sheetName: string, row: Record<string, any>) {
+  const { sheets, spreadsheetId } = await getSheetsClient();
+  const headerRes = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: `${sheetName}!1:1`,
+  });
+  const headers = (headerRes.data.values?.[0] || []).map((h) => String(h).trim());
+  const values = headers.map((h) => row[h] ?? "");
+  await sheets.spreadsheets.values.append({
+    spreadsheetId,
+    range: `${sheetName}!A:Z`,
+    valueInputOption: "USER_ENTERED",
+    requestBody: { values: [values] },
+  });
+}
+
+/** Budgets helpers (one TOTAL override row per month; notes optional). */
+export async function readBudgets() {
+  try {
+    return await readSheetAsObjects("Budgets");
+  } catch {
+    // If Budgets tab doesn't exist yet, behave as empty
+    return [] as Array<Record<string, string>>;
+  }
+}
+
+export async function appendBudgetOverride(
+  month: string,
+  amount: number,
+  notes?: string
+) {
+  await appendRowToSheet("Budgets", {
+    "Month (YYYY-MM)": month,
+    "Category": "TOTAL",
+    "Amount": amount,
+    "Notes": notes ?? "",
+  });
+}

@@ -5,10 +5,22 @@ import CategorySelect from "@/components/CategorySelect";
 import { fmtUSDSigned } from "@/lib/format";
 
 export default function TransactionsPage() {
-  const { txns: rows, isLoading: loading, getCategories } = useDataCache();
+  const { txns: rows, isLoading: loading, getCategories, refresh } = useDataCache();
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<number | null>(null);
   const [q, setQ] = useState("");
   const [type, setType] = useState<"" | "income" | "expense">("");
   const [categories, setCategories] = useState<string[]>([]);
+
+  async function onRefresh() {
+    setIsRefreshing(true);
+    try {
+      await refresh();
+      setLastUpdated(Date.now());
+    } finally {
+      setIsRefreshing(false);
+    }
+  }
 
   // no fetching here – data comes from cache
 
@@ -33,7 +45,18 @@ export default function TransactionsPage() {
     <div>
       <div className="flex items-center mb-3">
         <h2 className="text-xl font-semibold">Transactions</h2>
-       <RefreshButton />
+        <div className="ml-auto flex items-center gap-3">
+          {lastUpdated && (
+            <span className="text-xs text-slate-500">
+              Updated {new Date(lastUpdated).toLocaleTimeString()}
+            </span>
+          )}
+          <RefreshButton
+            onClick={onRefresh}
+            disabled={isRefreshing}
+            label={isRefreshing ? "Refreshing..." : "Refresh"}
+          />
+        </div>
       </div>
       <div className="flex gap-3 mb-3">
         <input className="border rounded px-3 py-2 flex-1" placeholder="Search by category or description..."
