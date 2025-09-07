@@ -8,6 +8,7 @@ import {
   Menu, 
   X,
   TrendingUp,
+  PiggyBank,
   // DollarSign
 } from 'lucide-react';
 
@@ -24,7 +25,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     { name: 'Analytics', href: '/analytics', icon: BarChart3 },
     { name: 'Transactions', href: '/transactions', icon: List },
     { name: 'Add Transaction', href: '/add', icon: Plus },
-    { name: 'Budget', href: '/budget', icon: Plus },
+    { name: 'Budget', href: '/budget', icon: PiggyBank },
   ];
 
   const isActive = (path: string) => location.pathname === path;

@@ -1,6 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { readTable } from "./_lib/sheets";
-import { readBudgets } from "./_lib/sheets";
+import { readTable, readBudgets } from "./_lib/sheets.js";
 
 const AUTH = process.env.APP_ACCESS_TOKEN || process.env.VITE_APP_ACCESS_TOKEN;
 
