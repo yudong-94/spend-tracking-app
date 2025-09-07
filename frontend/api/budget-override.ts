@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { appendBudgetOverride } from "./_lib/sheets";
+import { appendBudgetOverride } from "./_lib/sheets.js";
 
 const AUTH = process.env.APP_ACCESS_TOKEN || process.env.VITE_APP_ACCESS_TOKEN;
 
