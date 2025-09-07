@@ -46,7 +46,7 @@ function num(n: any) {
 }
 
 const SPECIALS = new Set(["rent", "travel", "tax return", "credit card fee"]);
-const CORE5 = ["Food", "Grocery", "Clothes", "Utilities", "Daily Necessities"];
+const CORE5 = ["Food", "Grocery", "Clothes", "Utility", "Daily Necessities"];
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // auth (same model as other routes)
@@ -178,8 +178,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         console.error("read Budgets tab failed", e);
     }
 
-    const computed = baseMedian + rentLM;
-    const totalBudget = manualTotal > 0 ? manualTotal : computed;
+    const totalBudget = baseMedian + rentLM + manualTotal
 
     // Category budgets for display
     const coreBudgets: Record<string, number> = {};
@@ -208,7 +207,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let rentActual = 0;
     const coreActual: Record<string, number> = {};
     CORE5.forEach((c) => (coreActual[c] = 0));
-    let travelActual = 0;
 
     // Daily series (cumulative)
     const days = daysInMonth(targetMonthDate);
@@ -225,7 +223,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       const lowCat = r.category.toLowerCase();
       if (lowCat === "rent") rentActual += r.amount;
-      else if (lowCat === "travel") travelActual += r.amount;
       else if (CORE5.includes(r.category)) coreActual[r.category] += r.amount;
 
       const d = r.day;
@@ -239,9 +236,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       series.push({ day: i + 1, cumActual: acc });
     }
 
-    // misc actual = total - rent - core - travel
+    // misc actual = total - rent - core
     const coreSumActual = Object.values(coreActual).reduce((a, b) => a + b, 0);
-    const miscActual = Math.max(0, totalActualMTD - rentActual - coreSumActual - travelActual);
+    const miscActual = Math.max(0, totalActualMTD - rentActual - coreSumActual);
 
     const budgetRows = [
       { category: "Rent", budget: rentLM, actual: rentActual, source: "last-month" as const },
@@ -251,7 +248,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         actual: coreActual[c],
         source: "median-12" as const,
       })),
-      { category: "Travel", budget: 0, actual: travelActual, source: "derived" as const },
       { category: "Miscellaneous", budget: miscBudget, actual: miscActual, source: "derived" as const },
     ].map((r) => ({ ...r, remaining: Math.max(0, r.budget - r.actual) }));
 
