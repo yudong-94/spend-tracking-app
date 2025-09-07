@@ -226,7 +226,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         manualNote = manualItems
           .map((i) => i.notes)
           .filter(Boolean)
-          .join(" • ");
+          .join("; ");
       }
     } catch (e) {
       console.error("read Budgets tab failed", e);

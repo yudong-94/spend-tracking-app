@@ -168,22 +168,9 @@ export default function Budget() {
         </div>
       </div>
 
-      {/* Adjust TOTAL override */}
-      <button
-        type="button"
-        className="px-3 py-2 rounded bg-slate-900 text-white"
-        onClick={() => setShowAdjust(true)}
-      >
-        Add adjustment
-      </button>
-
-      <AdjustBudgetModal
-        open={showAdjust}
-        onClose={() => setShowAdjust(false)}
-        onSuccess={fetchIt /* or refresh() – the function you use to re-fetch budgets */}
-      />
+      {/* Current adjustments */}
       {(data?.manualItems?.length ?? 0) > 0 && (
-        <div className="rounded-lg border p-4 mt-4">
+        <div className="rounded-lg border bg-white p-4">
             <div className="text-sm font-medium mb-2">Adjustments this month</div>
             <ul className="space-y-1">
             {data!.manualItems!.map((it, i) => {
@@ -202,6 +189,20 @@ export default function Budget() {
             </ul>
         </div>
         )}
+
+      {/* Adjust TOTAL override */}
+      <button
+        type="button"
+        className="px-3 py-2 rounded bg-slate-900 text-white"
+        onClick={() => setShowAdjust(true)}
+      >
+        Add adjustment
+      </button>    
+     <AdjustBudgetModal
+        open={showAdjust}
+        onClose={() => setShowAdjust(false)}
+        onSuccess={fetchIt /* or refresh() – the function you use to re-fetch budgets */}
+      />
     </div>
   );
 }
