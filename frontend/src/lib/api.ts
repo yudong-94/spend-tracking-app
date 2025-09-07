@@ -112,12 +112,20 @@ export async function getBudget(month?: string) {
     }>;
   }
   
-  export async function createBudgetOverride(input: { month?: string; amount: number; notes?: string }) {
-    const res = await fetch("/api/budget-override", {
-      method: "POST",
-      headers: { ...withAuth({}).headers, "Content-Type": "application/json" },
-      body: JSON.stringify(input),
-    });
-    if (!res.ok) throw new Error(`budget-override failed: ${res.status}`);
+// Save/append a budget override for a month
+export async function createBudgetOverride(input: {
+    amount: number;
+    notes?: string;
+    month?: string; // optional; server defaults to current month
+  }) {
+    const res = await fetch(
+      "/api/budgets",
+      withAuth({
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      })
+    );
+    if (!res.ok) throw new Error(`budgets POST failed: ${res.status}`);
     return res.json();
   }

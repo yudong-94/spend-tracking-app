@@ -2,13 +2,12 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { readTable, getSheetsClient } from "./_lib/sheets.js";
 
 const AUTH = process.env.APP_ACCESS_TOKEN || process.env.VITE_APP_ACCESS_TOKEN;
+const BUDGETS_SHEET = process.env.GOOGLE_SHEETS_BUDGETS_TAB || "Budgets";
 
-function normalizeType(s: any) {
-  return String(s || "").trim().toLowerCase();
-}
-function normalizeCat(s: any) {
-  return String(s || "").trim();
-}
+// -------------------- small helpers --------------------
+const norm = (s: any) => String(s ?? "").trim();
+const lower = (s: any) => norm(s).toLowerCase();
+
 function toMonthKey(d: Date) {
   const y = d.getFullYear();
   const m = d.getMonth() + 1;
@@ -36,33 +35,110 @@ function isSameMonth(d: Date, y: number, m: number) {
 }
 function average(nums: number[]) {
   const arr = nums.filter((n) => Number.isFinite(n));
-  if (!arr.length) return 0;
-  return arr.reduce((s, n) => s + n, 0) / arr.length;
+  return arr.length ? arr.reduce((s, n) => s + n, 0) / arr.length : 0;
 }
 function num(n: any) {
-  const v = typeof n === "number" ? n : Number(String(n).replace(/,/g, ""));
+  const v = typeof n === "number" ? n : Number(String(n ?? "").replace(/,/g, ""));
   return Number.isFinite(v) ? v : 0;
+}
+function normalizeType(s: any) {
+  return lower(s);
+}
+function normalizeCat(s: any) {
+  return norm(s);
 }
 
 const SPECIALS = new Set(["rent", "travel", "tax return", "credit card fee"]);
-const CORE5 = ["Food", "Grocery", "Clothes", "Utility", "Daily Necessities"];
+const CORE5 = ["Food", "Grocery", "Clothes", "Utility", "Daily Necessities"] as const;
 
+// -------------------- Budgets sheet I/O (header-agnostic) --------------------
+async function readBudgetOverrides() {
+  const { sheets, spreadsheetId } = await getSheetsClient();
+
+  const hdrRes = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: `${BUDGETS_SHEET}!1:1`,
+  });
+  const headers = (hdrRes.data.values?.[0] ?? []).map(String);
+  const H = headers.map((h) => lower(h));
+
+  const iMonth = H.findIndex((h) => h.startsWith("month"));
+  const iAmount = H.findIndex((h) => h === "amount");
+  const iNotes = H.findIndex((h) => h.startsWith("note")); // Notes/Note
+
+  const rowsRes = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: `${BUDGETS_SHEET}!A2:Z`,
+  });
+  const rows = rowsRes.data.values ?? [];
+
+  return rows
+    .map((r) => ({
+      month: iMonth >= 0 ? norm(r[iMonth]) : "",
+      amount: iAmount >= 0 ? num(r[iAmount]) : 0,
+      notes: iNotes >= 0 ? norm(r[iNotes]) : "",
+    }))
+    .filter((r) => r.month);
+}
+
+async function appendBudgetOverride(monthKey: string, amount: number, notes: string) {
+  const { sheets, spreadsheetId } = await getSheetsClient();
+
+  const hdrRes = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: `${BUDGETS_SHEET}!1:1`,
+  });
+  const headers = (hdrRes.data.values?.[0] ?? []).map(String);
+  const H = headers.map((h) => lower(h));
+
+  const iMonth = H.findIndex((h) => h.startsWith("month"));
+  const iAmount = H.findIndex((h) => h === "amount");
+  const iNotes = H.findIndex((h) => h.startsWith("note"));
+
+  const row = headers.map(() => "");
+  if (iMonth >= 0) row[iMonth] = monthKey;
+  if (iAmount >= 0) row[iAmount] = String(amount);
+  if (iNotes >= 0) row[iNotes] = notes ?? "";
+
+  await sheets.spreadsheets.values.append({
+    spreadsheetId,
+    range: `${BUDGETS_SHEET}!A:Z`,
+    valueInputOption: "USER_ENTERED",
+    requestBody: { values: [row] },
+  });
+}
+
+// -------------------- main handler (GET compute / POST override) --------------------
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // auth (same model as other routes)
+  // auth
   const header = req.headers.authorization || "";
   if (AUTH) {
     const want = `Bearer ${AUTH}`;
     if (header !== want) return res.status(401).json({ error: "unauthorized" });
   }
 
+  if (req.method === "POST") {
+    try {
+      const now = new Date();
+      const monthKey = toMonthKey(now);
+      const amount = num((req.body as any)?.amount);
+      const notes = norm((req.body as any)?.notes);
+      await appendBudgetOverride(monthKey, amount, notes);
+      return res.json({ ok: true, month: monthKey, amount, notes });
+    } catch (e: any) {
+      console.error("append override failed", e);
+      return res.status(500).json({ error: e?.message || "append failed" });
+    }
+  }
+
+  // GET – compute budgets
   try {
     // Load all transactions
-    const txRows = await readTable(); // from Transactions tab (your existing helper)
+    const txRows = await readTable();
 
-    // Basic parse
+    // Parse
     const tx = txRows.map((r) => {
-      const dateStr = String(r["Date"] || "").trim();
-      const d = new Date(dateStr);
+      const d = new Date(norm(r["Date"]));
       return {
         month: toMonthKey(d),
         year: d.getFullYear(),
@@ -75,111 +151,76 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       };
     });
 
-    // Determine target month
-    const qsMonth = String(req.query.month || "").trim();
-    const targetMonthKey = qsMonth || toMonthKey(new Date()); // current month (even if partial)
+    // Target month (current by default)
+    const qsMonth = norm(req.query.month as any);
+    const targetMonthKey = qsMonth || toMonthKey(new Date());
     const targetMonthDate = parseMonthKey(targetMonthKey);
 
-    // Last complete month (for history window & last rent)
+    // History window: 12 complete months (ending last complete month)
     const lastCompleteKey = lastCompleteMonthKey(new Date());
     const lastCompleteDate = parseMonthKey(lastCompleteKey);
 
-    // Build 12 complete months window (prev 12 excluding current)
     const histMonthsKeys: string[] = [];
     for (let i = 12; i >= 1; i--) {
       histMonthsKeys.push(toMonthKey(addMonths(lastCompleteDate, -i + 1)));
     }
 
-    // Group monthly totals
+    // Monthly totals & per-category totals (expenses only)
     const byMonthTotal = new Map<string, number>();
     const byMonthByCat = new Map<string, Map<string, number>>();
 
     for (const r of tx) {
       if (!r.isExpense) continue;
-      const key = r.month;
-      byMonthTotal.set(key, (byMonthTotal.get(key) || 0) + r.amount);
+      const mkey = r.month;
+      byMonthTotal.set(mkey, (byMonthTotal.get(mkey) || 0) + r.amount);
 
-      const catKey = r.category;
-      if (!byMonthByCat.has(key)) byMonthByCat.set(key, new Map());
-      const map = byMonthByCat.get(key)!;
-      map.set(catKey, (map.get(catKey) || 0) + r.amount);
+      if (!byMonthByCat.has(mkey)) byMonthByCat.set(mkey, new Map());
+      const map = byMonthByCat.get(mkey)!;
+      map.set(r.category, (map.get(r.category) || 0) + r.amount);
     }
 
-    // ex-specials for each hist month
+    // Base avg = total minus specials (avg of last 12 complete months)
     const exSpecialsValues: number[] = histMonthsKeys.map((mkey) => {
       const total = byMonthTotal.get(mkey) || 0;
-      const map = byMonthByCat.get(mkey) || new Map();
+      const catMap = byMonthByCat.get(mkey) || new Map();
       let specials = 0;
-      for (const [cat, v] of map.entries()) {
-        if (SPECIALS.has(cat.toLowerCase())) specials += v;
+      for (const [cat, v] of catMap.entries()) {
+        if (SPECIALS.has(lower(cat))) specials += v;
       }
       return total - specials;
     });
-
     const baseAvg = average(exSpecialsValues);
 
-    // Rent last month; fallback to average of last 3 months if 0
+    // Rent = last complete month (fallback to 3-month avg if missing)
     const lastMonthCats = byMonthByCat.get(lastCompleteKey) || new Map();
     let rentLM = 0;
     for (const [cat, v] of lastMonthCats.entries()) {
-      if (cat.toLowerCase() === "rent") {
-        rentLM += v;
-      }
+      if (lower(cat) === "rent") rentLM += v;
     }
     if (rentLM === 0) {
-      const rentSeries: number[] = [];
+      const rent3: number[] = [];
       for (let i = 1; i <= 3; i++) {
         const mk = toMonthKey(addMonths(lastCompleteDate, -i));
         const m = byMonthByCat.get(mk) || new Map();
         let v = 0;
         for (const [cat, val] of m.entries()) {
-          if (cat.toLowerCase() === "rent") v += val;
+          if (lower(cat) === "rent") v += val;
         }
-        rentSeries.push(v);
+        rent3.push(v);
       }
-      rentLM = average(rentSeries);
+      rentLM = average(rent3);
     }
 
-    // Read a manual TOTAL override from Budgets tab (optional).
-    // Accept either "Month" or "Month (YYYY-MM)" as the header.
-    const budgetsTab = process.env.GOOGLE_SHEETS_BUDGETS_TAB || "Budgets";
-    let manualTotal = 0;
-    let manualNote = "";
-    try {
-        const { sheets, spreadsheetId } = await getSheetsClient();
-        const resp = await sheets.spreadsheets.values.get({
-            spreadsheetId,
-        range: `${budgetsTab}!A1:C`,
-        });
-        const vals = resp.data.values || [];
-        if (vals.length) {
-            const headers = vals[0].map((h) => String(h).trim().toLowerCase());
-            const rows = vals.slice(1).map((r) => {
-                const o: Record<string, string> = {};
-                headers.forEach((h, i) => (o[h] = r[i] ?? ""));
-                return o;
-            });
-            const rec = rows.find((r) => {
-                const m =
-                    (r["month"] ||
-                    r["month (yyyy-mm)"] ||
-                    r["month yyyy-mm"] ||
-                    "").trim();
-                return m === targetMonthKey;
-            });
-            if (rec) {
-                const amt = (rec["amount"] || "").toString().replace(/,/g, "");
-                manualTotal = Number(amt) || 0;
-                manualNote = String(rec["notes"] || rec["note"] || "");
-        }
-        }
-    } catch (e) {
-        console.error("read Budgets tab failed", e);
-    }
+    // Manual TOTAL override from Budgets tab (uses first row for the month, if any)
+    const overrides = await readBudgetOverrides();
+    const overrideRow = overrides.find((r) => r.month === targetMonthKey);
+    const manualTotal = overrideRow?.amount || 0;
+    const manualNote = overrideRow?.notes || "";
 
-    const totalBudget = baseAvg + rentLM + manualTotal
+    // Final TOTAL budget
+    const totalBudget = baseAvg + rentLM + manualTotal;
 
-    // Category budgets for display
+    // Core 5 budgets = avg(12)
     const coreBudgets: Record<string, number> = {};
     for (const cat of CORE5) {
       const vals: number[] = [];
@@ -190,44 +231,45 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       coreBudgets[cat] = average(vals);
     }
 
-    // Misc
+    // Misc = Total - Rent - Core5
     const miscBudgetRaw =
       totalBudget -
       rentLM -
-      Object.values(coreBudgets).reduce((a, b) => a + b, 0) 
+      Object.values(coreBudgets).reduce((a, b) => a + b, 0);
     const overAllocated = miscBudgetRaw < 0;
     const miscBudget = Math.max(0, miscBudgetRaw);
 
-    // Actuals MTD (target month)
+    // Actuals MTD in target month
     const targetY = targetMonthDate.getFullYear();
     const targetM = targetMonthDate.getMonth();
-
     let totalActualMTD = 0;
     let rentActual = 0;
     const coreActual: Record<string, number> = {};
     CORE5.forEach((c) => (coreActual[c] = 0));
 
-    // Daily series (cumulative)
     const days = daysInMonth(targetMonthDate);
     const byDay = new Array(days).fill(0);
 
     for (const r of tx) {
       if (!r.isExpense) continue;
+      // fast month compare via yyyy-mm-01, then fallback
       if (!isSameMonth(new Date(`${r.month}-01`), targetY, targetM)) {
-        // fast month compare on yyyy-mm-01
         const d2 = new Date(r.year, r.mm, r.day);
         if (!isSameMonth(d2, targetY, targetM)) continue;
       }
-      totalActualMTD += r.amount;
 
-      const lowCat = r.category.toLowerCase();
-      if (lowCat === "rent") rentActual += r.amount;
-      else if (CORE5.includes(r.category)) coreActual[r.category] += r.amount;
+      totalActualMTD += r.amount;
+      const lc = lower(r.category);
+      if (lc === "rent") rentActual += r.amount;
+      else if ((CORE5 as readonly string[]).includes(r.category)) {
+        coreActual[r.category] += r.amount;
+      }
 
       const d = r.day;
       if (d >= 1 && d <= days) byDay[d - 1] += r.amount;
     }
 
+    // cumulative series
     const series: Array<{ day: number; cumActual: number }> = [];
     let acc = 0;
     for (let i = 0; i < days; i++) {
@@ -235,11 +277,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       series.push({ day: i + 1, cumActual: acc });
     }
 
-    // misc actual = total - rent - core
+    // Misc actual = total - rent - core
     const coreSumActual = Object.values(coreActual).reduce((a, b) => a + b, 0);
     const miscActual = Math.max(0, totalActualMTD - rentActual - coreSumActual);
 
-    const budgetRows = [
+    const rows = [
       { category: "Rent", budget: rentLM, actual: rentActual, source: "last-month" as const },
       ...CORE5.map((c) => ({
         category: c,
@@ -259,7 +301,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       manualNote,
       overAllocated,
       series,
-      rows: budgetRows,
+      rows,
     });
   } catch (e: any) {
     console.error(e);
