@@ -1,8 +1,9 @@
 import React, {
     createContext, useCallback, useContext, useEffect, useMemo, useState,
   } from "react";
-  import { listTransactions, listCategories } from "@/lib/api";
-  import type { Category } from "@/lib/api";
+import { listTransactions, listCategories } from "@/lib/api";
+import type { Category } from "@/lib/api";
+import { useAuth } from "@/state/auth";
   
   export type Tx = {
     id?: string;
@@ -60,28 +61,14 @@ import React, {
   }
   
   export function DataCacheProvider({ children }: { children: React.ReactNode }) {
+    const { token } = useAuth();
     const [txns, setTxns] = useState<Tx[]>([]);
     const [isLoading, setLoading] = useState(true);
     const [lastSyncAt, setLastSyncAt] = useState<number | undefined>();
     const [categories, setCategories] = useState<Category[]>([]);
   
-    // Initial hydrate from localStorage, then refresh if stale
-    useEffect(() => {
-        const persisted = loadFromStorage();
-        if (persisted) {
-          setTxns(persisted.txns);
-          setLastSyncAt(persisted.lastSyncAt);
-          setCategories(persisted.categories || []);
-          setLoading(false);
-          const stale = Date.now() - persisted.lastSyncAt > STALE_MS;
-          if (stale || !persisted.categories?.length) void refresh();
-        } else {
-          void refresh();
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-      }, []);
-  
     const refresh = useCallback(async () => {
+        if (!token) return;
         setLoading(true);
         try {
             const [rows, cats] = await Promise.all([
@@ -108,8 +95,26 @@ import React, {
         } finally {
           setLoading(false);
         }
-      }, []);
+      }, [token]);
 
+    // Initial hydrate from localStorage, load when token becomes available, then refresh if stale
+    useEffect(() => {
+        // hydrate from localStorage immediately (no network)
+        const persisted = loadFromStorage();
+        if (persisted) {
+          setTxns(persisted.txns);
+          setCategories(persisted.categories || []);
+          setLastSyncAt(persisted.lastSyncAt);
+          setLoading(false);
+        }
+        // only fetch when we actually have a token
+        if (token) {
+          const stale = !persisted || Date.now() - (persisted.lastSyncAt || 0) > STALE_MS
+                        || !persisted.categories?.length;
+          if (stale) void refresh();
+        }
+      }, [token, refresh]);
+            
       const sortCats = (a: Category, b: Category) => {
         if (a.type !== b.type) return a.type === "expense" ? -1 : 1; // expenses first
         return a.name.localeCompare(b.name);

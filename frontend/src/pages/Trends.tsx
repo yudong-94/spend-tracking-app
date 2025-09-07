@@ -1,4 +1,3 @@
-// frontend/src/pages/Trends.tsx
 import { useEffect, useState } from "react";
 import { listTransactions } from "@/lib/api";
 

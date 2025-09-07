@@ -1,13 +1,19 @@
 import { AUTH_STORAGE_KEY } from "@/state/auth";
 
+function getToken(): string {
+    try { return localStorage.getItem(AUTH_STORAGE_KEY) || ""; } catch { return ""; }
+  }
+
 function withAuth(init: RequestInit = {}): RequestInit {
-  const token = typeof window !== "undefined" ? localStorage.getItem(AUTH_STORAGE_KEY) : "";
+  const token = getToken();
+  // Optional: fail fast if there’s no key
+  if (!token) throw new Error("missing_access_key");
   return {
     ...init,
     headers: {
       "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(init.headers || {}),
+      Authorization: `Bearer ${token}`,
     },
   };
 }

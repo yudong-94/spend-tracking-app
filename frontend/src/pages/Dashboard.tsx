@@ -1,4 +1,3 @@
-// frontend/src/pages/Dashboard.tsx
 import { useDataCache } from "@/state/data-cache";
 import { fmtUSD } from "@/lib/format";
 import { COL } from "@/lib/colors";

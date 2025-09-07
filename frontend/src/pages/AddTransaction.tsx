@@ -1,4 +1,3 @@
-// frontend/src/pages/AddTransaction.tsx
 import { useState } from "react";
 import { createTransaction, NewTransaction } from "@/lib/api";
 import { useDataCache } from "@/state/data-cache"; 
