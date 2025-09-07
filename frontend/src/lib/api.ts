@@ -119,7 +119,7 @@ export async function createBudgetOverride(input: {
     month?: string; // optional; server defaults to current month
   }) {
     const res = await fetch(
-      "/api/budgets",
+      "/api/budget",
       withAuth({
         method: "POST",
         headers: { "Content-Type": "application/json" },
