@@ -61,15 +61,20 @@ import { useAuth } from "@/state/auth";
   }
   
   export function DataCacheProvider({ children }: { children: React.ReactNode }) {
-    const { token } = useAuth();
+    const { token, clear } = useAuth();
     const [txns, setTxns] = useState<Tx[]>([]);
     const [isLoading, setLoading] = useState(true);
     const [lastSyncAt, setLastSyncAt] = useState<number | undefined>();
+    const [lastError, setLastError] = useState<string | null>(null);
     const [categories, setCategories] = useState<Category[]>([]);
   
     const refresh = useCallback(async () => {
-        if (!token) return;
+        if (!token) {               // no key -> don’t hit API, don’t spin
+            setLoading(false);
+            return;
+          }
         setLoading(true);
+        setLastError(null);
         try {
             const [rows, cats] = await Promise.all([
                 listTransactions({}),
@@ -92,10 +97,24 @@ import { useAuth } from "@/state/auth";
           const ts = Date.now();
           setLastSyncAt(ts);
           saveToStorage(rows as Tx[], ts, usableCats as Category[]);
+        } catch (e: any) {
+            // Missing key: just stop; AccessGate will show if token isn’t set
+            if (e?.code === "NO_KEY" || e?.message === "missing_access_key") {
+              setLastError("no-key");
+              return;
+            }
+            // Server says unauthorized -> wipe key so gate re-appears
+            if (e?.status === 401) {
+              setLastError("unauthorized");
+              clear();
+              return;
+            }
+            setLastError("fetch-failed");
+            console.error(e);
         } finally {
           setLoading(false);
         }
-      }, [token]);
+      }, [token, clear]);
 
     // Initial hydrate from localStorage, load when token becomes available, then refresh if stale
     useEffect(() => {
@@ -105,7 +124,10 @@ import { useAuth } from "@/state/auth";
           setTxns(persisted.txns);
           setCategories(persisted.categories || []);
           setLastSyncAt(persisted.lastSyncAt);
-          setLoading(false);
+        }
+        if (!token) {           // no token -> ensure not “stuck” loading
+            setLoading(false);
+            return;
         }
         // only fetch when we actually have a token
         if (token) {
@@ -114,11 +136,11 @@ import { useAuth } from "@/state/auth";
           if (stale) void refresh();
         }
       }, [token, refresh]);
-            
-      const sortCats = (a: Category, b: Category) => {
+
+    const sortCats = (a: Category, b: Category) => {
         if (a.type !== b.type) return a.type === "expense" ? -1 : 1; // expenses first
         return a.name.localeCompare(b.name);
-      };
+    };
       
     const getCategories = useCallback(
         (type?: "income" | "expense") =>
@@ -127,7 +149,7 @@ import { useAuth } from "@/state/auth";
             .slice()
             .sort(sortCats),
         [categories]
-      );
+    );
       
     // Optimistic local add (used after POST)
     const addLocal = useCallback((tx: Tx) => {
@@ -174,7 +196,7 @@ import { useAuth } from "@/state/auth";
         txns, isLoading, lastSyncAt, refresh, addLocal,
         categories, getCategories,
         getSummary, getBreakdown, getMonthlySeries,
-      }), [txns, isLoading, lastSyncAt, refresh, addLocal, categories, getCategories, getSummary, getBreakdown, getMonthlySeries]);
+      }), [txns, isLoading, lastSyncAt, lastError, refresh, addLocal, categories, getCategories, getSummary, getBreakdown, getMonthlySeries]);
   
     return <DataCacheContext.Provider value={value}>{children}</DataCacheContext.Provider>;
   }

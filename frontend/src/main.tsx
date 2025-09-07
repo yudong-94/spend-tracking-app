@@ -21,13 +21,13 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        <DataCacheProvider>
-          <AuthProvider>
-            <AccessGate>
+        <AuthProvider>
+          <AccessGate>
+            <DataCacheProvider>
               <App />
-            </AccessGate>
-          </AuthProvider>
-        </DataCacheProvider>
+            </DataCacheProvider>
+          </AccessGate>
+        </AuthProvider>
       </BrowserRouter>
     </QueryClientProvider>
   </React.StrictMode>,
