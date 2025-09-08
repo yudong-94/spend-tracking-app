@@ -16,10 +16,22 @@ const ym = (d: string) => d.slice(0, 7);
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
 export default function Analytics() {
-  const { txns: all, getCategories } = useDataCache();
+  const { txns: all, getCategories, refresh } = useDataCache();
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<number | null>(null);
   const [start, setStart] = useState<string>("");
   const [end, setEnd] = useState<string>("");
   const [categories, setCategories] = useState<string[]>([]);
+
+  async function onRefresh() {
+    setIsRefreshing(true);
+    try {
+      await refresh();
+      setLastUpdated(Date.now());
+    } finally {
+      setIsRefreshing(false);
+    }
+  }
 
   // no fetching here – data comes from cache
 
@@ -95,7 +107,18 @@ export default function Analytics() {
     <div className="space-y-6">
       <div className="flex items-center">
         <h2 className="text-lg font-semibold">Analytics</h2>
-        <RefreshButton />
+        <div className="ml-auto flex items-center gap-3">
+          {lastUpdated && (
+            <span className="text-xs text-slate-500">
+              Updated {new Date(lastUpdated).toLocaleTimeString()}
+            </span>
+          )}
+        <RefreshButton
+          onClick={onRefresh}
+          disabled={isRefreshing}
+          label={isRefreshing ? "Refreshing..." : "Refresh"}
+        />
+        </div>
       </div>
       {/* Filters */}
       <div className="flex flex-wrap gap-3 items-end">

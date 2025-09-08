@@ -2,6 +2,7 @@ import { useDataCache } from "@/state/data-cache";
 import { fmtUSD } from "@/lib/format";
 import { COL } from "@/lib/colors";
 import RefreshButton from "@/components/RefreshButton";
+import { useState } from "react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from "recharts";
@@ -85,7 +86,9 @@ function CategoryChart({
 }
 
 export default function Dashboard() {
-  const { getSummary, getBreakdown } = useDataCache();
+  const { getSummary, getBreakdown, refresh } = useDataCache();
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<number | null>(null);
   const m = monthBounds();
   const y = ytdBounds();
   const mSummary = getSummary(m.start, m.end);
@@ -95,11 +98,32 @@ export default function Dashboard() {
   const yIncomeCats = getBreakdown("income", y.start, y.end);
   const yExpenseCats = getBreakdown("expense", y.start, y.end);
 
+  async function onRefresh() {
+    setIsRefreshing(true);
+    try {
+      await refresh();
+      setLastUpdated(Date.now());
+    } finally {
+      setIsRefreshing(false);
+    }
+  }
+
   return (
     <div className="space-y-8">
       <div className="flex items-center">
         <div className="text-lg font-semibold">Dashboard</div>
-        <RefreshButton />
+        <div className="ml-auto flex items-center gap-3">
+          {lastUpdated && (
+            <span className="text-xs text-slate-500">
+              Updated {new Date(lastUpdated).toLocaleTimeString()}
+            </span>
+          )}
+          <RefreshButton
+            onClick={onRefresh}
+            disabled={isRefreshing}
+            label={isRefreshing ? "Refreshing..." : "Refresh"}
+          />
+        </div>
       </div>
       {/* This Month */}
       <div className="space-y-4">
