@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from "react";
+import { Info } from "lucide-react";
 import { getBudget, createBudgetOverride } from "@/lib/api";
 import RefreshButton from "@/components/RefreshButton";
 import { fmtUSD } from "@/lib/format";
@@ -46,8 +47,13 @@ export default function Budget() {
   }, []);
 
   const totalBudget = data?.totalBudget ?? 0;
-  const cards = [
-    { label: "Budget (this month)", value: fmtUSD(totalBudget) },
+  const cards: Array<{ label: string; value: string; note?: string }> = [
+    {
+      label: "Budget (this month)",
+      value: fmtUSD(totalBudget),
+      note:
+        "Calculated as: average of last 12 complete months regular spend (excluding Rent, Travel, Tax Return, Credit Card Fee) + last month's rent + manual adjustment.",
+    },
     { label: "Actual (MTD)", value: fmtUSD(data?.totalActualMTD ?? 0) },
     { label: "Remaining", value: fmtUSD(data?.totalRemaining ?? 0) },
   ];
@@ -101,6 +107,12 @@ export default function Budget() {
           <div key={c.label} className="rounded-lg border bg-white p-4">
             <div className="text-sm text-slate-500">{c.label}</div>
             <div className="text-2xl font-semibold mt-1">{c.value}</div>
+            {c.note ? (
+              <div className="mt-1 text-xs text-slate-500 flex items-start gap-1">
+                <Info className="h-3.5 w-3.5 mt-[1px] text-slate-400 shrink-0" />
+                <span className="leading-relaxed">{c.note}</span>
+              </div>
+            ) : null}
           </div>
         ))}
       </div>
