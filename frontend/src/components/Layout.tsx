@@ -1,16 +1,16 @@
-import React, { useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import { 
-  Home, 
-  BarChart3, 
-  List, 
-  Plus, 
-  Menu, 
+import React, { useState } from "react";
+import { Link, useLocation } from "react-router-dom";
+import {
+  Home,
+  BarChart3,
+  List,
+  Plus,
+  Menu,
   X,
   TrendingUp,
   PiggyBank,
   // DollarSign
-} from 'lucide-react';
+} from "lucide-react";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -21,11 +21,11 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const location = useLocation();
 
   const navigation = [
-    { name: 'Dashboard', href: '/', icon: Home },
-    { name: 'Analytics', href: '/analytics', icon: BarChart3 },
-    { name: 'Transactions', href: '/transactions', icon: List },
-    { name: 'Add Transaction', href: '/add', icon: Plus },
-    { name: 'Budget', href: '/budget', icon: PiggyBank },
+    { name: "Dashboard", href: "/", icon: Home },
+    { name: "Analytics", href: "/analytics", icon: BarChart3 },
+    { name: "Transactions", href: "/transactions", icon: List },
+    { name: "Add Transaction", href: "/add", icon: Plus },
+    { name: "Budget", href: "/budget", icon: PiggyBank },
   ];
 
   const isActive = (path: string) => location.pathname === path;
@@ -33,8 +33,11 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Mobile sidebar */}
-      <div className={`fixed inset-0 z-50 lg:hidden ${sidebarOpen ? 'block' : 'hidden'}`}>
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-75" onClick={() => setSidebarOpen(false)} />
+      <div className={`fixed inset-0 z-50 lg:hidden ${sidebarOpen ? "block" : "hidden"}`}>
+        <div
+          className="fixed inset-0 bg-gray-600 bg-opacity-75"
+          onClick={() => setSidebarOpen(false)}
+        />
         <div className="fixed inset-y-0 left-0 flex w-64 flex-col bg-white">
           <div className="flex h-16 items-center justify-between px-4">
             <div className="flex items-center">
@@ -58,8 +61,8 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                   onClick={() => setSidebarOpen(false)}
                   className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md ${
                     isActive(item.href)
-                      ? 'bg-primary-100 text-primary-900'
-                      : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                      ? "bg-primary-100 text-primary-900"
+                      : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
                   }`}
                 >
                   <Icon className="mr-3 h-5 w-5" />
@@ -89,8 +92,8 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                   to={item.href}
                   className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md ${
                     isActive(item.href)
-                      ? 'bg-primary-100 text-primary-900'
-                      : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                      ? "bg-primary-100 text-primary-900"
+                      : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
                   }`}
                 >
                   <Icon className="mr-3 h-5 w-5" />
@@ -113,11 +116,11 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           >
             <Menu className="h-6 w-6" />
           </button>
-          
+
           <div className="flex flex-1 gap-x-4 self-stretch lg:gap-x-6">
             <div className="flex flex-1 items-center">
               <h1 className="text-lg font-semibold text-gray-900">
-                {navigation.find(item => isActive(item.href))?.name || 'Spend Tracker'}
+                {navigation.find((item) => isActive(item.href))?.name || "Spend Tracker"}
               </h1>
             </div>
           </div>
@@ -125,9 +128,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
         {/* Page content */}
         <main className="py-6">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            {children}
-          </div>
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">{children}</div>
         </main>
       </div>
     </div>

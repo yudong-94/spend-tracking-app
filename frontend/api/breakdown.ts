@@ -4,15 +4,20 @@ import { readTable } from "./_lib/sheets.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
-
     if (!requireAuth(req, res)) return;
 
     if (req.method !== "GET") {
       res.setHeader("Allow", "GET");
       return res.status(405).send("Method Not Allowed");
     }
-    const { start, end, type = "expense" } = req.query as {
-      start?: string; end?: string; type?: string;
+    const {
+      start,
+      end,
+      type = "expense",
+    } = req.query as {
+      start?: string;
+      end?: string;
+      type?: string;
     };
     const target = String(type).toLowerCase();
     if (!["income", "expense"].includes(target)) {
@@ -34,8 +39,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const amt = Number(r["Amount"] ?? r["amount"] ?? 0) || 0;
       byCat.set(cat, (byCat.get(cat) || 0) + amt);
     }
-    const result = Array.from(byCat, ([category, amount]) => ({ category, amount }))
-      .sort((a, b) => b.amount - a.amount);
+    const result = Array.from(byCat, ([category, amount]) => ({ category, amount })).sort(
+      (a, b) => b.amount - a.amount,
+    );
     return res.status(200).json(result);
   } catch (e: any) {
     console.error(e);

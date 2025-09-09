@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useDataCache, Tx } from "@/state/data-cache";
-import RefreshButton from "@/components/RefreshButton";
+import PageHeader from "@/components/PageHeader";
 import CategorySelect from "@/components/CategorySelect";
 import { fmtUSDSigned } from "@/lib/format";
 
@@ -25,17 +25,18 @@ export default function TransactionsPage() {
   // no fetching here – data comes from cache
 
   const filtered = useMemo<Tx[]>(() => {
-   return (rows as Tx[]).filter((r: Tx) => {
-       if (type && r.type !== type) return false;
-       if (categories.length && !categories.includes(r.category)) return false;
-       if (q && !(r.category + " " + (r.description || "")).toLowerCase().includes(q.toLowerCase())) return false;
-       return true;
-     });
-   }, [rows, q, type, categories]);
+    return (rows as Tx[]).filter((r: Tx) => {
+      if (type && r.type !== type) return false;
+      if (categories.length && !categories.includes(r.category)) return false;
+      if (q && !(r.category + " " + (r.description || "")).toLowerCase().includes(q.toLowerCase()))
+        return false;
+      return true;
+    });
+  }, [rows, q, type, categories]);
 
   const total = filtered.reduce(
     (s: number, r: Tx) => s + (r.type === "income" ? r.amount : -r.amount),
-    0
+    0,
   );
   const totalKind: "income" | "expense" = total >= 0 ? "income" : "expense";
   const totalClass =
@@ -43,25 +44,21 @@ export default function TransactionsPage() {
 
   return (
     <div>
-      <div className="flex items-center mb-3">
-        <h2 className="text-xl font-semibold">Transactions</h2>
-        <div className="ml-auto flex items-center gap-3">
-          {lastUpdated && (
-            <span className="text-xs text-slate-500">
-              Updated {new Date(lastUpdated).toLocaleTimeString()}
-            </span>
-          )}
-          <RefreshButton
-            onClick={onRefresh}
-            disabled={isRefreshing}
-            label={isRefreshing ? "Refreshing..." : "Refresh"}
-          />
-        </div>
+      <div className="mb-3">
+        <PageHeader lastUpdated={lastUpdated} onRefresh={onRefresh} isRefreshing={isRefreshing} />
       </div>
       <div className="flex gap-3 mb-3">
-        <input className="border rounded px-3 py-2 flex-1" placeholder="Search by category or description..."
-               value={q} onChange={e => setQ(e.target.value)} />
-        <select className="border rounded px-3 py-2" value={type} onChange={e => setType(e.target.value as any)}>
+        <input
+          className="border rounded px-3 py-2 flex-1"
+          placeholder="Search by category or description..."
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+        />
+        <select
+          className="border rounded px-3 py-2"
+          value={type}
+          onChange={(e) => setType(e.target.value as any)}
+        >
           <option value="">All Types</option>
           <option value="income">Income</option>
           <option value="expense">Expense</option>
@@ -71,7 +68,7 @@ export default function TransactionsPage() {
           multiple
           value={categories}
           onChange={setCategories}
-          options={getCategories()}        // expense first, then income
+          options={getCategories()} // expense first, then income
           className="w-56"
           placeholder="All Categories"
         />
@@ -108,7 +105,7 @@ export default function TransactionsPage() {
                     <span className="inline-flex items-center gap-2">
                       <span
                         className={`h-2.5 w-2.5 rounded-full ${
-                        r.type === "income" ? "bg-emerald-500" : "bg-rose-500"
+                          r.type === "income" ? "bg-emerald-500" : "bg-rose-500"
                         }`}
                       />
                       {r.type === "income" ? "Income" : "Expense"}
@@ -117,9 +114,7 @@ export default function TransactionsPage() {
                   <td className="py-2 pr-4">{r.category}</td>
                   <td className="py-2 pr-4">{r.description}</td>
                   <td className="py-2 px-3 text-right font-medium">
-                    <span
-                      className={r.type === "income" ? "text-emerald-600" : "text-rose-600"}
-                    >
+                    <span className={r.type === "income" ? "text-emerald-600" : "text-rose-600"}>
                       {fmtUSDSigned(r.amount, r.type)}
                     </span>
                   </td>

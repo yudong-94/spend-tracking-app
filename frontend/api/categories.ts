@@ -7,7 +7,6 @@ import { getSheetsClient } from "./_lib/sheets.js";
  * Reads the "Categories" sheet. Header row must contain: ID, Name, Type
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-
   if (!requireAuth(req, res)) return;
 
   if (req.method !== "GET") return res.status(405).send("Method Not Allowed");
@@ -41,14 +40,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .map((r) => ({
         id: String(r[idxId] ?? "").trim(),
         name: String(r[idxName] ?? "").trim(),
-        type: String(r[idxType] ?? "").trim().toLowerCase(),
+        type: String(r[idxType] ?? "")
+          .trim()
+          .toLowerCase(),
       }))
-      .filter(
-        (x) =>
-          x.id &&
-          x.name &&
-          (x.type === "income" || x.type === "expense")
-      );
+      .filter((x) => x.id && x.name && (x.type === "income" || x.type === "expense"));
 
     return res.status(200).json(out);
   } catch (err) {

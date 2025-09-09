@@ -19,8 +19,12 @@ export default function AddTransaction() {
 
   // Sort: expenses A→Z, then income A→Z
   const sortedOptions = useMemo(() => {
-    const exp = categories.filter((c) => c.type === "expense").sort((a, b) => a.name.localeCompare(b.name));
-    const inc = categories.filter((c) => c.type === "income").sort((a, b) => a.name.localeCompare(b.name));
+    const exp = categories
+      .filter((c) => c.type === "expense")
+      .sort((a, b) => a.name.localeCompare(b.name));
+    const inc = categories
+      .filter((c) => c.type === "income")
+      .sort((a, b) => a.name.localeCompare(b.name));
     return [...exp, ...inc];
   }, [categories]);
 
@@ -40,7 +44,9 @@ export default function AddTransaction() {
 
     for (const r of txns as any[]) {
       const name = String(r?.Category ?? "").trim();
-      const type = String(r?.Type ?? "").trim().toLowerCase() as "income" | "expense";
+      const type = String(r?.Type ?? "")
+        .trim()
+        .toLowerCase() as "income" | "expense";
       if (!name || (type !== "income" && type !== "expense")) continue;
       if (!seen.has(name)) {
         seen.add(name);
@@ -72,8 +78,6 @@ export default function AddTransaction() {
 
   return (
     <div className="max-w-2xl">
-      <h2 className="text-xl font-semibold mb-4">Add Transaction</h2>
-
       <form onSubmit={onSubmit} className="grid gap-4">
         {/* Date */}
         <div className="grid gap-1">
@@ -107,9 +111,21 @@ export default function AddTransaction() {
           </div>
         </div>
 
-        {/* Quick add presets */}
+        {/* Category (single-select) */}
+        <div className="grid gap-1">
+          <label className="text-sm">Category</label>
+          <CategorySelect
+            multiple={false}
+            options={sortedOptions}
+            value={form.Category}
+            onChange={(name: string) => setCategory(name)}
+            placeholder="Choose a category…"
+          />
+        </div>
+
+        {/* Quick add presets (moved below Category) */}
         {presets.length > 0 && (
-          <div className="grid gap-2">
+          <div className="grid gap-2 mt-1">
             <div className="text-sm text-slate-500">Quick add</div>
             <div className="flex flex-wrap gap-2">
               {presets.map((p) => (
@@ -134,18 +150,6 @@ export default function AddTransaction() {
             </div>
           </div>
         )}
-
-        {/* Category (single-select) */}
-        <div className="grid gap-1">
-          <label className="text-sm">Category</label>
-          <CategorySelect
-            multiple={false}
-            options={sortedOptions}
-            value={form.Category}
-            onChange={(name: string) => setCategory(name)}
-            placeholder="Choose a category…"
-          />
-        </div>
 
         {/* Amount */}
         <div className="grid gap-1">

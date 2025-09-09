@@ -8,23 +8,31 @@ Built with **Vite + React + TypeScript + Tailwind**, charts via **Recharts**, an
 - **Dashboard**
   - “**This Month**” and “**This Year**” cards: Income / Expense / Net (USD formatted)
   - Category breakdown charts (income + expense) for month & YTD
+  - X‑axis is de‑crowded automatically: shows Top 14 categories and groups the rest into “Other”, truncates long labels and skips ticks when crowded.
 - **Analytics**
   - Monthly totals (income / expense / net) bar charts
+  - Combined monthly chart: income vs expense with a net line
+  - Monthly savings rate KPI + line chart (net ÷ income)
+  - Annual totals (income / expense / net) bar charts
+  - Annual savings rate line chart (per‑year net ÷ income)
   - **YoY pacing** line chart: cumulative net vs. last year (Jan→Dec)
-  - Time window & **multi-select category** filters
+  - Time window & **multi‑select category** filters
 - **Transactions**
   - Search, type filter, **multi-select category** filter
   - Signed USD totals (+ for income, − for expense)
   - Colored dots: 🟢 income, 🔴 expense
 - **Add Transaction**
-  - Quick form with date, type, category (single-select)
+  - Quick form with date, type, category (single‑select)
+  - “Quick add” chips (recent categories) now sit right below Category for faster entry
   - Posts directly to your Google Sheet
 - **Data**
   - Uses your **Transactions** and **Categories** tabs
   - Generates a unique `ID` like `spend-3901` when adding
-- **Performance**
-  - App-wide **cache** (localStorage) hydrated on load
-  - **Refresh** button; cache auto-refreshes after adding a transaction
+- **Performance & UX**
+  - App‑wide **cache** (localStorage) hydrated on load
+  - **Refresh** button; cache auto‑refreshes after adding a transaction
+  - Charts auto‑size Y‑axes to avoid clipping currency/percent labels
+  - Unified page header component (timestamp + refresh) shared across screens
 
 ---
 
@@ -68,20 +76,28 @@ GOOGLE_SHEETS_TAB=Transactions
 
 ## ▶️ Run Locally
 
+Option A — from repo root (workspace scripts):
+
 ```bash
-cd frontend
-npm i
-# Put the env vars above into frontend/.env.local
-npm run dev
+npm install               # installs all workspaces
+cp frontend/.env.local.example frontend/.env.local  # if provided, else create it
+npm run dev               # runs backend (if used) and frontend together
 ```
 
-Open http://localhost:5173
+Option B — frontend only:
+
+```bash
+cd frontend
+npm install
+# Put the env vars above into frontend/.env.local
+npm run dev               # http://localhost:5173
+```
 
 ---
 
 ## ☁️ Deploy (Vercel)
 - Import the repo in Vercel.
-- roject root: **/frontend**
+- Project root: **/frontend**
 - **Build Command**: npm run build
 - **Output Dir**: dist
 - Set the env vars in the project.
@@ -114,6 +130,10 @@ frontend/
       api.ts              # Client fetchers
       format.ts           # Currency formatting
       colors.ts           # Chart palette
+      chart.ts            # Helpers (dynamic Y-axis, % formatter)
+    components/
+      PageHeader.tsx      # Shared page header (updated timestamp + refresh)
+      CombinedMonthlyChart.tsx
 
 ---
 
@@ -139,7 +159,7 @@ All routes are under /api/* (serverless):
 ## 🧠 Caching & Refresh Behavior
 - On first load, the app hydrates from **localStorage** (transactions + categories).
 - Data is considered **stale after 5 min** and then background-refreshed.
-- **Refres** button triggers a fetch across the app.
+- **Refresh** button triggers a fetch across the app.
 - After **adding** a transaction, the app **optimistically** updates the cache and silently refreshes.
 
 ---
@@ -147,11 +167,15 @@ All routes are under /api/* (serverless):
 🎨 UI Details
 - **Money**: signed USD (+ income, − expense) using Intl.NumberFormat
 - **Badges**: 🟢 income / 🔴 expense dots in tables & dropdowns
-- **Charts**: Recharts (green = income, red = expense, blue = net)
+- **Charts**: Recharts (green = income, red = expense, blue = net). Y‑axes auto‑size to avoid clipped labels.
 - **Category dropdowns**:
    - **Analytics & Transactions: multi-select**
    - **Add Transaction: single-select**
    - Searchable, grouped (Expenses first, then Income)
+
+For Dashboard category charts:
+- Shows Top 14 categories; remaining categories are grouped into “Other”.
+- Truncates long labels and skips some ticks when crowded to keep the axis readable.
 
 ---
 
@@ -170,6 +194,21 @@ All routes are under /api/* (serverless):
 - **IDs not added**
 	- The server scans existing spend-#### and appends +1.
 (For heavy concurrency, consider switching to ULIDs.)
+
+### Dev & Tooling
+- Formatting: `npm run format` (Prettier across repo) and `npm run format:check`.
+- Lint (frontend): `npm run lint` from the `frontend/` folder (ESLint + TS + React Hooks).
+- Building frontend: `npm run build` from `frontend/`.
+
+### Storybook (optional)
+The repo contains simple stories (PageHeader and CombinedMonthlyChart) but does not include Storybook runtime by default.
+
+To enable locally:
+```bash
+cd frontend
+npx storybook@latest init
+npm run storybook
+```
 
 ---
 

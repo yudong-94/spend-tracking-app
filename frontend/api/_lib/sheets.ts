@@ -17,12 +17,7 @@ function getSheetIds() {
 
 export async function getSheetsClient() {
   const creds = getCreds();
-  const auth = new google.auth.JWT(
-    creds.client_email,
-    undefined,
-    creds.private_key,
-    SCOPES
-  );
+  const auth = new google.auth.JWT(creds.client_email, undefined, creds.private_key, SCOPES);
   const sheets = google.sheets({ version: "v4", auth });
   return { sheets, ...getSheetIds() };
 }
@@ -31,7 +26,7 @@ export async function getSheetsClient() {
 async function readHeadersFor(
   sheets: ReturnType<typeof google.sheets>["spreadsheets"]["values"],
   spreadsheetId: string,
-  sheetName: string
+  sheetName: string,
 ) {
   const headerRes = await sheets.get({
     spreadsheetId,
@@ -134,15 +129,11 @@ export async function readBudgets() {
   }
 }
 
-export async function appendBudgetOverride(
-  month: string,
-  amount: number,
-  notes?: string
-) {
+export async function appendBudgetOverride(month: string, amount: number, notes?: string) {
   await appendRowToSheet("Budgets", {
     "Month (YYYY-MM)": month,
-    "Category": "TOTAL",
-    "Amount": amount,
-    "Notes": notes ?? "",
+    Category: "TOTAL",
+    Amount: amount,
+    Notes: notes ?? "",
   });
 }

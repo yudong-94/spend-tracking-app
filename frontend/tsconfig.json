@@ -22,5 +22,6 @@
     "types": ["vite/client"]
   },
   "include": ["src", "api", "src/types.d.ts"],
+  "exclude": ["src/stories/**/*"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

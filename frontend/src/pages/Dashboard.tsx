@@ -1,14 +1,14 @@
 import { useDataCache } from "@/state/data-cache";
 import { fmtUSD } from "@/lib/format";
 import { COL } from "@/lib/colors";
-import RefreshButton from "@/components/RefreshButton";
+import PageHeader from "@/components/PageHeader";
 import { useState } from "react";
-import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
-} from "recharts";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
+import { estimateYAxisWidthFromMax } from "@/lib/chart";
 
 type Summary = { totalIncome: number; totalExpense: number; netCashFlow: number };
 type CatAmt = { category: string; amount: number };
+const Y_AXIS_WIDTH = 80; // prevent tick labels from being clipped
 
 const monthBounds = (d = new Date()) => {
   const start = new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10);
@@ -25,17 +25,14 @@ const ytdBounds = () => {
 
 function KPIRow({ summary }: { summary: Summary | null }) {
   const net = summary?.netCashFlow ?? 0;
-  const netClass =
-    net > 0 ? "text-emerald-600" : net < 0 ? "text-rose-600" : "text-slate-600";
+  const netClass = net > 0 ? "text-emerald-600" : net < 0 ? "text-rose-600" : "text-slate-600";
   return (
     <section className="grid gap-3 sm:grid-cols-3">
       <div>
-        Income:{" "}
-        <strong className="text-emerald-600">{fmtUSD(summary?.totalIncome ?? 0)}</strong>
+        Income: <strong className="text-emerald-600">{fmtUSD(summary?.totalIncome ?? 0)}</strong>
       </div>
       <div>
-        Expense:{" "}
-        <strong className="text-rose-600">{fmtUSD(summary?.totalExpense ?? 0)}</strong>
+        Expense: <strong className="text-rose-600">{fmtUSD(summary?.totalExpense ?? 0)}</strong>
       </div>
       <div>
         Net: <strong className={netClass}>{fmtUSD(net)}</strong>
@@ -44,37 +41,52 @@ function KPIRow({ summary }: { summary: Summary | null }) {
   );
 }
 
-function CategoryChart({
-  title,
-  data,
-  color,
-}: {
-  title: string;
-  data: CatAmt[];
-  color: string;
-}) {
+function CategoryChart({ title, data, color }: { title: string; data: CatAmt[]; color: string }) {
+  // Prepare data: sort desc, cap to top N, group the rest as "Other"
+  const MAX_BARS = 15;
+  const sorted = [...data].sort((a, b) => (b.amount || 0) - (a.amount || 0));
+  const othersTotal = sorted.slice(MAX_BARS - 1).reduce((s, x) => s + (x.amount || 0), 0);
+  const chartData =
+    sorted.length > MAX_BARS
+      ? [...sorted.slice(0, MAX_BARS - 1), { category: "Other", amount: othersTotal }]
+      : sorted;
+  const shownCount = chartData.length;
+  // Show at most ~12 tick labels by skipping some when crowded
+  const interval = shownCount > 12 ? Math.ceil(shownCount / 12) - 1 : 0;
+  const angle = shownCount > 10 ? -30 : -20;
+  const truncate = (s: string, n = 12) => (s && s.length > n ? `${s.slice(0, n - 1)}…` : s);
   return (
     <div className="p-4 rounded-lg border bg-white">
       <h3 className="font-medium mb-2">{title}</h3>
-      {data.length === 0 ? (
+      {chartData.length === 0 ? (
         <div className="text-sm text-neutral-500">No data yet.</div>
       ) : (
         <div className="h-64">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart
-              data={data.map((x) => ({ name: x.category, amount: x.amount }))}
-              margin={{ left: 8, right: 8, top: 8, bottom: 8 }}
+              data={chartData.map((x) => ({ name: x.category, amount: x.amount }))}
+              margin={{ left: 16, right: 8, top: 8, bottom: 8 }}
             >
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis
                 dataKey="name"
                 tick={{ fontSize: 12 }}
-                interval={0}
-                angle={-20}
+                interval={interval}
+                angle={angle}
                 textAnchor="end"
                 height={50}
+                tickFormatter={(v: string) => truncate(v)}
               />
-              <YAxis tickFormatter={(v: number) => fmtUSD(Number(v))} />
+              <YAxis
+                width={Math.max(
+                  Y_AXIS_WIDTH,
+                  estimateYAxisWidthFromMax(
+                    Math.max(0, ...chartData.map((d) => d.amount || 0)),
+                    (n) => fmtUSD(Number(n)),
+                  ),
+                )}
+                tickFormatter={(v: number) => fmtUSD(Number(v))}
+              />
               <Tooltip formatter={(v: any) => fmtUSD(Number(v))} />
               <Bar dataKey="amount" fill={color} radius={[4, 4, 0, 0]} />
             </BarChart>
@@ -110,21 +122,7 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-8">
-      <div className="flex items-center">
-        <div className="text-lg font-semibold">Dashboard</div>
-        <div className="ml-auto flex items-center gap-3">
-          {lastUpdated && (
-            <span className="text-xs text-slate-500">
-              Updated {new Date(lastUpdated).toLocaleTimeString()}
-            </span>
-          )}
-          <RefreshButton
-            onClick={onRefresh}
-            disabled={isRefreshing}
-            label={isRefreshing ? "Refreshing..." : "Refresh"}
-          />
-        </div>
-      </div>
+      <PageHeader lastUpdated={lastUpdated} onRefresh={onRefresh} isRefreshing={isRefreshing} />
       {/* This Month */}
       <div className="space-y-4">
         <h2 className="text-lg font-semibold">This Month</h2>
@@ -148,11 +146,7 @@ export default function Dashboard() {
         <h2 className="text-lg font-semibold">This Year</h2>
         <KPIRow summary={ySummary} />
         <section className="grid gap-6 lg:grid-cols-2">
-          <CategoryChart
-            title="Income by category (YTD)"
-            data={yIncomeCats}
-            color={COL.income}
-          />
+          <CategoryChart title="Income by category (YTD)" data={yIncomeCats} color={COL.income} />
           <CategoryChart
             title="Expense by category (YTD)"
             data={yExpenseCats}
