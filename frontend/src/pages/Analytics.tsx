@@ -19,6 +19,29 @@ import {
 import { estimateYAxisWidthFromMax, percentFormatter } from "@/lib/chart";
 import CombinedMonthlyChart from "@/components/CombinedMonthlyChart";
 
+// Tooltip for savings rate charts
+function RateTooltip({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean;
+  payload?: any[];
+  label?: any;
+}) {
+  if (!active || !payload || payload.length === 0) return null;
+  const v = Number(payload[0]?.value);
+  return (
+    <div className="rounded border bg-white p-2 text-sm shadow">
+      <div className="font-medium">{String(label)}</div>
+      <div>Saving rate: {Number.isFinite(v) ? percentFormatter(v) : "—"}</div>
+      <div className="mt-1 text-xs text-slate-500">
+        Formula: net ÷ income. Years with zero income are omitted.
+      </div>
+    </div>
+  );
+}
+
 type Tx = { date: string; type: "income" | "expense"; category: string; amount: number };
 type Point = { month: string; income: number; expense: number; net: number };
 type YearPoint = { year: string; income: number; expense: number; net: number };
@@ -95,6 +118,14 @@ export default function Analytics() {
     }
     return [...by.values()].sort((a, b) => a.year.localeCompare(b.year));
   }, [filtered]);
+
+  // Annual savings rate (net / income)
+  const annualRateData = useMemo(() => {
+    return annualSeries.map((p) => ({
+      year: p.year,
+      rate: p.income > 0 ? p.net / p.income : null,
+    }));
+  }, [annualSeries]);
 
   // --- YoY cumulative net (Jan..Dec). Ignores start/end; applies category filter.
   const yoyData = useMemo(() => {
@@ -366,6 +397,41 @@ export default function Analytics() {
               <Tooltip formatter={(v: any) => fmtUSD(Number(v))} />
               <Bar dataKey="net" fill={COL.net} radius={[4, 4, 0, 0]} />
             </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* Annual Savings Rate */}
+      <div className="p-4 rounded-lg border bg-white">
+        <h3 className="font-medium mb-2">Annual savings rate</h3>
+        <div className="h-64">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={annualRateData} margin={{ left: 16, right: 8, top: 8, bottom: 8 }}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="year" />
+              <YAxis
+                width={Math.max(
+                  MIN_Y_AXIS,
+                  estimateYAxisWidthFromMax(
+                    Math.max(
+                      0,
+                      ...annualRateData.map((d) => (d.rate == null ? 0 : Math.abs(d.rate))),
+                    ),
+                    (n) => percentFormatter(n),
+                  ),
+                )}
+                tickFormatter={(v: number) => percentFormatter(v)}
+              />
+              <Tooltip content={<RateTooltip />} />
+              <Line
+                type="monotone"
+                dataKey="rate"
+                stroke={COL.net}
+                strokeWidth={2}
+                dot={false}
+                connectNulls
+              />
+            </LineChart>
           </ResponsiveContainer>
         </div>
       </div>
