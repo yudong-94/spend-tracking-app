@@ -11,6 +11,7 @@ import {
 
 type Tx = { date: string; type: "income" | "expense"; category: string; amount: number };
 type Point = { month: string; income: number; expense: number; net: number };
+type YearPoint = { year: string; income: number; expense: number; net: number };
 
 const ym = (d: string) => d.slice(0, 7);
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
@@ -55,6 +56,31 @@ export default function Analytics() {
       by.set(key, p);
     }
     return [...by.values()].sort((a,b) => a.month.localeCompare(b.month));
+  }, [filtered]);
+
+  // Totals based on current Analytics filters
+  const totals = useMemo(() => {
+    let totalIncome = 0;
+    let totalExpense = 0;
+    for (const r of filtered as Tx[]) {
+      if (r.type === "income") totalIncome += r.amount;
+      else totalExpense += r.amount;
+    }
+    const net = totalIncome - totalExpense;
+    return { totalIncome, totalExpense, net };
+  }, [filtered]);
+
+  // Annual aggregation (respects start/end + category like monthly)
+  const annualSeries: YearPoint[] = useMemo<YearPoint[]>(() => {
+    const by = new Map<string, YearPoint>();
+    for (const r of filtered as Tx[]) {
+      const key = r.date.slice(0, 4); // YYYY
+      const p = by.get(key) ?? { year: key, income: 0, expense: 0, net: 0 };
+      if (r.type === "income") p.income += r.amount; else p.expense += r.amount;
+      p.net = p.income - p.expense;
+      by.set(key, p);
+    }
+    return [...by.values()].sort((a, b) => a.year.localeCompare(b.year));
   }, [filtered]);
 
  // --- YoY cumulative net (Jan..Dec). Ignores start/end; applies category filter.
@@ -120,6 +146,30 @@ export default function Analytics() {
         />
         </div>
       </div>
+      {/* Totals (match Dashboard KPI style) */}
+      <section className="grid gap-3 sm:grid-cols-3">
+        <div>
+          Income: <strong className="text-emerald-600">{fmtUSD(totals.totalIncome)}</strong>
+        </div>
+        <div>
+          Expense: <strong className="text-rose-600">{fmtUSD(totals.totalExpense)}</strong>
+        </div>
+        <div>
+          {(() => {
+            const net = totals.net;
+            const netClass = net > 0
+              ? "text-emerald-600"
+              : net < 0
+              ? "text-rose-600"
+              : "text-slate-600";
+            return (
+              <>
+                Net: <strong className={netClass}>{fmtUSD(net)}</strong>
+              </>
+            );
+          })()}
+        </div>
+      </section>
       {/* Filters */}
       <div className="flex flex-wrap gap-3 items-end">
         <div className="grid">
@@ -183,6 +233,54 @@ export default function Analytics() {
             <BarChart data={series} margin={{ left: 8, right: 8, top: 8, bottom: 8 }}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="month" />
+              <YAxis tickFormatter={(v: number) => fmtUSD(v)} />
+              <Tooltip formatter={(v: any) => fmtUSD(Number(v))} />
+              <Bar dataKey="net" fill={COL.net} radius={[4,4,0,0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* Annual Income */}
+      <div className="p-4 rounded-lg border bg-white">
+        <h3 className="font-medium mb-2">Annual total income</h3>
+        <div className="h-64">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={annualSeries} margin={{ left: 8, right: 8, top: 8, bottom: 8 }}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="year" />
+              <YAxis tickFormatter={(v: number) => fmtUSD(v)} />
+              <Tooltip formatter={(v: any) => fmtUSD(Number(v))} />
+              <Bar dataKey="income" fill={COL.income} radius={[4,4,0,0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* Annual Expenses */}
+      <div className="p-4 rounded-lg border bg-white">
+        <h3 className="font-medium mb-2">Annual total expenses</h3>
+        <div className="h-64">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={annualSeries} margin={{ left: 8, right: 8, top: 8, bottom: 8 }}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="year" />
+              <YAxis tickFormatter={(v: number) => fmtUSD(v)} />
+              <Tooltip formatter={(v: any) => fmtUSD(Number(v))} />
+              <Bar dataKey="expense" fill={COL.expense} radius={[4,4,0,0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* Annual Net */}
+      <div className="p-4 rounded-lg border bg-white">
+        <h3 className="font-medium mb-2">Annual net</h3>
+        <div className="h-64">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={annualSeries} margin={{ left: 8, right: 8, top: 8, bottom: 8 }}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="year" />
               <YAxis tickFormatter={(v: number) => fmtUSD(v)} />
               <Tooltip formatter={(v: any) => fmtUSD(Number(v))} />
               <Bar dataKey="net" fill={COL.net} radius={[4,4,0,0]} />
