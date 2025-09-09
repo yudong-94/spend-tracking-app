@@ -10,7 +10,6 @@ type FormTx = {
   Type: "income" | "expense";
   Category: string;
   Amount: number;
-  Account?: string;
   Description?: string;
 };
 
@@ -33,7 +32,6 @@ export default function AddTransaction() {
     Type: "expense",
     Category: "",
     Amount: 0,
-    Account: "",
     Description: "",
   });
 
@@ -70,7 +68,13 @@ export default function AddTransaction() {
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const Amount = Math.round((form.Amount || 0) * 100) / 100; // 2dp
-    await createTransaction({ ...form, Amount } as any); // keep "Amount" (capital A) for sheet
+    await createTransaction({
+      date: form.Date,
+      type: form.Type,
+      category: form.Category,
+      amount: Amount,
+      description: form.Description || undefined,
+    });
     setForm((f) => ({ ...f, Amount: 0, Description: "" }));
     refresh?.();
     alert("Saved!");
@@ -157,17 +161,6 @@ export default function AddTransaction() {
           <CurrencyInput
             value={form.Amount || 0}
             onChange={(v) => setForm((f) => ({ ...f, Amount: v }))}
-          />
-        </div>
-
-        {/* Account (optional) */}
-        <div className="grid gap-1">
-          <label className="text-sm">Account (optional)</label>
-          <input
-            type="text"
-            value={form.Account || ""}
-            onChange={(e) => setForm((f) => ({ ...f, Account: e.target.value }))}
-            className="border p-2 rounded"
           />
         </div>
 
