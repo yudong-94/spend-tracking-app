@@ -9,6 +9,7 @@ import {
 
 type Summary = { totalIncome: number; totalExpense: number; netCashFlow: number };
 type CatAmt = { category: string; amount: number };
+const Y_AXIS_WIDTH = 80; // prevent tick labels from being clipped
 
 const monthBounds = (d = new Date()) => {
   const start = new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10);
@@ -63,7 +64,7 @@ function CategoryChart({
           <ResponsiveContainer width="100%" height="100%">
             <BarChart
               data={data.map((x) => ({ name: x.category, amount: x.amount }))}
-              margin={{ left: 8, right: 8, top: 8, bottom: 8 }}
+              margin={{ left: 16, right: 8, top: 8, bottom: 8 }}
             >
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis
@@ -74,7 +75,7 @@ function CategoryChart({
                 textAnchor="end"
                 height={50}
               />
-              <YAxis tickFormatter={(v: number) => fmtUSD(Number(v))} />
+              <YAxis width={Y_AXIS_WIDTH} tickFormatter={(v: number) => fmtUSD(Number(v))} />
               <Tooltip formatter={(v: any) => fmtUSD(Number(v))} />
               <Bar dataKey="amount" fill={color} radius={[4, 4, 0, 0]} />
             </BarChart>

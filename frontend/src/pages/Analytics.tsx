@@ -15,6 +15,7 @@ type YearPoint = { year: string; income: number; expense: number; net: number };
 
 const ym = (d: string) => d.slice(0, 7);
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const Y_AXIS_WIDTH = 80; // prevent tick labels from being clipped
 
 export default function Analytics() {
   const { txns: all, getCategories, refresh } = useDataCache();
@@ -198,10 +199,10 @@ export default function Analytics() {
         <h3 className="font-medium mb-2">Monthly total income</h3>
         <div className="h-64">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={series} margin={{ left: 8, right: 8, top: 8, bottom: 8 }}>
+            <BarChart data={series} margin={{ left: 16, right: 8, top: 8, bottom: 8 }}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="month" />
-              <YAxis tickFormatter={(v: number) => fmtUSD(v)} />
+              <YAxis width={Y_AXIS_WIDTH} tickFormatter={(v: number) => fmtUSD(v)} />
               <Tooltip formatter={(v: any) => fmtUSD(Number(v))} />
               <Bar dataKey="income" fill={COL.income} radius={[4,4,0,0]} />
             </BarChart>
@@ -214,10 +215,10 @@ export default function Analytics() {
         <h3 className="font-medium mb-2">Monthly total expenses</h3>
         <div className="h-64">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={series} margin={{ left: 8, right: 8, top: 8, bottom: 8 }}>
+            <BarChart data={series} margin={{ left: 16, right: 8, top: 8, bottom: 8 }}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="month" />
-              <YAxis tickFormatter={(v: number) => fmtUSD(v)} />
+              <YAxis width={Y_AXIS_WIDTH} tickFormatter={(v: number) => fmtUSD(v)} />
               <Tooltip formatter={(v: any) => fmtUSD(Number(v))} />
               <Bar dataKey="expense" fill={COL.expense} radius={[4,4,0,0]} />
             </BarChart>
@@ -230,10 +231,10 @@ export default function Analytics() {
         <h3 className="font-medium mb-2">Monthly net</h3>
         <div className="h-64">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={series} margin={{ left: 8, right: 8, top: 8, bottom: 8 }}>
+            <BarChart data={series} margin={{ left: 16, right: 8, top: 8, bottom: 8 }}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="month" />
-              <YAxis tickFormatter={(v: number) => fmtUSD(v)} />
+              <YAxis width={Y_AXIS_WIDTH} tickFormatter={(v: number) => fmtUSD(v)} />
               <Tooltip formatter={(v: any) => fmtUSD(Number(v))} />
               <Bar dataKey="net" fill={COL.net} radius={[4,4,0,0]} />
             </BarChart>
@@ -246,10 +247,10 @@ export default function Analytics() {
         <h3 className="font-medium mb-2">Annual total income</h3>
         <div className="h-64">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={annualSeries} margin={{ left: 8, right: 8, top: 8, bottom: 8 }}>
+            <BarChart data={annualSeries} margin={{ left: 16, right: 8, top: 8, bottom: 8 }}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="year" />
-              <YAxis tickFormatter={(v: number) => fmtUSD(v)} />
+              <YAxis width={Y_AXIS_WIDTH} tickFormatter={(v: number) => fmtUSD(v)} />
               <Tooltip formatter={(v: any) => fmtUSD(Number(v))} />
               <Bar dataKey="income" fill={COL.income} radius={[4,4,0,0]} />
             </BarChart>
@@ -262,10 +263,10 @@ export default function Analytics() {
         <h3 className="font-medium mb-2">Annual total expenses</h3>
         <div className="h-64">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={annualSeries} margin={{ left: 8, right: 8, top: 8, bottom: 8 }}>
+            <BarChart data={annualSeries} margin={{ left: 16, right: 8, top: 8, bottom: 8 }}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="year" />
-              <YAxis tickFormatter={(v: number) => fmtUSD(v)} />
+              <YAxis width={Y_AXIS_WIDTH} tickFormatter={(v: number) => fmtUSD(v)} />
               <Tooltip formatter={(v: any) => fmtUSD(Number(v))} />
               <Bar dataKey="expense" fill={COL.expense} radius={[4,4,0,0]} />
             </BarChart>
@@ -278,10 +279,10 @@ export default function Analytics() {
         <h3 className="font-medium mb-2">Annual net</h3>
         <div className="h-64">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={annualSeries} margin={{ left: 8, right: 8, top: 8, bottom: 8 }}>
+            <BarChart data={annualSeries} margin={{ left: 16, right: 8, top: 8, bottom: 8 }}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="year" />
-              <YAxis tickFormatter={(v: number) => fmtUSD(v)} />
+              <YAxis width={Y_AXIS_WIDTH} tickFormatter={(v: number) => fmtUSD(v)} />
               <Tooltip formatter={(v: any) => fmtUSD(Number(v))} />
               <Bar dataKey="net" fill={COL.net} radius={[4,4,0,0]} />
             </BarChart>
@@ -297,10 +298,10 @@ export default function Analytics() {
         </div>
         <div className="h-64">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={yoyData} margin={{ left: 8, right: 8, top: 8, bottom: 8 }}>
+            <LineChart data={yoyData} margin={{ left: 16, right: 8, top: 8, bottom: 8 }}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="label" />
-              <YAxis tickFormatter={(v: number) => fmtUSD(v)} />
+              <YAxis width={Y_AXIS_WIDTH} tickFormatter={(v: number) => fmtUSD(v)} />
               <Tooltip formatter={(v: any) => fmtUSD(Number(v))} />
               <Legend />
               <Line type="monotone" dataKey="thisYear" name={`${new Date().getFullYear()} YTD`}
