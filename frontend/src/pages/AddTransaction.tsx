@@ -111,9 +111,21 @@ export default function AddTransaction() {
           </div>
         </div>
 
-        {/* Quick add presets */}
+        {/* Category (single-select) */}
+        <div className="grid gap-1">
+          <label className="text-sm">Category</label>
+          <CategorySelect
+            multiple={false}
+            options={sortedOptions}
+            value={form.Category}
+            onChange={(name: string) => setCategory(name)}
+            placeholder="Choose a category…"
+          />
+        </div>
+
+        {/* Quick add presets (moved below Category) */}
         {presets.length > 0 && (
-          <div className="grid gap-2">
+          <div className="grid gap-2 mt-1">
             <div className="text-sm text-slate-500">Quick add</div>
             <div className="flex flex-wrap gap-2">
               {presets.map((p) => (
@@ -138,18 +150,6 @@ export default function AddTransaction() {
             </div>
           </div>
         )}
-
-        {/* Category (single-select) */}
-        <div className="grid gap-1">
-          <label className="text-sm">Category</label>
-          <CategorySelect
-            multiple={false}
-            options={sortedOptions}
-            value={form.Category}
-            onChange={(name: string) => setCategory(name)}
-            placeholder="Choose a category…"
-          />
-        </div>
 
         {/* Amount */}
         <div className="grid gap-1">
