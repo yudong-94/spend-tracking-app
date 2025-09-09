@@ -1,9 +1,10 @@
 import { useDataCache } from "@/state/data-cache";
 import { fmtUSD } from "@/lib/format";
 import { COL } from "@/lib/colors";
-import RefreshButton from "@/components/RefreshButton";
+import PageHeader from "@/components/PageHeader";
 import { useState } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
+import { estimateYAxisWidthFromMax } from "@/lib/chart";
 
 type Summary = { totalIncome: number; totalExpense: number; netCashFlow: number };
 type CatAmt = { category: string; amount: number };
@@ -62,7 +63,15 @@ function CategoryChart({ title, data, color }: { title: string; data: CatAmt[]; 
                 textAnchor="end"
                 height={50}
               />
-              <YAxis width={Y_AXIS_WIDTH} tickFormatter={(v: number) => fmtUSD(Number(v))} />
+              <YAxis
+                width={Math.max(
+                  Y_AXIS_WIDTH,
+                  estimateYAxisWidthFromMax(Math.max(0, ...data.map((d) => d.amount || 0)), (n) =>
+                    fmtUSD(Number(n)),
+                  ),
+                )}
+                tickFormatter={(v: number) => fmtUSD(Number(v))}
+              />
               <Tooltip formatter={(v: any) => fmtUSD(Number(v))} />
               <Bar dataKey="amount" fill={color} radius={[4, 4, 0, 0]} />
             </BarChart>
@@ -98,20 +107,7 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-8">
-      <div className="flex items-center">
-        <div className="ml-auto flex items-center gap-3">
-          {lastUpdated && (
-            <span className="text-xs text-slate-500">
-              Updated {new Date(lastUpdated).toLocaleTimeString()}
-            </span>
-          )}
-          <RefreshButton
-            onClick={onRefresh}
-            disabled={isRefreshing}
-            label={isRefreshing ? "Refreshing..." : "Refresh"}
-          />
-        </div>
-      </div>
+      <PageHeader lastUpdated={lastUpdated} onRefresh={onRefresh} isRefreshing={isRefreshing} />
       {/* This Month */}
       <div className="space-y-4">
         <h2 className="text-lg font-semibold">This Month</h2>

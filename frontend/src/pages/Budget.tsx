@@ -1,8 +1,9 @@
 import { useEffect, useState, useMemo } from "react";
 import { Info } from "lucide-react";
 import { getBudget, createBudgetOverride } from "@/lib/api";
-import RefreshButton from "@/components/RefreshButton";
+import PageHeader from "@/components/PageHeader";
 import { fmtUSD } from "@/lib/format";
+import { estimateYAxisWidthFromMax } from "@/lib/chart";
 import {
   LineChart,
   Line,
@@ -91,9 +92,7 @@ export default function Budget() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-end">
-        <RefreshButton onClick={fetchIt} label={loading ? "Refreshing..." : "Refresh"} />
-      </div>
+      <PageHeader onRefresh={fetchIt} isRefreshing={loading} />
 
       {err ? (
         <div className="text-sm px-3 py-2 rounded border bg-rose-50 border-rose-200 text-rose-700">
@@ -132,7 +131,16 @@ export default function Budget() {
             <LineChart data={seriesForChart}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="day" />
-              <YAxis tickFormatter={(v: number) => fmtUSD(v)} width={80} />
+              <YAxis
+                tickFormatter={(v: number) => fmtUSD(v)}
+                width={(() => {
+                  const maxVal = Math.max(
+                    totalBudget || 0,
+                    ...seriesForChart.map((p: any) => Math.abs(Number(p?.cumActual || 0))),
+                  );
+                  return Math.max(56, estimateYAxisWidthFromMax(maxVal, fmtUSD));
+                })()}
+              />
               <Tooltip formatter={(v: number) => fmtUSD(Number(v))} />
               <Line type="monotone" dataKey="cumActual" stroke="#2563eb" dot={false} />
               <ReferenceLine

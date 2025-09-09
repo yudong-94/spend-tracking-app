@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useDataCache } from "@/state/data-cache";
 import { fmtUSD } from "@/lib/format";
 import { COL } from "@/lib/colors";
-import RefreshButton from "@/components/RefreshButton";
+import PageHeader from "@/components/PageHeader";
 import CategorySelect from "@/components/CategorySelect";
 import {
   BarChart,
@@ -16,6 +16,8 @@ import {
   Line,
   Legend,
 } from "recharts";
+import { estimateYAxisWidthFromMax, percentFormatter } from "@/lib/chart";
+import CombinedMonthlyChart from "@/components/CombinedMonthlyChart";
 
 type Tx = { date: string; type: "income" | "expense"; category: string; amount: number };
 type Point = { month: string; income: number; expense: number; net: number };
@@ -23,7 +25,7 @@ type YearPoint = { year: string; income: number; expense: number; net: number };
 
 const ym = (d: string) => d.slice(0, 7);
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-const Y_AXIS_WIDTH = 80; // prevent tick labels from being clipped
+const MIN_Y_AXIS = 56; // lower bound for Y-axis width
 
 export default function Analytics() {
   const { txns: all, getCategories, refresh } = useDataCache();
@@ -143,20 +145,7 @@ export default function Analytics() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center">
-        <div className="ml-auto flex items-center gap-3">
-          {lastUpdated && (
-            <span className="text-xs text-slate-500">
-              Updated {new Date(lastUpdated).toLocaleTimeString()}
-            </span>
-          )}
-          <RefreshButton
-            onClick={onRefresh}
-            disabled={isRefreshing}
-            label={isRefreshing ? "Refreshing..." : "Refresh"}
-          />
-        </div>
-      </div>
+      <PageHeader lastUpdated={lastUpdated} onRefresh={onRefresh} isRefreshing={isRefreshing} />
       {/* Filters */}
       <div className="flex flex-wrap gap-3 items-end">
         <div className="grid">
@@ -211,6 +200,19 @@ export default function Analytics() {
           })()}
         </div>
       </section>
+      {/* Savings rate (based on filters) */}
+      <div className="text-sm text-slate-600">
+        {(() => {
+          const rate = totals.totalIncome > 0 ? totals.net / totals.totalIncome : null;
+          const cls = rate !== null && rate >= 0 ? "text-emerald-600" : "text-rose-600";
+          return (
+            <>
+              Savings rate:{" "}
+              <strong className={cls}>{rate === null ? "—" : percentFormatter(rate)}</strong>
+            </>
+          );
+        })()}
+      </div>
 
       {/* Monthly Income */}
       <div className="p-4 rounded-lg border bg-white">
@@ -220,7 +222,16 @@ export default function Analytics() {
             <BarChart data={series} margin={{ left: 16, right: 8, top: 8, bottom: 8 }}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="month" />
-              <YAxis width={Y_AXIS_WIDTH} tickFormatter={(v: number) => fmtUSD(v)} />
+              <YAxis
+                width={Math.max(
+                  MIN_Y_AXIS,
+                  estimateYAxisWidthFromMax(
+                    Math.max(0, ...series.map((p) => p.income || 0)),
+                    fmtUSD,
+                  ),
+                )}
+                tickFormatter={(v: number) => fmtUSD(v)}
+              />
               <Tooltip formatter={(v: any) => fmtUSD(Number(v))} />
               <Bar dataKey="income" fill={COL.income} radius={[4, 4, 0, 0]} />
             </BarChart>
@@ -236,7 +247,16 @@ export default function Analytics() {
             <BarChart data={series} margin={{ left: 16, right: 8, top: 8, bottom: 8 }}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="month" />
-              <YAxis width={Y_AXIS_WIDTH} tickFormatter={(v: number) => fmtUSD(v)} />
+              <YAxis
+                width={Math.max(
+                  MIN_Y_AXIS,
+                  estimateYAxisWidthFromMax(
+                    Math.max(0, ...series.map((p) => p.expense || 0)),
+                    fmtUSD,
+                  ),
+                )}
+                tickFormatter={(v: number) => fmtUSD(v)}
+              />
               <Tooltip formatter={(v: any) => fmtUSD(Number(v))} />
               <Bar dataKey="expense" fill={COL.expense} radius={[4, 4, 0, 0]} />
             </BarChart>
@@ -252,12 +272,27 @@ export default function Analytics() {
             <BarChart data={series} margin={{ left: 16, right: 8, top: 8, bottom: 8 }}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="month" />
-              <YAxis width={Y_AXIS_WIDTH} tickFormatter={(v: number) => fmtUSD(v)} />
+              <YAxis
+                width={Math.max(
+                  MIN_Y_AXIS,
+                  estimateYAxisWidthFromMax(
+                    Math.max(0, ...series.map((p) => Math.abs(p.net || 0))),
+                    fmtUSD,
+                  ),
+                )}
+                tickFormatter={(v: number) => fmtUSD(v)}
+              />
               <Tooltip formatter={(v: any) => fmtUSD(Number(v))} />
               <Bar dataKey="net" fill={COL.net} radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
+      </div>
+
+      {/* Combined monthly: Income vs Expense with Net line */}
+      <div className="p-4 rounded-lg border bg-white">
+        <h3 className="font-medium mb-2">Monthly income vs expense (with net)</h3>
+        <CombinedMonthlyChart data={series} />
       </div>
 
       {/* Annual Income */}
@@ -268,7 +303,16 @@ export default function Analytics() {
             <BarChart data={annualSeries} margin={{ left: 16, right: 8, top: 8, bottom: 8 }}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="year" />
-              <YAxis width={Y_AXIS_WIDTH} tickFormatter={(v: number) => fmtUSD(v)} />
+              <YAxis
+                width={Math.max(
+                  MIN_Y_AXIS,
+                  estimateYAxisWidthFromMax(
+                    Math.max(0, ...annualSeries.map((p) => p.income || 0)),
+                    fmtUSD,
+                  ),
+                )}
+                tickFormatter={(v: number) => fmtUSD(v)}
+              />
               <Tooltip formatter={(v: any) => fmtUSD(Number(v))} />
               <Bar dataKey="income" fill={COL.income} radius={[4, 4, 0, 0]} />
             </BarChart>
@@ -284,7 +328,16 @@ export default function Analytics() {
             <BarChart data={annualSeries} margin={{ left: 16, right: 8, top: 8, bottom: 8 }}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="year" />
-              <YAxis width={Y_AXIS_WIDTH} tickFormatter={(v: number) => fmtUSD(v)} />
+              <YAxis
+                width={Math.max(
+                  MIN_Y_AXIS,
+                  estimateYAxisWidthFromMax(
+                    Math.max(0, ...annualSeries.map((p) => p.expense || 0)),
+                    fmtUSD,
+                  ),
+                )}
+                tickFormatter={(v: number) => fmtUSD(v)}
+              />
               <Tooltip formatter={(v: any) => fmtUSD(Number(v))} />
               <Bar dataKey="expense" fill={COL.expense} radius={[4, 4, 0, 0]} />
             </BarChart>
@@ -300,7 +353,16 @@ export default function Analytics() {
             <BarChart data={annualSeries} margin={{ left: 16, right: 8, top: 8, bottom: 8 }}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="year" />
-              <YAxis width={Y_AXIS_WIDTH} tickFormatter={(v: number) => fmtUSD(v)} />
+              <YAxis
+                width={Math.max(
+                  MIN_Y_AXIS,
+                  estimateYAxisWidthFromMax(
+                    Math.max(0, ...annualSeries.map((p) => Math.abs(p.net || 0))),
+                    fmtUSD,
+                  ),
+                )}
+                tickFormatter={(v: number) => fmtUSD(v)}
+              />
               <Tooltip formatter={(v: any) => fmtUSD(Number(v))} />
               <Bar dataKey="net" fill={COL.net} radius={[4, 4, 0, 0]} />
             </BarChart>
@@ -319,7 +381,23 @@ export default function Analytics() {
             <LineChart data={yoyData} margin={{ left: 16, right: 8, top: 8, bottom: 8 }}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="label" />
-              <YAxis width={Y_AXIS_WIDTH} tickFormatter={(v: number) => fmtUSD(v)} />
+              <YAxis
+                width={Math.max(
+                  MIN_Y_AXIS,
+                  estimateYAxisWidthFromMax(
+                    Math.max(
+                      0,
+                      ...yoyData
+                        .map((d) => [d.thisYear, d.lastYear])
+                        .flat()
+                        .filter((x) => x != null)
+                        .map((x) => Math.abs(x as number)),
+                    ),
+                    fmtUSD,
+                  ),
+                )}
+                tickFormatter={(v: number) => fmtUSD(v)}
+              />
               <Tooltip formatter={(v: any) => fmtUSD(Number(v))} />
               <Legend />
               <Line

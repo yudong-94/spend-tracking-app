@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useDataCache, Tx } from "@/state/data-cache";
-import RefreshButton from "@/components/RefreshButton";
+import PageHeader from "@/components/PageHeader";
 import CategorySelect from "@/components/CategorySelect";
 import { fmtUSDSigned } from "@/lib/format";
 
@@ -44,19 +44,8 @@ export default function TransactionsPage() {
 
   return (
     <div>
-      <div className="flex items-center mb-3">
-        <div className="ml-auto flex items-center gap-3">
-          {lastUpdated && (
-            <span className="text-xs text-slate-500">
-              Updated {new Date(lastUpdated).toLocaleTimeString()}
-            </span>
-          )}
-          <RefreshButton
-            onClick={onRefresh}
-            disabled={isRefreshing}
-            label={isRefreshing ? "Refreshing..." : "Refresh"}
-          />
-        </div>
+      <div className="mb-3">
+        <PageHeader lastUpdated={lastUpdated} onRefresh={onRefresh} isRefreshing={isRefreshing} />
       </div>
       <div className="flex gap-3 mb-3">
         <input
