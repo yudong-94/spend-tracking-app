@@ -93,6 +93,25 @@ export default function Analytics() {
     return [...by.values()].sort((a, b) => a.month.localeCompare(b.month));
   }, [filtered]);
 
+  // Category breakdowns based on current filters
+  const incomeCats = useMemo(() => {
+    const by = new Map<string, number>();
+    for (const r of filtered as Tx[]) {
+      if (r.type !== "income") continue;
+      by.set(r.category, (by.get(r.category) || 0) + r.amount);
+    }
+    return [...by.entries()].map(([category, amount]) => ({ category, amount }));
+  }, [filtered]);
+
+  const expenseCats = useMemo(() => {
+    const by = new Map<string, number>();
+    for (const r of filtered as Tx[]) {
+      if (r.type !== "expense") continue;
+      by.set(r.category, (by.get(r.category) || 0) + r.amount);
+    }
+    return [...by.entries()].map(([category, amount]) => ({ category, amount }));
+  }, [filtered]);
+
   // Totals based on current Analytics filters
   const totals = useMemo(() => {
     let totalIncome = 0;
@@ -488,6 +507,79 @@ export default function Analytics() {
           </ResponsiveContainer>
         </div>
       </div>
+
+      {/* Category breakdown (based on filters) */}
+      <section className="grid gap-6 lg:grid-cols-2">
+        {/* Income by category */}
+        <div className="p-4 rounded-lg border bg-white">
+          <h3 className="font-medium mb-2">Income by category (filtered)</h3>
+          {(() => {
+            const MAX_BARS = 15;
+            const sorted = [...incomeCats].sort((a, b) => (b.amount || 0) - (a.amount || 0));
+            const othersTotal = sorted.slice(MAX_BARS - 1).reduce((s, x) => s + (x.amount || 0), 0);
+            const chartData =
+              sorted.length > MAX_BARS
+                ? [...sorted.slice(0, MAX_BARS - 1), { category: "Other", amount: othersTotal }]
+                : sorted;
+            if (chartData.length === 0) return <div className="text-sm text-neutral-500">No data yet.</div>;
+            const maxLabelLen = Math.max(0, ...chartData.map((x) => (x.category || "").length));
+            const yCatWidth = Math.max(90, Math.min(260, Math.round(maxLabelLen * 7.2 + 16)));
+            const containerHeight = Math.max(260, Math.min(560, 28 * chartData.length + 40));
+            return (
+              <div style={{ height: containerHeight }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    layout="vertical"
+                    data={chartData.map((x) => ({ name: x.category, amount: x.amount }))}
+                    margin={{ left: 16, right: 16, top: 8, bottom: 8 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis type="number" tickFormatter={(v: number) => fmtUSD(Number(v))} />
+                    <YAxis type="category" dataKey="name" width={yCatWidth} tick={{ fontSize: 12 }} />
+                    <Tooltip formatter={(v: any) => fmtUSD(Number(v))} />
+                    <Bar dataKey="amount" fill={COL.income} radius={[0, 4, 4, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            );
+          })()}
+        </div>
+
+        {/* Expense by category */}
+        <div className="p-4 rounded-lg border bg-white">
+          <h3 className="font-medium mb-2">Expense by category (filtered)</h3>
+          {(() => {
+            const MAX_BARS = 15;
+            const sorted = [...expenseCats].sort((a, b) => (b.amount || 0) - (a.amount || 0));
+            const othersTotal = sorted.slice(MAX_BARS - 1).reduce((s, x) => s + (x.amount || 0), 0);
+            const chartData =
+              sorted.length > MAX_BARS
+                ? [...sorted.slice(0, MAX_BARS - 1), { category: "Other", amount: othersTotal }]
+                : sorted;
+            if (chartData.length === 0) return <div className="text-sm text-neutral-500">No data yet.</div>;
+            const maxLabelLen = Math.max(0, ...chartData.map((x) => (x.category || "").length));
+            const yCatWidth = Math.max(90, Math.min(260, Math.round(maxLabelLen * 7.2 + 16)));
+            const containerHeight = Math.max(260, Math.min(560, 28 * chartData.length + 40));
+            return (
+              <div style={{ height: containerHeight }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    layout="vertical"
+                    data={chartData.map((x) => ({ name: x.category, amount: x.amount }))}
+                    margin={{ left: 16, right: 16, top: 8, bottom: 8 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis type="number" tickFormatter={(v: number) => fmtUSD(Number(v))} />
+                    <YAxis type="category" dataKey="name" width={yCatWidth} tick={{ fontSize: 12 }} />
+                    <Tooltip formatter={(v: any) => fmtUSD(Number(v))} />
+                    <Bar dataKey="amount" fill={COL.expense} radius={[0, 4, 4, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            );
+          })()}
+        </div>
+      </section>
     </div>
   );
 }
