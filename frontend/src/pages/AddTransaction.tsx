@@ -19,8 +19,12 @@ export default function AddTransaction() {
 
   // Sort: expenses A→Z, then income A→Z
   const sortedOptions = useMemo(() => {
-    const exp = categories.filter((c) => c.type === "expense").sort((a, b) => a.name.localeCompare(b.name));
-    const inc = categories.filter((c) => c.type === "income").sort((a, b) => a.name.localeCompare(b.name));
+    const exp = categories
+      .filter((c) => c.type === "expense")
+      .sort((a, b) => a.name.localeCompare(b.name));
+    const inc = categories
+      .filter((c) => c.type === "income")
+      .sort((a, b) => a.name.localeCompare(b.name));
     return [...exp, ...inc];
   }, [categories]);
 
@@ -40,7 +44,9 @@ export default function AddTransaction() {
 
     for (const r of txns as any[]) {
       const name = String(r?.Category ?? "").trim();
-      const type = String(r?.Type ?? "").trim().toLowerCase() as "income" | "expense";
+      const type = String(r?.Type ?? "")
+        .trim()
+        .toLowerCase() as "income" | "expense";
       if (!name || (type !== "income" && type !== "expense")) continue;
       if (!seen.has(name)) {
         seen.add(name);
@@ -72,7 +78,6 @@ export default function AddTransaction() {
 
   return (
     <div className="max-w-2xl">
-
       <form onSubmit={onSubmit} className="grid gap-4">
         {/* Date */}
         <div className="grid gap-1">

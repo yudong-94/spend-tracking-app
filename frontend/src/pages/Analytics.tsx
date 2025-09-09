@@ -5,8 +5,16 @@ import { COL } from "@/lib/colors";
 import RefreshButton from "@/components/RefreshButton";
 import CategorySelect from "@/components/CategorySelect";
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
-  LineChart, Line, Legend
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  CartesianGrid,
+  LineChart,
+  Line,
+  Legend,
 } from "recharts";
 
 type Tx = { date: string; type: "income" | "expense"; category: string; amount: number };
@@ -14,7 +22,7 @@ type Point = { month: string; income: number; expense: number; net: number };
 type YearPoint = { year: string; income: number; expense: number; net: number };
 
 const ym = (d: string) => d.slice(0, 7);
-const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const Y_AXIS_WIDTH = 80; // prevent tick labels from being clipped
 
 export default function Analytics() {
@@ -52,11 +60,12 @@ export default function Analytics() {
     for (const r of filtered as Tx[]) {
       const key = ym(r.date);
       const p = by.get(key) ?? { month: key, income: 0, expense: 0, net: 0 };
-      if (r.type === "income") p.income += r.amount; else p.expense += r.amount;
+      if (r.type === "income") p.income += r.amount;
+      else p.expense += r.amount;
       p.net = p.income - p.expense;
       by.set(key, p);
     }
-    return [...by.values()].sort((a,b) => a.month.localeCompare(b.month));
+    return [...by.values()].sort((a, b) => a.month.localeCompare(b.month));
   }, [filtered]);
 
   // Totals based on current Analytics filters
@@ -77,58 +86,60 @@ export default function Analytics() {
     for (const r of filtered as Tx[]) {
       const key = r.date.slice(0, 4); // YYYY
       const p = by.get(key) ?? { year: key, income: 0, expense: 0, net: 0 };
-      if (r.type === "income") p.income += r.amount; else p.expense += r.amount;
+      if (r.type === "income") p.income += r.amount;
+      else p.expense += r.amount;
       p.net = p.income - p.expense;
       by.set(key, p);
     }
     return [...by.values()].sort((a, b) => a.year.localeCompare(b.year));
   }, [filtered]);
 
- // --- YoY cumulative net (Jan..Dec). Ignores start/end; applies category filter.
- const yoyData = useMemo(() => {
-  const now = new Date();
-  const thisYear = now.getFullYear();
-  const lastYear = thisYear - 1;
-  const cutoffIdx = now.getMonth(); // 0-based: current month index
+  // --- YoY cumulative net (Jan..Dec). Ignores start/end; applies category filter.
+  const yoyData = useMemo(() => {
+    const now = new Date();
+    const thisYear = now.getFullYear();
+    const lastYear = thisYear - 1;
+    const cutoffIdx = now.getMonth(); // 0-based: current month index
 
-  // monthly nets for both years (12 buckets each)
-  const monthly: Record<number, number[]> = {
-    [thisYear]: Array(12).fill(0),
-    [lastYear]: Array(12).fill(0),
-  };
+    // monthly nets for both years (12 buckets each)
+    const monthly: Record<number, number[]> = {
+      [thisYear]: Array(12).fill(0),
+      [lastYear]: Array(12).fill(0),
+    };
 
-  for (const r of all as Tx[]) {
-    const y = Number(r.date.slice(0, 4));
-    if (y !== thisYear && y !== lastYear) continue;
-    if (categories.length && !categories.includes(r.category)) continue;
-    const mIdx = Number(r.date.slice(5, 7)) - 1; // 0..11
-    const delta = r.type === "income" ? r.amount : -r.amount;
-    monthly[y][mIdx] += delta;
-  }
-
-  // cumulative series
-  const cumThis: (number | null)[] = Array(12).fill(null);
-  const cumLast: number[] = Array(12).fill(0);
-  let accT = 0, accL = 0;
-  for (let i = 0; i < 12; i++) {
-    accL += monthly[lastYear][i] || 0;      // full year
-    cumLast[i] = accL;
-
-    if (i <= cutoffIdx) {                   // YTD only
-      accT += monthly[thisYear][i] || 0;
-      cumThis[i] = accT;
-    } else {
-      cumThis[i] = null;                    // makes the line stop after current month
+    for (const r of all as Tx[]) {
+      const y = Number(r.date.slice(0, 4));
+      if (y !== thisYear && y !== lastYear) continue;
+      if (categories.length && !categories.includes(r.category)) continue;
+      const mIdx = Number(r.date.slice(5, 7)) - 1; // 0..11
+      const delta = r.type === "income" ? r.amount : -r.amount;
+      monthly[y][mIdx] += delta;
     }
-  }
 
-  return Array.from({ length: 12 }, (_, i) => ({
-    label: MONTHS[i],                       // Jan..Dec
-    thisYear: cumThis[i],
-    lastYear: cumLast[i],
-  }));
-}, [all, categories]);
+    // cumulative series
+    const cumThis: (number | null)[] = Array(12).fill(null);
+    const cumLast: number[] = Array(12).fill(0);
+    let accT = 0,
+      accL = 0;
+    for (let i = 0; i < 12; i++) {
+      accL += monthly[lastYear][i] || 0; // full year
+      cumLast[i] = accL;
 
+      if (i <= cutoffIdx) {
+        // YTD only
+        accT += monthly[thisYear][i] || 0;
+        cumThis[i] = accT;
+      } else {
+        cumThis[i] = null; // makes the line stop after current month
+      }
+    }
+
+    return Array.from({ length: 12 }, (_, i) => ({
+      label: MONTHS[i], // Jan..Dec
+      thisYear: cumThis[i],
+      lastYear: cumLast[i],
+    }));
+  }, [all, categories]);
 
   return (
     <div className="space-y-6">
@@ -139,25 +150,35 @@ export default function Analytics() {
               Updated {new Date(lastUpdated).toLocaleTimeString()}
             </span>
           )}
-        <RefreshButton
-          onClick={onRefresh}
-          disabled={isRefreshing}
-          label={isRefreshing ? "Refreshing..." : "Refresh"}
-        />
+          <RefreshButton
+            onClick={onRefresh}
+            disabled={isRefreshing}
+            label={isRefreshing ? "Refreshing..." : "Refresh"}
+          />
         </div>
       </div>
       {/* Filters */}
       <div className="flex flex-wrap gap-3 items-end">
         <div className="grid">
           <label className="text-sm">Start</label>
-          <input type="date" className="border rounded px-3 py-2" value={start} onChange={e => setStart(e.target.value)} />
+          <input
+            type="date"
+            className="border rounded px-3 py-2"
+            value={start}
+            onChange={(e) => setStart(e.target.value)}
+          />
         </div>
         <div className="grid">
           <label className="text-sm">End</label>
-          <input type="date" className="border rounded px-3 py-2" value={end} onChange={e => setEnd(e.target.value)} />
+          <input
+            type="date"
+            className="border rounded px-3 py-2"
+            value={end}
+            onChange={(e) => setEnd(e.target.value)}
+          />
         </div>
         <div className="grid">
-        <label className="text-sm">Category</label>
+          <label className="text-sm">Category</label>
           <CategorySelect
             multiple
             value={categories}
@@ -180,11 +201,8 @@ export default function Analytics() {
         <div>
           {(() => {
             const net = totals.net;
-            const netClass = net > 0
-              ? "text-emerald-600"
-              : net < 0
-              ? "text-rose-600"
-              : "text-slate-600";
+            const netClass =
+              net > 0 ? "text-emerald-600" : net < 0 ? "text-rose-600" : "text-slate-600";
             return (
               <>
                 Net: <strong className={netClass}>{fmtUSD(net)}</strong>
@@ -204,7 +222,7 @@ export default function Analytics() {
               <XAxis dataKey="month" />
               <YAxis width={Y_AXIS_WIDTH} tickFormatter={(v: number) => fmtUSD(v)} />
               <Tooltip formatter={(v: any) => fmtUSD(Number(v))} />
-              <Bar dataKey="income" fill={COL.income} radius={[4,4,0,0]} />
+              <Bar dataKey="income" fill={COL.income} radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -220,7 +238,7 @@ export default function Analytics() {
               <XAxis dataKey="month" />
               <YAxis width={Y_AXIS_WIDTH} tickFormatter={(v: number) => fmtUSD(v)} />
               <Tooltip formatter={(v: any) => fmtUSD(Number(v))} />
-              <Bar dataKey="expense" fill={COL.expense} radius={[4,4,0,0]} />
+              <Bar dataKey="expense" fill={COL.expense} radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -236,7 +254,7 @@ export default function Analytics() {
               <XAxis dataKey="month" />
               <YAxis width={Y_AXIS_WIDTH} tickFormatter={(v: number) => fmtUSD(v)} />
               <Tooltip formatter={(v: any) => fmtUSD(Number(v))} />
-              <Bar dataKey="net" fill={COL.net} radius={[4,4,0,0]} />
+              <Bar dataKey="net" fill={COL.net} radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -252,7 +270,7 @@ export default function Analytics() {
               <XAxis dataKey="year" />
               <YAxis width={Y_AXIS_WIDTH} tickFormatter={(v: number) => fmtUSD(v)} />
               <Tooltip formatter={(v: any) => fmtUSD(Number(v))} />
-              <Bar dataKey="income" fill={COL.income} radius={[4,4,0,0]} />
+              <Bar dataKey="income" fill={COL.income} radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -268,7 +286,7 @@ export default function Analytics() {
               <XAxis dataKey="year" />
               <YAxis width={Y_AXIS_WIDTH} tickFormatter={(v: number) => fmtUSD(v)} />
               <Tooltip formatter={(v: any) => fmtUSD(Number(v))} />
-              <Bar dataKey="expense" fill={COL.expense} radius={[4,4,0,0]} />
+              <Bar dataKey="expense" fill={COL.expense} radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -284,7 +302,7 @@ export default function Analytics() {
               <XAxis dataKey="year" />
               <YAxis width={Y_AXIS_WIDTH} tickFormatter={(v: number) => fmtUSD(v)} />
               <Tooltip formatter={(v: any) => fmtUSD(Number(v))} />
-              <Bar dataKey="net" fill={COL.net} radius={[4,4,0,0]} />
+              <Bar dataKey="net" fill={COL.net} radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -304,10 +322,24 @@ export default function Analytics() {
               <YAxis width={Y_AXIS_WIDTH} tickFormatter={(v: number) => fmtUSD(v)} />
               <Tooltip formatter={(v: any) => fmtUSD(Number(v))} />
               <Legend />
-              <Line type="monotone" dataKey="thisYear" name={`${new Date().getFullYear()} YTD`}
-                    stroke={COL.net} strokeWidth={2} dot={false} connectNulls={false} />
-              <Line type="monotone" dataKey="lastYear" name={`${new Date().getFullYear()-1} (full)`}
-                    stroke="#9ca3af" strokeWidth={2} strokeDasharray="5 5" dot={false} />
+              <Line
+                type="monotone"
+                dataKey="thisYear"
+                name={`${new Date().getFullYear()} YTD`}
+                stroke={COL.net}
+                strokeWidth={2}
+                dot={false}
+                connectNulls={false}
+              />
+              <Line
+                type="monotone"
+                dataKey="lastYear"
+                name={`${new Date().getFullYear() - 1} (full)`}
+                stroke="#9ca3af"
+                strokeWidth={2}
+                strokeDasharray="5 5"
+                dot={false}
+              />
             </LineChart>
           </ResponsiveContainer>
         </div>

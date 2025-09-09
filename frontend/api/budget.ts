@@ -188,14 +188,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let manualTotal = 0;
     let manualItems: Array<{ amount: number; notes: string }> = [];
     let manualNote = ""; // keep for backward-compatible display
-    
+
     try {
       const { sheets, spreadsheetId } = await getSheetsClient();
       const resp = await sheets.spreadsheets.values.get({
         spreadsheetId,
         range: `${BUDGETS_SHEET}!A1:C`,
       });
-    
+
       const vals = resp.data.values || [];
       if (vals.length) {
         const headers = vals[0].map((h) => String(h).trim().toLowerCase());
@@ -204,12 +204,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           headers.forEach((h, i) => (o[h] = r[i] ?? ""));
           return o;
         });
-    
+
         for (const r of rows) {
-          const m = String(
-            r["month"] || r["month (yyyy-mm)"] || r["month yyyy-mm"] || ""
-          ).trim();
-    
+          const m = String(r["month"] || r["month (yyyy-mm)"] || r["month yyyy-mm"] || "").trim();
+
           if (m === targetMonthKey) {
             const amt = Number(String(r["amount"] ?? "").replace(/,/g, ""));
             if (Number.isFinite(amt) && amt !== 0) {
@@ -221,7 +219,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             }
           }
         }
-    
+
         // Back-compat: collapse notes to a single line if you still show it near the top
         manualNote = manualItems
           .map((i) => i.notes)
@@ -248,9 +246,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Misc = Total - Rent - Core5
     const miscBudgetRaw =
-      totalBudget -
-      rentLM -
-      Object.values(coreBudgets).reduce((a, b) => a + b, 0);
+      totalBudget - rentLM - Object.values(coreBudgets).reduce((a, b) => a + b, 0);
     const overAllocated = miscBudgetRaw < 0;
     const miscBudget = Math.max(0, miscBudgetRaw);
 
@@ -304,7 +300,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         actual: coreActual[c],
         source: "avg-12" as const,
       })),
-      { category: "Miscellaneous", budget: miscBudget, actual: miscActual, source: "derived" as const },
+      {
+        category: "Miscellaneous",
+        budget: miscBudget,
+        actual: miscActual,
+        source: "derived" as const,
+      },
     ].map((r) => ({ ...r, remaining: Math.max(0, r.budget - r.actual) }));
 
     res.json({

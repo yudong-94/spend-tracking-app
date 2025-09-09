@@ -4,9 +4,8 @@ import { readTable } from "./_lib/sheets.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
-
     if (!requireAuth(req, res)) return;
-    
+
     if (req.method !== "GET") {
       res.setHeader("Allow", "GET");
       return res.status(405).send("Method Not Allowed");
@@ -17,7 +16,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const startMs = toTime(start);
     const endMs = toTime(end);
 
-    let income = 0, expense = 0;
+    let income = 0,
+      expense = 0;
     for (const r of rows) {
       const t = new Date(r["Date"] || r["date"]).getTime();
       if (!Number.isFinite(t)) continue;
@@ -31,7 +31,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({
       totalIncome: income,
       totalExpense: expense,
-      netCashFlow: income - expense
+      netCashFlow: income - expense,
     });
   } catch (e: any) {
     console.error(e);

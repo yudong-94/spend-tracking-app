@@ -3,9 +3,7 @@ import { fmtUSD } from "@/lib/format";
 import { COL } from "@/lib/colors";
 import RefreshButton from "@/components/RefreshButton";
 import { useState } from "react";
-import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
-} from "recharts";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 
 type Summary = { totalIncome: number; totalExpense: number; netCashFlow: number };
 type CatAmt = { category: string; amount: number };
@@ -26,17 +24,14 @@ const ytdBounds = () => {
 
 function KPIRow({ summary }: { summary: Summary | null }) {
   const net = summary?.netCashFlow ?? 0;
-  const netClass =
-    net > 0 ? "text-emerald-600" : net < 0 ? "text-rose-600" : "text-slate-600";
+  const netClass = net > 0 ? "text-emerald-600" : net < 0 ? "text-rose-600" : "text-slate-600";
   return (
     <section className="grid gap-3 sm:grid-cols-3">
       <div>
-        Income:{" "}
-        <strong className="text-emerald-600">{fmtUSD(summary?.totalIncome ?? 0)}</strong>
+        Income: <strong className="text-emerald-600">{fmtUSD(summary?.totalIncome ?? 0)}</strong>
       </div>
       <div>
-        Expense:{" "}
-        <strong className="text-rose-600">{fmtUSD(summary?.totalExpense ?? 0)}</strong>
+        Expense: <strong className="text-rose-600">{fmtUSD(summary?.totalExpense ?? 0)}</strong>
       </div>
       <div>
         Net: <strong className={netClass}>{fmtUSD(net)}</strong>
@@ -45,15 +40,7 @@ function KPIRow({ summary }: { summary: Summary | null }) {
   );
 }
 
-function CategoryChart({
-  title,
-  data,
-  color,
-}: {
-  title: string;
-  data: CatAmt[];
-  color: string;
-}) {
+function CategoryChart({ title, data, color }: { title: string; data: CatAmt[]; color: string }) {
   return (
     <div className="p-4 rounded-lg border bg-white">
       <h3 className="font-medium mb-2">{title}</h3>
@@ -148,11 +135,7 @@ export default function Dashboard() {
         <h2 className="text-lg font-semibold">This Year</h2>
         <KPIRow summary={ySummary} />
         <section className="grid gap-6 lg:grid-cols-2">
-          <CategoryChart
-            title="Income by category (YTD)"
-            data={yIncomeCats}
-            color={COL.income}
-          />
+          <CategoryChart title="Income by category (YTD)" data={yIncomeCats} color={COL.income} />
           <CategoryChart
             title="Expense by category (YTD)"
             data={yExpenseCats}

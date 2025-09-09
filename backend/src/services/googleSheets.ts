@@ -1,6 +1,6 @@
-import { google } from 'googleapis';
-import { Transaction, Category, ApiResponse } from '@spend-tracking/shared';
-import { config } from '../config';
+import { google } from "googleapis";
+import { Transaction, Category, ApiResponse } from "@spend-tracking/shared";
+import { config } from "../config";
 
 export class GoogleSheetsService {
   private sheets: any;
@@ -11,18 +11,18 @@ export class GoogleSheetsService {
       config.googleSheets.credentials.client_email,
       undefined,
       config.googleSheets.credentials.private_key,
-      ['https://www.googleapis.com/auth/spreadsheets']
+      ["https://www.googleapis.com/auth/spreadsheets"],
     );
 
-    this.sheets = google.sheets({ version: 'v4', auth: this.auth });
+    this.sheets = google.sheets({ version: "v4", auth: this.auth });
   }
 
   private async authenticate(): Promise<void> {
     try {
       await this.auth.authorize();
     } catch (error) {
-      console.error('Google Sheets authentication failed:', error);
-      throw new Error('Failed to authenticate with Google Sheets');
+      console.error("Google Sheets authentication failed:", error);
+      throw new Error("Failed to authenticate with Google Sheets");
     }
   }
 
@@ -43,19 +43,19 @@ export class GoogleSheetsService {
       // Skip header row and parse data
       const transactions: Transaction[] = rows.slice(1).map((row: any[], index: number) => ({
         id: row[0] || `generated-${Date.now()}-${index}`,
-        date: row[1] || new Date().toISOString().split('T')[0],
+        date: row[1] || new Date().toISOString().split("T")[0],
         amount: parseFloat(row[2]) || 0,
-        type: (row[3] || 'expense') as 'income' | 'expense',
-        category: row[4] || 'Uncategorized',
-        description: row[5] || '',
+        type: (row[3] || "expense") as "income" | "expense",
+        category: row[4] || "Uncategorized",
+        description: row[5] || "",
         createdAt: row[6] || new Date().toISOString(),
         updatedAt: row[7] || new Date().toISOString(),
       }));
 
       return { success: true, data: transactions };
     } catch (error) {
-      console.error('Error fetching transactions:', error);
-      return { success: false, error: 'Failed to fetch transactions' };
+      console.error("Error fetching transactions:", error);
+      return { success: false, error: "Failed to fetch transactions" };
     }
   }
 
@@ -76,20 +76,22 @@ export class GoogleSheetsService {
       // Skip header row and parse data
       const categories: Category[] = rows.slice(1).map((row: any[], index: number) => ({
         id: row[0] || `category-${Date.now()}-${index}`,
-        name: row[1] || 'Uncategorized',
-        type: (row[2] || 'expense') as 'income' | 'expense',
-        color: row[3] || '#6B7280',
+        name: row[1] || "Uncategorized",
+        type: (row[2] || "expense") as "income" | "expense",
+        color: row[3] || "#6B7280",
         icon: row[4] || undefined,
       }));
 
       return { success: true, data: categories };
     } catch (error) {
-      console.error('Error fetching categories:', error);
-      return { success: false, error: 'Failed to fetch categories' };
+      console.error("Error fetching categories:", error);
+      return { success: false, error: "Failed to fetch categories" };
     }
   }
 
-  async addTransaction(transaction: Omit<Transaction, 'id' | 'createdAt' | 'updatedAt'>): Promise<ApiResponse<Transaction>> {
+  async addTransaction(
+    transaction: Omit<Transaction, "id" | "createdAt" | "updatedAt">,
+  ): Promise<ApiResponse<Transaction>> {
     try {
       await this.authenticate();
 
@@ -106,7 +108,7 @@ export class GoogleSheetsService {
         newTransaction.amount.toString(),
         newTransaction.type,
         newTransaction.category,
-        newTransaction.description || '',
+        newTransaction.description || "",
         newTransaction.createdAt,
         newTransaction.updatedAt,
       ];
@@ -114,8 +116,8 @@ export class GoogleSheetsService {
       await this.sheets.spreadsheets.values.append({
         spreadsheetId: config.googleSheets.spreadsheetId,
         range: config.googleSheets.ranges.transactions,
-        valueInputOption: 'RAW',
-        insertDataOption: 'INSERT_ROWS',
+        valueInputOption: "RAW",
+        insertDataOption: "INSERT_ROWS",
         requestBody: {
           values: [row],
         },
@@ -123,8 +125,8 @@ export class GoogleSheetsService {
 
       return { success: true, data: newTransaction };
     } catch (error) {
-      console.error('Error adding transaction:', error);
-      return { success: false, error: 'Failed to add transaction' };
+      console.error("Error adding transaction:", error);
+      return { success: false, error: "Failed to add transaction" };
     }
   }
 
@@ -142,7 +144,7 @@ export class GoogleSheetsService {
       const rowIndex = rows.findIndex((row: any[]) => row[0] === transaction.id);
 
       if (rowIndex === -1) {
-        return { success: false, error: 'Transaction not found' };
+        return { success: false, error: "Transaction not found" };
       }
 
       const updatedTransaction = {
@@ -156,15 +158,15 @@ export class GoogleSheetsService {
         updatedTransaction.amount.toString(),
         updatedTransaction.type,
         updatedTransaction.category,
-        updatedTransaction.description || '',
+        updatedTransaction.description || "",
         updatedTransaction.createdAt,
         updatedTransaction.updatedAt,
       ];
 
       await this.sheets.spreadsheets.values.update({
         spreadsheetId: config.googleSheets.spreadsheetId,
-        range: `${config.googleSheets.ranges.transactions.split('!')[0]}!A${rowIndex + 1}`,
-        valueInputOption: 'RAW',
+        range: `${config.googleSheets.ranges.transactions.split("!")[0]}!A${rowIndex + 1}`,
+        valueInputOption: "RAW",
         requestBody: {
           values: [row],
         },
@@ -172,8 +174,8 @@ export class GoogleSheetsService {
 
       return { success: true, data: updatedTransaction };
     } catch (error) {
-      console.error('Error updating transaction:', error);
-      return { success: false, error: 'Failed to update transaction' };
+      console.error("Error updating transaction:", error);
+      return { success: false, error: "Failed to update transaction" };
     }
   }
 
@@ -191,7 +193,7 @@ export class GoogleSheetsService {
       const rowIndex = rows.findIndex((row: any[]) => row[0] === transactionId);
 
       if (rowIndex === -1) {
-        return { success: false, error: 'Transaction not found' };
+        return { success: false, error: "Transaction not found" };
       }
 
       // Delete the row (add 1 because Sheets API is 1-indexed)
@@ -203,7 +205,7 @@ export class GoogleSheetsService {
               deleteDimension: {
                 range: {
                   sheetId: 0, // Assuming first sheet
-                  dimension: 'ROWS',
+                  dimension: "ROWS",
                   startIndex: rowIndex,
                   endIndex: rowIndex + 1,
                 },
@@ -215,8 +217,8 @@ export class GoogleSheetsService {
 
       return { success: true, data: true };
     } catch (error) {
-      console.error('Error deleting transaction:', error);
-      return { success: false, error: 'Failed to delete transaction' };
+      console.error("Error deleting transaction:", error);
+      return { success: false, error: "Failed to delete transaction" };
     }
   }
 }

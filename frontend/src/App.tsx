@@ -1,10 +1,10 @@
 // import React from 'react';
-import { Routes, Route } from 'react-router-dom';
-import Layout from './components/Layout';
-import Dashboard from './pages/Dashboard';
-import Transactions from './pages/Transactions';
-import Analytics from './pages/Analytics';
-import AddTransaction from './pages/AddTransaction';
+import { Routes, Route } from "react-router-dom";
+import Layout from "./components/Layout";
+import Dashboard from "./pages/Dashboard";
+import Transactions from "./pages/Transactions";
+import Analytics from "./pages/Analytics";
+import AddTransaction from "./pages/AddTransaction";
 import Budget from "@/pages/Budget";
 
 function App() {

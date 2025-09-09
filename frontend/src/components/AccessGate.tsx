@@ -23,7 +23,9 @@ export default function AccessGate({ children }: { children: React.ReactNode }) 
           className="w-full border rounded px-3 py-2 mb-3"
         />
         <button className="w-full bg-slate-900 text-white rounded px-3 py-2">Continue</button>
-        <p className="mt-2 text-sm text-slate-500">Tip: this must match APP_ACCESS_TOKEN on the server.</p>
+        <p className="mt-2 text-sm text-slate-500">
+          Tip: this must match APP_ACCESS_TOKEN on the server.
+        </p>
       </form>
     </div>
   );

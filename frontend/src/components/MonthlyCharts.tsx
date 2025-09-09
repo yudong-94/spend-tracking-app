@@ -1,4 +1,4 @@
-import React from 'react';
+import React from "react";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -7,19 +7,12 @@ import {
   Title,
   Tooltip,
   Legend,
-} from 'chart.js';
-import { Bar } from 'react-chartjs-2';
-import { MonthlySummary } from '@spend-tracking/shared';
-import { formatCurrency, formatMonth } from '@spend-tracking/shared';
+} from "chart.js";
+import { Bar } from "react-chartjs-2";
+import { MonthlySummary } from "@spend-tracking/shared";
+import { formatCurrency, formatMonth } from "@spend-tracking/shared";
 
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  Title,
-  Tooltip,
-  Legend
-);
+ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
 interface MonthlyChartsProps {
   monthlyTrends: MonthlySummary[];
@@ -27,22 +20,22 @@ interface MonthlyChartsProps {
 }
 
 const MonthlyCharts: React.FC<MonthlyChartsProps> = ({ monthlyTrends, categoryFilter }) => {
-    // Reverse the order for charts to show earliest to latest (left to right)
-    const chartData = [...monthlyTrends].reverse();
-    const labels = chartData.map(month => formatMonth(month.month));
-    
-    const incomeData = chartData.map(month => month.income);
-    const expensesData = chartData.map(month => Math.abs(month.expenses)); // Use absolute value for display
-    const netData = chartData.map(month => month.netCashFlow);
-  
+  // Reverse the order for charts to show earliest to latest (left to right)
+  const chartData = [...monthlyTrends].reverse();
+  const labels = chartData.map((month) => formatMonth(month.month));
+
+  const incomeData = chartData.map((month) => month.income);
+  const expensesData = chartData.map((month) => Math.abs(month.expenses)); // Use absolute value for display
+  const netData = chartData.map((month) => month.netCashFlow);
+
   const incomeChartData = {
     labels,
     datasets: [
       {
-        label: 'Monthly Income',
+        label: "Monthly Income",
         data: incomeData,
-        backgroundColor: 'rgba(34, 197, 94, 0.8)',
-        borderColor: 'rgb(34, 197, 94)',
+        backgroundColor: "rgba(34, 197, 94, 0.8)",
+        borderColor: "rgb(34, 197, 94)",
         borderWidth: 1,
       },
     ],
@@ -52,10 +45,10 @@ const MonthlyCharts: React.FC<MonthlyChartsProps> = ({ monthlyTrends, categoryFi
     labels,
     datasets: [
       {
-        label: 'Monthly Expenses',
+        label: "Monthly Expenses",
         data: expensesData,
-        backgroundColor: 'rgba(239, 68, 68, 0.8)',
-        borderColor: 'rgb(239, 68, 68)',
+        backgroundColor: "rgba(239, 68, 68, 0.8)",
+        borderColor: "rgb(239, 68, 68)",
         borderWidth: 1,
       },
     ],
@@ -65,38 +58,35 @@ const MonthlyCharts: React.FC<MonthlyChartsProps> = ({ monthlyTrends, categoryFi
     labels,
     datasets: [
       {
-        label: 'Monthly Net Cash Flow',
+        label: "Monthly Net Cash Flow",
         data: netData,
-        backgroundColor: netData.map(value => 
-          value >= 0 ? 'rgba(34, 197, 94, 0.8)' : 'rgba(239, 68, 68, 0.8)'
+        backgroundColor: netData.map((value) =>
+          value >= 0 ? "rgba(34, 197, 94, 0.8)" : "rgba(239, 68, 68, 0.8)",
         ),
-        borderColor: netData.map(value => 
-          value >= 0 ? 'rgb(34, 197, 94)' : 'rgb(239, 68, 68)'
-        ),
+        borderColor: netData.map((value) => (value >= 0 ? "rgb(34, 197, 94)" : "rgb(239, 68, 68)")),
         borderWidth: 1,
       },
     ],
   };
 
-
   const chartOptions = {
     responsive: true,
     plugins: {
       legend: {
-        position: 'top' as const,
+        position: "top" as const,
       },
       title: {
         display: true,
-        text: categoryFilter 
+        text: categoryFilter
           ? `Monthly Financial Trends - ${categoryFilter}`
-          : 'Monthly Financial Trends',
+          : "Monthly Financial Trends",
       },
     },
     scales: {
       y: {
         beginAtZero: true,
         ticks: {
-          callback: function(value: any) {
+          callback: function (value: any) {
             return formatCurrency(value);
           },
         },

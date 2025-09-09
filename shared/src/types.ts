@@ -2,7 +2,7 @@ export interface Transaction {
   id: string;
   date: string; // ISO date string
   amount: number;
-  type: 'income' | 'expense';
+  type: "income" | "expense";
   category: string;
   description?: string;
   createdAt: string;
@@ -12,7 +12,7 @@ export interface Transaction {
 export interface Category {
   id: string;
   name: string;
-  type: 'income' | 'expense';
+  type: "income" | "expense";
   color: string;
   icon?: string;
 }
@@ -35,7 +35,7 @@ export interface CategoryBreakdown {
 export interface PeriodFilter {
   startDate: string;
   endDate: string;
-  type?: 'income' | 'expense' | 'all';
+  type?: "income" | "expense" | "all";
   category?: string;
 }
 

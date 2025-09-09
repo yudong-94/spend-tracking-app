@@ -3,26 +3,35 @@ import { Info } from "lucide-react";
 import { getBudget, createBudgetOverride } from "@/lib/api";
 import RefreshButton from "@/components/RefreshButton";
 import { fmtUSD } from "@/lib/format";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  ReferenceLine,
+} from "recharts";
 
 type BudgetResp = {
-    month: string;
-    totalBudget: number;
-    totalActualMTD: number;
-    totalRemaining: number;
-    manualTotal: number;
-    manualNote: string;
-    manualItems?: Array<{ amount: number; notes: string }>; // <-- add
-    overAllocated: boolean;
-    series: Array<{ day: number; cumActual: number }>;
-    rows: Array<{
-      category: string;
-      budget: number;
-      actual: number;
-      remaining: number;
-      source: "avg-12" | "last-month" | "derived";
-    }>;
-  };
+  month: string;
+  totalBudget: number;
+  totalActualMTD: number;
+  totalRemaining: number;
+  manualTotal: number;
+  manualNote: string;
+  manualItems?: Array<{ amount: number; notes: string }>; // <-- add
+  overAllocated: boolean;
+  series: Array<{ day: number; cumActual: number }>;
+  rows: Array<{
+    category: string;
+    budget: number;
+    actual: number;
+    remaining: number;
+    source: "avg-12" | "last-month" | "derived";
+  }>;
+};
 
 export default function Budget() {
   const [data, setData] = useState<BudgetResp | null>(null);
@@ -51,8 +60,7 @@ export default function Budget() {
     {
       label: "Budget (this month)",
       value: fmtUSD(totalBudget),
-      note:
-        "Calculated as: average of last 12 complete months regular spend (excluding Rent, Travel, Tax Return, Credit Card Fee) + last month's rent + manual adjustment.",
+      note: "Calculated as: average of last 12 complete months regular spend (excluding Rent, Travel, Tax Return, Credit Card Fee) + last month's rent + manual adjustment.",
     },
     { label: "Actual (MTD)", value: fmtUSD(data?.totalActualMTD ?? 0) },
     { label: "Remaining", value: fmtUSD(data?.totalRemaining ?? 0) },
@@ -61,7 +69,7 @@ export default function Budget() {
   const METHOD_TEXT: Record<string, string> = {
     "last-month": "Last month (fixed)",
     "avg-12": "Average of last 12 complete months",
-    "derived": "Derived remainder (Misc.)",
+    derived: "Derived remainder (Misc.)",
     "override-total": "Manual TOTAL override", // shown at top as a note; included here for completeness
   };
   const methodLabel = (s?: string) => METHOD_TEXT[s || ""] || "-";
@@ -127,11 +135,16 @@ export default function Budget() {
               <YAxis tickFormatter={(v: number) => fmtUSD(v)} width={80} />
               <Tooltip formatter={(v: number) => fmtUSD(Number(v))} />
               <Line type="monotone" dataKey="cumActual" stroke="#2563eb" dot={false} />
-              <ReferenceLine y={totalBudget} stroke="#111827" strokeDasharray="6 6" ifOverflow="extendDomain" />
+              <ReferenceLine
+                y={totalBudget}
+                stroke="#111827"
+                strokeDasharray="6 6"
+                ifOverflow="extendDomain"
+              />
             </LineChart>
           </ResponsiveContainer>
           <div className="mt-1 text-xs text-slate-500">
-          Actuals are shown through today; the line does not project future days.
+            Actuals are shown through today; the line does not project future days.
           </div>
         </div>
       </div>
@@ -153,7 +166,11 @@ export default function Budget() {
             </thead>
             <tbody>
               {rows.map((r) => {
-                const pct = r.budget ? Math.min(1, (r.actual || 0) / r.budget) : r.actual > 0 ? 1 : 0;
+                const pct = r.budget
+                  ? Math.min(1, (r.actual || 0) / r.budget)
+                  : r.actual > 0
+                    ? 1
+                    : 0;
                 const color =
                   pct < 0.8 ? "bg-emerald-500" : pct <= 1 ? "bg-amber-500" : "bg-rose-500";
                 return (
@@ -165,7 +182,10 @@ export default function Budget() {
                     <td className="py-2 px-3 text-slate-500">{methodLabel(r.source)}</td>
                     <td className="py-2">
                       <div className="h-2 w-40 bg-slate-200 rounded">
-                        <div className={`h-2 rounded ${color}`} style={{ width: `${pct * 100}%` }} />
+                        <div
+                          className={`h-2 rounded ${color}`}
+                          style={{ width: `${pct * 100}%` }}
+                        />
                       </div>
                     </td>
                   </tr>
@@ -174,7 +194,9 @@ export default function Budget() {
             </tbody>
           </table>
           {data?.overAllocated ? (
-            <div className="text-xs text-rose-600 mt-3">Note: budgets are over-allocated (Miscellaneous went below 0).</div>
+            <div className="text-xs text-rose-600 mt-3">
+              Note: budgets are over-allocated (Miscellaneous went below 0).
+            </div>
           ) : null}
         </div>
       </div>
@@ -182,24 +204,24 @@ export default function Budget() {
       {/* Current adjustments */}
       {(data?.manualItems?.length ?? 0) > 0 && (
         <div className="rounded-lg border bg-white p-4">
-            <div className="text-sm font-medium mb-2">Adjustments this month</div>
-            <ul className="space-y-1">
+          <div className="text-sm font-medium mb-2">Adjustments this month</div>
+          <ul className="space-y-1">
             {data!.manualItems!.map((it, i) => {
-                const sign = it.amount >= 0 ? "+" : "−";
-                const abs = Math.abs(it.amount);
-                return (
+              const sign = it.amount >= 0 ? "+" : "−";
+              const abs = Math.abs(it.amount);
+              return (
                 <li key={i} className="flex justify-between text-sm">
-                    <span className="text-slate-600">{it.notes || "—"}</span>
-                    <span className="font-medium">
+                  <span className="text-slate-600">{it.notes || "—"}</span>
+                  <span className="font-medium">
                     {sign}
                     {fmtUSD(abs)}
-                    </span>
+                  </span>
                 </li>
-                );
+              );
             })}
-            </ul>
+          </ul>
         </div>
-        )}
+      )}
 
       {/* Adjust TOTAL override */}
       <button
@@ -208,8 +230,8 @@ export default function Budget() {
         onClick={() => setShowAdjust(true)}
       >
         Add adjustment
-      </button>    
-     <AdjustBudgetModal
+      </button>
+      <AdjustBudgetModal
         open={showAdjust}
         onClose={() => setShowAdjust(false)}
         onSuccess={fetchIt /* or refresh() – the function you use to re-fetch budgets */}
@@ -219,88 +241,88 @@ export default function Budget() {
 }
 
 function AdjustBudgetModal({
-    open,
-    onClose,
-    onSuccess, // call to refresh data after save
-  }: {
-    open: boolean;
-    onClose: () => void;
-    onSuccess: () => Promise<void> | void;
-  }) {
-    const [amount, setAmount] = useState<string>("");
-    const [notes, setNotes] = useState<string>("");
-    const [saving, setSaving] = useState(false);
-    const parsed = Number((amount || "").toString().replace(/,/g, ""));
-  
-    if (!open) return null;
-  
-    async function handleSave(e: React.FormEvent) {
-      e.preventDefault();
-      if (!Number.isFinite(parsed)) {
-        alert("Please enter a valid amount.");
-        return;
-      }
-      setSaving(true);
-      try {
-        await createBudgetOverride({ amount: parsed, notes });
-        await onSuccess(); // refresh budgets
-        onClose();
-      } catch (err) {
-        console.error(err);
-        alert("Failed to save the adjustment.");
-      } finally {
-        setSaving(false);
-      }
+  open,
+  onClose,
+  onSuccess, // call to refresh data after save
+}: {
+  open: boolean;
+  onClose: () => void;
+  onSuccess: () => Promise<void> | void;
+}) {
+  const [amount, setAmount] = useState<string>("");
+  const [notes, setNotes] = useState<string>("");
+  const [saving, setSaving] = useState(false);
+  const parsed = Number((amount || "").toString().replace(/,/g, ""));
+
+  if (!open) return null;
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault();
+    if (!Number.isFinite(parsed)) {
+      alert("Please enter a valid amount.");
+      return;
     }
-  
-    return (
-      <div className="fixed inset-0 z-50 bg-black/20 flex items-start justify-center p-6">
-        <div className="w-full max-w-3xl rounded-lg bg-white shadow-lg">
-          <div className="flex items-center justify-between p-4 border-b">
-            <h3 className="text-base font-semibold">Adjust Budget (this month)</h3>
+    setSaving(true);
+    try {
+      await createBudgetOverride({ amount: parsed, notes });
+      await onSuccess(); // refresh budgets
+      onClose();
+    } catch (err) {
+      console.error(err);
+      alert("Failed to save the adjustment.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/20 flex items-start justify-center p-6">
+      <div className="w-full max-w-3xl rounded-lg bg-white shadow-lg">
+        <div className="flex items-center justify-between p-4 border-b">
+          <h3 className="text-base font-semibold">Adjust Budget (this month)</h3>
+          <button
+            type="button"
+            className="px-3 py-1.5 rounded bg-slate-900 text-white"
+            onClick={onClose}
+            disabled={saving}
+          >
+            Close
+          </button>
+        </div>
+
+        <form onSubmit={handleSave} className="p-4 space-y-4">
+          <div>
+            <label className="block text-sm mb-1">Amount</label>
+            <input
+              className="w-full border rounded px-3 py-2"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder="e.g. 500"
+              inputMode="decimal"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm mb-1">Notes (optional)</label>
+            <input
+              className="w-full border rounded px-3 py-2"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="What is this adjustment for?"
+            />
+          </div>
+
+          <div className="pt-2">
             <button
-              type="button"
-              className="px-3 py-1.5 rounded bg-slate-900 text-white"
-              onClick={onClose}
-              disabled={saving}
+              type="submit"
+              className="px-4 py-2 rounded bg-slate-900 text-white disabled:opacity-50"
+              disabled={saving || !Number.isFinite(parsed)}
             >
-              Close
+              {saving ? "Saving…" : "Save"}
             </button>
           </div>
-  
-          <form onSubmit={handleSave} className="p-4 space-y-4">
-            <div>
-              <label className="block text-sm mb-1">Amount</label>
-              <input
-                className="w-full border rounded px-3 py-2"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                placeholder="e.g. 500"
-                inputMode="decimal"
-              />
-            </div>
-  
-            <div>
-              <label className="block text-sm mb-1">Notes (optional)</label>
-              <input
-                className="w-full border rounded px-3 py-2"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="What is this adjustment for?"
-              />
-            </div>
-  
-            <div className="pt-2">
-              <button
-                type="submit"
-                className="px-4 py-2 rounded bg-slate-900 text-white disabled:opacity-50"
-                disabled={saving || !Number.isFinite(parsed)}
-              >
-                {saving ? "Saving…" : "Save"}
-              </button>
-            </div>
-          </form>
-        </div>
+        </form>
       </div>
-    );
-  }
+    </div>
+  );
+}

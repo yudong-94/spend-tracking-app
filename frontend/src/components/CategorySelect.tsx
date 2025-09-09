@@ -14,7 +14,7 @@ function Dot({ type, size = 8 }: { type: "income" | "expense"; size?: number }) 
 }
 
 type BaseProps = {
-  options: Cat[];                 // pass getCategories() or getCategories(type)
+  options: Cat[]; // pass getCategories() or getCategories(type)
   placeholder?: string;
   className?: string;
   disabled?: boolean;
@@ -22,13 +22,13 @@ type BaseProps = {
 
 type SingleProps = BaseProps & {
   multiple?: false;
-  value: string;                  // category name
+  value: string; // category name
   onChange: (v: string) => void;
 };
 
 type MultiProps = BaseProps & {
   multiple: true;
-  value: string[];                // category names
+  value: string[]; // category names
   onChange: (v: string[]) => void;
 };
 
@@ -50,13 +50,14 @@ export default function CategorySelect(props: SingleProps | MultiProps) {
 
   const selectedNames: string[] = useMemo(
     () => (isMulti ? (props as MultiProps).value : [(props as SingleProps).value].filter(Boolean)),
-    [isMulti, props]
+    [isMulti, props],
   );
 
   const selected = useMemo(
-    () => (!isMulti ? props.options.find((c) => c.name === (props as SingleProps).value) : undefined),
+    () =>
+      !isMulti ? props.options.find((c) => c.name === (props as SingleProps).value) : undefined,
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [isMulti, (props as SingleProps).value, props.options]
+    [isMulti, (props as SingleProps).value, props.options],
   );
 
   const filtered = useMemo(() => {
