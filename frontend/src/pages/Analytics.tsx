@@ -147,7 +147,30 @@ export default function Analytics() {
         />
         </div>
       </div>
-      {/* Totals (match Dashboard KPI style) */}
+      {/* Filters */}
+      <div className="flex flex-wrap gap-3 items-end">
+        <div className="grid">
+          <label className="text-sm">Start</label>
+          <input type="date" className="border rounded px-3 py-2" value={start} onChange={e => setStart(e.target.value)} />
+        </div>
+        <div className="grid">
+          <label className="text-sm">End</label>
+          <input type="date" className="border rounded px-3 py-2" value={end} onChange={e => setEnd(e.target.value)} />
+        </div>
+        <div className="grid">
+        <label className="text-sm">Category</label>
+          <CategorySelect
+            multiple
+            value={categories}
+            onChange={setCategories}
+            options={getCategories()}
+            className="w-56"
+            placeholder="All Categories"
+          />
+        </div>
+      </div>
+
+      {/* Totals (match Dashboard KPI style; based on filters above) */}
       <section className="grid gap-3 sm:grid-cols-3">
         <div>
           Income: <strong className="text-emerald-600">{fmtUSD(totals.totalIncome)}</strong>
@@ -171,28 +194,6 @@ export default function Analytics() {
           })()}
         </div>
       </section>
-      {/* Filters */}
-      <div className="flex flex-wrap gap-3 items-end">
-        <div className="grid">
-          <label className="text-sm">Start</label>
-          <input type="date" className="border rounded px-3 py-2" value={start} onChange={e => setStart(e.target.value)} />
-        </div>
-        <div className="grid">
-          <label className="text-sm">End</label>
-          <input type="date" className="border rounded px-3 py-2" value={end} onChange={e => setEnd(e.target.value)} />
-        </div>
-        <div className="grid">
-        <label className="text-sm">Category</label>
-          <CategorySelect
-            multiple
-            value={categories}
-            onChange={setCategories}
-            options={getCategories()}
-            className="w-56"
-            placeholder="All Categories"
-          />
-        </div>
-      </div>
 
       {/* Monthly Income */}
       <div className="p-4 rounded-lg border bg-white">
