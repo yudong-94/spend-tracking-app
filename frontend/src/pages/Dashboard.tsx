@@ -112,7 +112,6 @@ export default function Dashboard() {
   return (
     <div className="space-y-8">
       <div className="flex items-center">
-        <div className="text-lg font-semibold">Dashboard</div>
         <div className="ml-auto flex items-center gap-3">
           {lastUpdated && (
             <span className="text-xs text-slate-500">

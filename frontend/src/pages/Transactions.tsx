@@ -44,7 +44,6 @@ export default function TransactionsPage() {
   return (
     <div>
       <div className="flex items-center mb-3">
-        <h2 className="text-xl font-semibold">Transactions</h2>
         <div className="ml-auto flex items-center gap-3">
           {lastUpdated && (
             <span className="text-xs text-slate-500">

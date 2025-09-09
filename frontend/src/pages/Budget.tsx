@@ -83,8 +83,7 @@ export default function Budget() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold">Budget</h2>
+      <div className="flex items-center justify-end">
         <RefreshButton onClick={fetchIt} label={loading ? "Refreshing..." : "Refresh"} />
       </div>
 

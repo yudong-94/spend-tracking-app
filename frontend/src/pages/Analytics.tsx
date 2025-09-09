@@ -133,7 +133,6 @@ export default function Analytics() {
   return (
     <div className="space-y-6">
       <div className="flex items-center">
-        <h2 className="text-lg font-semibold">Analytics</h2>
         <div className="ml-auto flex items-center gap-3">
           {lastUpdated && (
             <span className="text-xs text-slate-500">

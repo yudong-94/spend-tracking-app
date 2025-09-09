@@ -72,7 +72,6 @@ export default function AddTransaction() {
 
   return (
     <div className="max-w-2xl">
-      <h2 className="text-xl font-semibold mb-4">Add Transaction</h2>
 
       <form onSubmit={onSubmit} className="grid gap-4">
         {/* Date */}
