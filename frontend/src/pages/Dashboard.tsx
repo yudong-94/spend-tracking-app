@@ -4,11 +4,10 @@ import { COL } from "@/lib/colors";
 import PageHeader from "@/components/PageHeader";
 import { useState } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
-import { estimateYAxisWidthFromMax } from "@/lib/chart";
 
 type Summary = { totalIncome: number; totalExpense: number; netCashFlow: number };
 type CatAmt = { category: string; amount: number };
-const Y_AXIS_WIDTH = 80; // prevent tick labels from being clipped
+// (no fixed Y-axis width needed for vertical charts)
 
 const monthBounds = (d = new Date()) => {
   const start = new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10);
@@ -51,44 +50,28 @@ function CategoryChart({ title, data, color }: { title: string; data: CatAmt[]; 
       ? [...sorted.slice(0, MAX_BARS - 1), { category: "Other", amount: othersTotal }]
       : sorted;
   const shownCount = chartData.length;
-  // Show at most ~12 tick labels by skipping some when crowded
-  const interval = shownCount > 12 ? Math.ceil(shownCount / 12) - 1 : 0;
-  const angle = shownCount > 10 ? -30 : -20;
-  const truncate = (s: string, n = 12) => (s && s.length > n ? `${s.slice(0, n - 1)}…` : s);
+  // Category labels on the left; compute a reasonable width and height
+  const maxLabelLen = Math.max(0, ...chartData.map((x) => (x.category || "").length));
+  const yCatWidth = Math.max(90, Math.min(260, Math.round(maxLabelLen * 7.2 + 16)));
+  const containerHeight = Math.max(260, Math.min(560, 28 * shownCount + 40));
   return (
     <div className="p-4 rounded-lg border bg-white">
       <h3 className="font-medium mb-2">{title}</h3>
       {chartData.length === 0 ? (
         <div className="text-sm text-neutral-500">No data yet.</div>
       ) : (
-        <div className="h-64">
+        <div style={{ height: containerHeight }}>
           <ResponsiveContainer width="100%" height="100%">
             <BarChart
+              layout="vertical"
               data={chartData.map((x) => ({ name: x.category, amount: x.amount }))}
-              margin={{ left: 16, right: 8, top: 8, bottom: 8 }}
+              margin={{ left: 16, right: 16, top: 8, bottom: 8 }}
             >
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis
-                dataKey="name"
-                tick={{ fontSize: 12 }}
-                interval={interval}
-                angle={angle}
-                textAnchor="end"
-                height={50}
-                tickFormatter={(v: string) => truncate(v)}
-              />
-              <YAxis
-                width={Math.max(
-                  Y_AXIS_WIDTH,
-                  estimateYAxisWidthFromMax(
-                    Math.max(0, ...chartData.map((d) => d.amount || 0)),
-                    (n) => fmtUSD(Number(n)),
-                  ),
-                )}
-                tickFormatter={(v: number) => fmtUSD(Number(v))}
-              />
+              <XAxis type="number" tickFormatter={(v: number) => fmtUSD(Number(v))} />
+              <YAxis type="category" dataKey="name" width={yCatWidth} tick={{ fontSize: 12 }} />
               <Tooltip formatter={(v: any) => fmtUSD(Number(v))} />
-              <Bar dataKey="amount" fill={color} radius={[4, 4, 0, 0]} />
+              <Bar dataKey="amount" fill={color} radius={[0, 4, 4, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
