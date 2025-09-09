@@ -42,32 +42,47 @@ function KPIRow({ summary }: { summary: Summary | null }) {
 }
 
 function CategoryChart({ title, data, color }: { title: string; data: CatAmt[]; color: string }) {
+  // Prepare data: sort desc, cap to top N, group the rest as "Other"
+  const MAX_BARS = 15;
+  const sorted = [...data].sort((a, b) => (b.amount || 0) - (a.amount || 0));
+  const othersTotal = sorted.slice(MAX_BARS - 1).reduce((s, x) => s + (x.amount || 0), 0);
+  const chartData =
+    sorted.length > MAX_BARS
+      ? [...sorted.slice(0, MAX_BARS - 1), { category: "Other", amount: othersTotal }]
+      : sorted;
+  const shownCount = chartData.length;
+  // Show at most ~12 tick labels by skipping some when crowded
+  const interval = shownCount > 12 ? Math.ceil(shownCount / 12) - 1 : 0;
+  const angle = shownCount > 10 ? -30 : -20;
+  const truncate = (s: string, n = 12) => (s && s.length > n ? `${s.slice(0, n - 1)}…` : s);
   return (
     <div className="p-4 rounded-lg border bg-white">
       <h3 className="font-medium mb-2">{title}</h3>
-      {data.length === 0 ? (
+      {chartData.length === 0 ? (
         <div className="text-sm text-neutral-500">No data yet.</div>
       ) : (
         <div className="h-64">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart
-              data={data.map((x) => ({ name: x.category, amount: x.amount }))}
+              data={chartData.map((x) => ({ name: x.category, amount: x.amount }))}
               margin={{ left: 16, right: 8, top: 8, bottom: 8 }}
             >
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis
                 dataKey="name"
                 tick={{ fontSize: 12 }}
-                interval={0}
-                angle={-20}
+                interval={interval}
+                angle={angle}
                 textAnchor="end"
                 height={50}
+                tickFormatter={(v: string) => truncate(v)}
               />
               <YAxis
                 width={Math.max(
                   Y_AXIS_WIDTH,
-                  estimateYAxisWidthFromMax(Math.max(0, ...data.map((d) => d.amount || 0)), (n) =>
-                    fmtUSD(Number(n)),
+                  estimateYAxisWidthFromMax(
+                    Math.max(0, ...chartData.map((d) => d.amount || 0)),
+                    (n) => fmtUSD(Number(n)),
                   ),
                 )}
                 tickFormatter={(v: number) => fmtUSD(Number(v))}
