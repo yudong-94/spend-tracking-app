@@ -279,24 +279,30 @@ export default function Analytics() {
         </div>
 
         {/* Tabs */}
-        <div className="mt-3 flex gap-1 text-sm">
-          {([
-            ["overview", "Overview"],
-            ["monthly", "Monthly"],
-            ["annual", "Annual"],
-            ["breakdown", "Breakdown"],
-          ] as Array<[Tab, string]>).map(([key, label]) => (
-            <button
-              key={key}
-              onClick={() => setTab(key)}
-              className={`px-3 py-1.5 rounded border ${
-                tab === key ? "bg-slate-900 text-white" : "bg-white hover:bg-slate-50"
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+        <nav className="mt-3 text-sm" role="tablist" aria-label="Analytics sections">
+          <div className="flex gap-4">
+            {([
+              ["overview", "Overview"],
+              ["monthly", "Monthly"],
+              ["annual", "Annual"],
+              ["breakdown", "Breakdown"],
+            ] as Array<[Tab, string]>).map(([key, label]) => (
+              <button
+                key={key}
+                role="tab"
+                aria-selected={tab === key}
+                onClick={() => setTab(key)}
+                className={`-mb-px border-b-2 px-1.5 pb-2 transition-colors ${
+                  tab === key
+                    ? "border-slate-900 text-slate-900 font-medium"
+                    : "border-transparent text-slate-500 hover:text-slate-700"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </nav>
       </div>
 
       {/* Totals (match Dashboard KPI style; based on filters above) */}
@@ -362,6 +368,30 @@ export default function Analytics() {
         })()}
       </section>
       )}
+
+      {/* Simple totals for Monthly and Annual tabs (no deltas) */}
+      {(tab === "monthly" || tab === "annual") && (
+        <section className="grid gap-3 sm:grid-cols-3">
+          <div>
+            Income: <strong className="text-emerald-600">{fmtUSD(totals.totalIncome)}</strong>
+          </div>
+          <div>
+            Expense: <strong className="text-rose-600">{fmtUSD(totals.totalExpense)}</strong>
+          </div>
+          <div>
+            {(() => {
+              const net = totals.net;
+              const netClass =
+                net > 0 ? "text-emerald-600" : net < 0 ? "text-rose-600" : "text-slate-600";
+              return (
+                <>
+                  Net: <strong className={netClass}>{fmtUSD(net)}</strong>
+                </>
+              );
+            })()}
+          </div>
+        </section>
+      )}
       {/* Savings rate (based on filters) */}
       {tab === "overview" && (
       <div className="text-sm text-slate-600">
@@ -378,8 +408,8 @@ export default function Analytics() {
       </div>
       )}
 
-      {/* Overview: Combined monthly */}
-      {tab === "overview" && (
+      {/* Monthly: Combined monthly */}
+      {tab === "monthly" && (
       <div className="p-4 rounded-lg border bg-white">
         <h3 className="font-medium mb-2">Monthly income vs expense (with net)</h3>
         <CombinedMonthlyChart data={series} />
