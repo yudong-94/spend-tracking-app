@@ -124,6 +124,51 @@ export default function Analytics() {
     return { totalIncome, totalExpense, net };
   }, [filtered]);
 
+  // Month-over-month and 3-month average comparisons based on the monthly series above
+  const deltas = useMemo(() => {
+    const n = series.length;
+    if (n === 0) return null;
+    const cur = series[n - 1];
+    const prev = n >= 2 ? series[n - 2] : undefined;
+    const tail = n >= 2 ? series.slice(Math.max(0, n - 4), n - 1) : [];
+    const avg3 = tail.length
+      ? {
+          income: tail.reduce((s, p) => s + (p.income || 0), 0) / tail.length,
+          expense: tail.reduce((s, p) => s + (p.expense || 0), 0) / tail.length,
+          net: tail.reduce((s, p) => s + (p.net || 0), 0) / tail.length,
+        }
+      : undefined;
+
+    const mk = (curVal: number, base?: number) => {
+      if (base == null) return { abs: null as number | null, pct: null as number | null };
+      const d = curVal - base;
+      const pct = base !== 0 ? d / base : null;
+      return { abs: d, pct };
+    };
+
+    return {
+      month: cur.month,
+      // compare against previous month if available
+      vsLast: {
+        income: prev ? mk(cur.income, prev.income) : { abs: null, pct: null },
+        expense: prev ? mk(cur.expense, prev.expense) : { abs: null, pct: null },
+        net: prev ? mk(cur.net, prev.net) : { abs: null, pct: null },
+      },
+      // compare against average of previous up-to-3 months (excluding current)
+      vsAvg3: avg3
+        ? {
+            income: mk(cur.income, avg3.income),
+            expense: mk(cur.expense, avg3.expense),
+            net: mk(cur.net, avg3.net),
+          }
+        : {
+            income: { abs: null, pct: null },
+            expense: { abs: null, pct: null },
+            net: { abs: null, pct: null },
+          },
+    } as const;
+  }, [series]);
+
   // Annual aggregation (respects start/end + category like monthly)
   const annualSeries: YearPoint[] = useMemo<YearPoint[]>(() => {
     const by = new Map<string, YearPoint>();
@@ -231,24 +276,64 @@ export default function Analytics() {
 
       {/* Totals (match Dashboard KPI style; based on filters above) */}
       <section className="grid gap-3 sm:grid-cols-3">
-        <div>
-          Income: <strong className="text-emerald-600">{fmtUSD(totals.totalIncome)}</strong>
-        </div>
-        <div>
-          Expense: <strong className="text-rose-600">{fmtUSD(totals.totalExpense)}</strong>
-        </div>
-        <div>
-          {(() => {
-            const net = totals.net;
-            const netClass =
-              net > 0 ? "text-emerald-600" : net < 0 ? "text-rose-600" : "text-slate-600";
+        {(() => {
+          // helper to render a small colored delta snippet
+          const renderDelta = (
+            metric: "income" | "expense" | "net",
+            which: "vsLast" | "vsAvg3",
+          ) => {
+            const d = deltas?.[which]?.[metric];
+            if (!d || d.abs == null) return null;
+            const abs = d.abs;
+            const pct = d.pct;
+            const goodPositive = metric === "expense" ? false : true;
+            const isGood = goodPositive ? abs >= 0 : abs <= 0;
+            const color = isGood ? "text-emerald-600" : "text-rose-600";
+            const label = which === "vsLast" ? "vs last mo" : "vs 3-mo avg";
+            const sign = abs > 0 ? "+" : abs < 0 ? "−" : "";
+            const amount = fmtUSD(Math.abs(abs));
+            const pctStr = pct == null ? "" : ` (${percentFormatter(pct)})`;
             return (
-              <>
-                Net: <strong className={netClass}>{fmtUSD(net)}</strong>
-              </>
+              <span className="ml-2 text-xs text-slate-500">
+                {label}:{" "}
+                <span className={color}>
+                  {sign}
+                  {amount}
+                  {pctStr}
+                </span>
+              </span>
             );
-          })()}
-        </div>
+          };
+
+          return (
+            <>
+              <div>
+                Income: <strong className="text-emerald-600">{fmtUSD(totals.totalIncome)}</strong>
+                {renderDelta("income", "vsLast")}
+                {renderDelta("income", "vsAvg3")}
+              </div>
+              <div>
+                Expense: <strong className="text-rose-600">{fmtUSD(totals.totalExpense)}</strong>
+                {renderDelta("expense", "vsLast")}
+                {renderDelta("expense", "vsAvg3")}
+              </div>
+              <div>
+                {(() => {
+                  const net = totals.net;
+                  const netClass =
+                    net > 0 ? "text-emerald-600" : net < 0 ? "text-rose-600" : "text-slate-600";
+                  return (
+                    <>
+                      Net: <strong className={netClass}>{fmtUSD(net)}</strong>
+                      {renderDelta("net", "vsLast")}
+                      {renderDelta("net", "vsAvg3")}
+                    </>
+                  );
+                })()}
+              </div>
+            </>
+          );
+        })()}
       </section>
       {/* Savings rate (based on filters) */}
       <div className="text-sm text-slate-600">
