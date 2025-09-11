@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from "react";
-import { Info } from "lucide-react";
-import { createBudgetOverride } from "@/lib/api";
+import { Info, ChevronLeft, ChevronRight } from "lucide-react";
+import { getBudget, createBudgetOverride } from "@/lib/api";
 import { useDataCache } from "@/state/data-cache";
 import PageHeader from "@/components/PageHeader";
 import { fmtUSD } from "@/lib/format";
@@ -41,11 +41,22 @@ export default function Budget() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  const fetchIt = async () => {
+  const now = new Date();
+  const monthKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  const CUR_MONTH = monthKey(now);
+  const [selectedMonth, setSelectedMonth] = useState<string>(CUR_MONTH);
+
+  const fetchIt = async (m?: string) => {
     try {
       setLoading(true);
       setErr(null);
-      await refreshBudget();
+      const target = m || selectedMonth;
+      if (target === CUR_MONTH) {
+        await refreshBudget();
+      } else {
+        const d = await getBudget(target);
+        setData(d as BudgetResp);
+      }
     } catch (e: any) {
       setErr(e?.message || "Failed");
     } finally {
@@ -55,14 +66,28 @@ export default function Budget() {
 
   useEffect(() => {
     // If cache already has data, use it; otherwise prefetch
-    if (budget) setData(budget as BudgetResp);
-    else void fetchIt();
+    if (budget) {
+      setData(budget as BudgetResp);
+      setSelectedMonth((budget as BudgetResp).month || CUR_MONTH);
+    } else void fetchIt(CUR_MONTH);
     // keep in sync with provider updates
   }, []);
 
   useEffect(() => {
     if (budget) setData(budget as BudgetResp);
   }, [budget]);
+
+  // When switching months, load appropriate data
+  useEffect(() => {
+    if (!selectedMonth) return;
+    if (selectedMonth === CUR_MONTH) {
+      if (budget) setData(budget as BudgetResp);
+      else void fetchIt(CUR_MONTH);
+    } else {
+      void fetchIt(selectedMonth);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedMonth]);
 
   const totalBudget = data?.totalBudget ?? 0;
   const cards: Array<{ label: string; value: string; note?: string }> = [
@@ -96,11 +121,51 @@ export default function Budget() {
 
   const rows = data?.rows ?? [];
 
+  // removed pacing badge – linear pacing not appropriate for seasonal spend
+
   const [showAdjust, setShowAdjust] = useState(false);
 
   return (
     <div className="space-y-6">
-      <PageHeader onRefresh={fetchIt} isRefreshing={loading || isBudgetLoading} />
+      <PageHeader onRefresh={() => fetchIt(selectedMonth)} isRefreshing={loading || isBudgetLoading} />
+
+      {/* Month switcher + pacing */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="inline-flex items-center gap-1">
+          <button
+            type="button"
+            className="p-1.5 rounded border hover:bg-slate-50"
+            onClick={() => {
+              const [y, m] = selectedMonth.split("-").map(Number);
+              const d = new Date(y, (m || 1) - 2, 1); // prev month
+              setSelectedMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+            }}
+            aria-label="Previous month"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+          <input
+            type="month"
+            className="border rounded px-3 py-1.5"
+            value={selectedMonth}
+            onChange={(e) => setSelectedMonth(e.target.value)}
+          />
+          <button
+            type="button"
+            className="p-1.5 rounded border hover:bg-slate-50"
+            onClick={() => {
+              const [y, m] = selectedMonth.split("-").map(Number);
+              const d = new Date(y, (m || 1), 1); // next month
+              setSelectedMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+            }}
+            aria-label="Next month"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* pacing badge removed */}
+      </div>
 
       {err ? (
         <div className="text-sm px-3 py-2 rounded border bg-rose-50 border-rose-200 text-rose-700">

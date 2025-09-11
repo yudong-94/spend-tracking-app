@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useDataCache } from "@/state/data-cache";
 import { fmtUSD } from "@/lib/format";
 import { COL } from "@/lib/colors";
@@ -60,6 +60,30 @@ export default function Analytics() {
   const [end, setEnd] = useState<string>("");
   const [categories, setCategories] = useState<string[]>([]);
   const [tab, setTab] = useState<Tab>("monthly");
+  // Persist filters + tab selection
+  const LS_KEY = "analytics-state-v1";
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(LS_KEY);
+      if (!raw) return;
+      const s = JSON.parse(raw) as {
+        start?: string;
+        end?: string;
+        categories?: string[];
+        tab?: Tab;
+      };
+      if (s.start) setStart(s.start);
+      if (s.end) setEnd(s.end);
+      if (Array.isArray(s.categories)) setCategories(s.categories);
+      if (s.tab) setTab(s.tab);
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    try {
+      localStorage.setItem(LS_KEY, JSON.stringify({ start, end, categories, tab }));
+    } catch {}
+  }, [start, end, categories, tab]);
 
   async function onRefresh() {
     setIsRefreshing(true);
@@ -95,6 +119,16 @@ export default function Analytics() {
     }
     return [...by.values()].sort((a, b) => a.month.localeCompare(b.month));
   }, [filtered]);
+
+  // Prep last 12 months for KPI sparklines
+  const last12 = useMemo(() => (series.length > 12 ? series.slice(series.length - 12) : series), [series]);
+  const kpiData = useMemo(() => {
+    const income = last12.map((p, i) => ({ x: i, v: p.income }));
+    const expense = last12.map((p, i) => ({ x: i, v: p.expense }));
+    const net = last12.map((p, i) => ({ x: i, v: p.net }));
+    const rate = last12.map((p, i) => ({ x: i, v: p.income > 0 ? p.net / p.income : null }));
+    return { income, expense, net, rate };
+  }, [last12]);
 
   // Category breakdowns based on current filters
   const incomeCats = useMemo(() => {
@@ -265,51 +299,73 @@ export default function Analytics() {
         </nav>
       </div>
 
-      {/* Simple totals for Monthly and Annual tabs */}
+      {/* KPI cards with mini sparklines (Monthly, Annual) */}
       {(tab === "monthly" || tab === "annual") && (
         <section className="grid gap-3 sm:grid-cols-4">
-          <div>
-            Income: <strong className="text-emerald-600">{fmtUSD(totals.totalIncome)}</strong>
+          {/* Income */}
+          <div className="rounded-lg border bg-white p-3">
+            <div className="text-xs text-slate-500">Income</div>
+            <div className="text-lg font-semibold text-emerald-600">{fmtUSD(totals.totalIncome)}</div>
+            <div className="mt-2 h-10">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={kpiData.income} margin={{ left: 0, right: 0, top: 4, bottom: 0 }}>
+                  <Line type="monotone" dataKey="v" stroke={COL.income} strokeWidth={2} dot={false} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
           </div>
-          <div>
-            Expense: <strong className="text-rose-600">{fmtUSD(totals.totalExpense)}</strong>
+          {/* Expense */}
+          <div className="rounded-lg border bg-white p-3">
+            <div className="text-xs text-slate-500">Expense</div>
+            <div className="text-lg font-semibold text-rose-600">{fmtUSD(totals.totalExpense)}</div>
+            <div className="mt-2 h-10">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={kpiData.expense} margin={{ left: 0, right: 0, top: 4, bottom: 0 }}>
+                  <Line type="monotone" dataKey="v" stroke={COL.expense} strokeWidth={2} dot={false} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
           </div>
-          <div>
-            {(() => {
-              const net = totals.net;
-              const netClass =
-                net > 0 ? "text-emerald-600" : net < 0 ? "text-rose-600" : "text-slate-600";
-              return (
-                <>
-                  Net: <strong className={netClass}>{fmtUSD(net)}</strong>
-                </>
-              );
-            })()}
+          {/* Net */}
+          <div className="rounded-lg border bg-white p-3">
+            <div className="text-xs text-slate-500">Net</div>
+            <div className={`text-lg font-semibold ${totals.net >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+              {fmtUSD(totals.net)}
+            </div>
+            <div className="mt-2 h-10">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={kpiData.net} margin={{ left: 0, right: 0, top: 4, bottom: 0 }}>
+                  <Line type="monotone" dataKey="v" stroke={COL.net} strokeWidth={2} dot={false} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
           </div>
-          <div>
-            {(() => {
-              const rate = savingsRate;
-              const cls = rate !== null && rate >= 0 ? "text-emerald-600" : "text-rose-600";
-              const tip =
-                "Savings rate = net / income. Based on current filters. If income is 0, savings rate is not defined.";
-              return (
-                <div className="inline-flex items-center gap-1">
-                  <span>Savings rate:</span>
-                  <span className="relative group inline-flex">
-                    <span
-                      aria-label="Savings rate definition"
-                      className="inline-flex h-4 w-4 select-none items-center justify-center rounded-full border border-slate-300 text-[10px] leading-none text-slate-600 bg-white cursor-help"
-                    >
-                      i
-                    </span>
-                    <span className="absolute left-1/2 z-10 hidden -translate-x-1/2 whitespace-nowrap rounded border bg-white px-2 py-1 text-xs text-slate-700 shadow group-hover:block mt-1">
-                      {tip}
-                    </span>
-                  </span>
-                  <strong className={cls}>{rate === null ? "—" : percentFormatter(rate)}</strong>
-                </div>
-              );
-            })()}
+          {/* Savings rate */}
+          <div className="rounded-lg border bg-white p-3">
+            <div className="text-xs text-slate-500 flex items-center gap-1">
+              <span>Savings rate</span>
+              <span className="relative group inline-flex">
+                <span
+                  aria-label="Savings rate definition"
+                  className="inline-flex h-4 w-4 select-none items-center justify-center rounded-full border border-slate-300 text-[10px] leading-none text-slate-600 bg-white cursor-help"
+                >
+                  i
+                </span>
+                <span className="absolute left-1/2 z-10 hidden -translate-x-1/2 whitespace-nowrap rounded border bg-white px-2 py-1 text-xs text-slate-700 shadow group-hover:block mt-1">
+                  Savings rate = net / income. Based on current filters. If income is 0, savings rate is not defined.
+                </span>
+              </span>
+            </div>
+            <div className={`text-lg font-semibold ${savingsRate != null && savingsRate >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+              {savingsRate == null ? "—" : percentFormatter(savingsRate)}
+            </div>
+            <div className="mt-2 h-10">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={kpiData.rate} margin={{ left: 0, right: 0, top: 4, bottom: 0 }}>
+                  <Line type="monotone" dataKey="v" stroke={COL.net} strokeWidth={2} dot={false} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
           </div>
         </section>
       )}
