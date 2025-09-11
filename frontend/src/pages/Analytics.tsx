@@ -127,6 +127,10 @@ export default function Analytics() {
     return { totalIncome, totalExpense, net };
   }, [filtered]);
 
+  const savingsRate = useMemo(() => {
+    return totals.totalIncome > 0 ? totals.net / totals.totalIncome : null;
+  }, [totals]);
+
   // (Overview removed) – no deltas computation needed
 
   // Annual aggregation (respects start/end + category like monthly)
@@ -263,7 +267,7 @@ export default function Analytics() {
 
       {/* Simple totals for Monthly and Annual tabs */}
       {(tab === "monthly" || tab === "annual") && (
-        <section className="grid gap-3 sm:grid-cols-3">
+        <section className="grid gap-3 sm:grid-cols-4">
           <div>
             Income: <strong className="text-emerald-600">{fmtUSD(totals.totalIncome)}</strong>
           </div>
@@ -278,6 +282,24 @@ export default function Analytics() {
               return (
                 <>
                   Net: <strong className={netClass}>{fmtUSD(net)}</strong>
+                </>
+              );
+            })()}
+          </div>
+          <div>
+            {(() => {
+              const rate = savingsRate;
+              const cls = rate !== null && rate >= 0 ? "text-emerald-600" : "text-rose-600";
+              const label =
+                "Savings rate = net / income. Based on current filters. If income is 0, savings rate is not defined.";
+              return (
+                <>
+                  <span title={label} aria-label={label} className="cursor-help">
+                    Savings rate:
+                  </span>{" "}
+                  <strong className={cls}>
+                    {rate === null ? "—" : percentFormatter(rate)}
+                  </strong>
                 </>
               );
             })()}
