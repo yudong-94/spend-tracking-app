@@ -50,6 +50,8 @@ const ym = (d: string) => d.slice(0, 7);
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const MIN_Y_AXIS = 56; // lower bound for Y-axis width
 
+type Tab = "overview" | "monthly" | "annual" | "breakdown";
+
 export default function Analytics() {
   const { txns: all, getCategories, refresh } = useDataCache();
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -57,6 +59,7 @@ export default function Analytics() {
   const [start, setStart] = useState<string>("");
   const [end, setEnd] = useState<string>("");
   const [categories, setCategories] = useState<string[]>([]);
+  const [tab, setTab] = useState<Tab>("overview");
 
   async function onRefresh() {
     setIsRefreshing(true);
@@ -242,40 +245,63 @@ export default function Analytics() {
     <div className="space-y-6">
       <PageHeader lastUpdated={lastUpdated} onRefresh={onRefresh} isRefreshing={isRefreshing} />
       {/* Filters */}
-      <div className="flex flex-wrap gap-3 items-end">
-        <div className="grid">
-          <label className="text-sm">Start</label>
-          <input
-            type="date"
-            className="border rounded px-3 py-2"
-            value={start}
-            onChange={(e) => setStart(e.target.value)}
-          />
+      <div className="sticky top-0 z-10 bg-white/90 backdrop-blur supports-[backdrop-filter]:bg-white/70 border-b py-2">
+        <div className="flex flex-wrap gap-3 items-end">
+          <div className="grid">
+            <label className="text-sm">Start</label>
+            <input
+              type="date"
+              className="border rounded px-3 py-2"
+              value={start}
+              onChange={(e) => setStart(e.target.value)}
+            />
+          </div>
+          <div className="grid">
+            <label className="text-sm">End</label>
+            <input
+              type="date"
+              className="border rounded px-3 py-2"
+              value={end}
+              onChange={(e) => setEnd(e.target.value)}
+            />
+          </div>
+          <div className="grid">
+            <label className="text-sm">Category</label>
+            <CategorySelect
+              multiple
+              value={categories}
+              onChange={setCategories}
+              options={getCategories()}
+              className="w-56"
+              placeholder="All Categories"
+            />
+          </div>
         </div>
-        <div className="grid">
-          <label className="text-sm">End</label>
-          <input
-            type="date"
-            className="border rounded px-3 py-2"
-            value={end}
-            onChange={(e) => setEnd(e.target.value)}
-          />
-        </div>
-        <div className="grid">
-          <label className="text-sm">Category</label>
-          <CategorySelect
-            multiple
-            value={categories}
-            onChange={setCategories}
-            options={getCategories()}
-            className="w-56"
-            placeholder="All Categories"
-          />
+
+        {/* Tabs */}
+        <div className="mt-3 flex gap-1 text-sm">
+          {([
+            ["overview", "Overview"],
+            ["monthly", "Monthly"],
+            ["annual", "Annual"],
+            ["breakdown", "Breakdown"],
+          ] as Array<[Tab, string]>).map(([key, label]) => (
+            <button
+              key={key}
+              onClick={() => setTab(key)}
+              className={`px-3 py-1.5 rounded border ${
+                tab === key ? "bg-slate-900 text-white" : "bg-white hover:bg-slate-50"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
         </div>
       </div>
 
       {/* Totals (match Dashboard KPI style; based on filters above) */}
-      <section className="grid gap-3 sm:grid-cols-3">
+      {tab === "overview" && (
+        <section className="grid gap-3 sm:grid-cols-3">
         {(() => {
           // helper to render a small colored delta snippet
           const renderDelta = (
@@ -335,7 +361,9 @@ export default function Analytics() {
           );
         })()}
       </section>
+      )}
       {/* Savings rate (based on filters) */}
+      {tab === "overview" && (
       <div className="text-sm text-slate-600">
         {(() => {
           const rate = totals.totalIncome > 0 ? totals.net / totals.totalIncome : null;
@@ -348,8 +376,18 @@ export default function Analytics() {
           );
         })()}
       </div>
+      )}
+
+      {/* Overview: Combined monthly */}
+      {tab === "overview" && (
+      <div className="p-4 rounded-lg border bg-white">
+        <h3 className="font-medium mb-2">Monthly income vs expense (with net)</h3>
+        <CombinedMonthlyChart data={series} />
+      </div>
+      )}
 
       {/* Monthly Income */}
+      {tab === "monthly" && (
       <div className="p-4 rounded-lg border bg-white">
         <h3 className="font-medium mb-2">Monthly total income</h3>
         <div className="h-64">
@@ -373,8 +411,10 @@ export default function Analytics() {
           </ResponsiveContainer>
         </div>
       </div>
+      )}
 
       {/* Monthly Expenses */}
+      {tab === "monthly" && (
       <div className="p-4 rounded-lg border bg-white">
         <h3 className="font-medium mb-2">Monthly total expenses</h3>
         <div className="h-64">
@@ -398,8 +438,10 @@ export default function Analytics() {
           </ResponsiveContainer>
         </div>
       </div>
+      )}
 
       {/* Monthly Net */}
+      {tab === "monthly" && (
       <div className="p-4 rounded-lg border bg-white">
         <h3 className="font-medium mb-2">Monthly net</h3>
         <div className="h-64">
@@ -423,14 +465,11 @@ export default function Analytics() {
           </ResponsiveContainer>
         </div>
       </div>
+      )}
 
-      {/* Combined monthly: Income vs Expense with Net line */}
-      <div className="p-4 rounded-lg border bg-white">
-        <h3 className="font-medium mb-2">Monthly income vs expense (with net)</h3>
-        <CombinedMonthlyChart data={series} />
-      </div>
 
       {/* Annual Income */}
+      {tab === "annual" && (
       <div className="p-4 rounded-lg border bg-white">
         <h3 className="font-medium mb-2">Annual total income</h3>
         <div className="h-64">
@@ -454,8 +493,10 @@ export default function Analytics() {
           </ResponsiveContainer>
         </div>
       </div>
+      )}
 
       {/* Annual Expenses */}
+      {tab === "annual" && (
       <div className="p-4 rounded-lg border bg-white">
         <h3 className="font-medium mb-2">Annual total expenses</h3>
         <div className="h-64">
@@ -479,8 +520,10 @@ export default function Analytics() {
           </ResponsiveContainer>
         </div>
       </div>
+      )}
 
       {/* Annual Net */}
+      {tab === "annual" && (
       <div className="p-4 rounded-lg border bg-white">
         <h3 className="font-medium mb-2">Annual net</h3>
         <div className="h-64">
@@ -504,8 +547,10 @@ export default function Analytics() {
           </ResponsiveContainer>
         </div>
       </div>
+      )}
 
       {/* Annual Savings Rate */}
+      {tab === "annual" && (
       <div className="p-4 rounded-lg border bg-white">
         <h3 className="font-medium mb-2">Annual savings rate</h3>
         <div className="h-64">
@@ -539,8 +584,10 @@ export default function Analytics() {
           </ResponsiveContainer>
         </div>
       </div>
+      )}
 
       {/* NEW: YoY cumulative net (YTD) */}
+      {tab === "annual" && (
       <div className="p-4 rounded-lg border bg-white">
         <h3 className="font-medium mb-2">YoY cumulative net (YTD)</h3>
         <div className="text-xs text-neutral-500 mb-2">
@@ -592,8 +639,10 @@ export default function Analytics() {
           </ResponsiveContainer>
         </div>
       </div>
+      )}
 
       {/* Category breakdown (based on filters) */}
+      {tab === "breakdown" && (
       <section className="grid gap-6 lg:grid-cols-2">
         {/* Income by category */}
         <div className="p-4 rounded-lg border bg-white">
@@ -665,6 +714,7 @@ export default function Analytics() {
           })()}
         </div>
       </section>
+      )}
     </div>
   );
 }
