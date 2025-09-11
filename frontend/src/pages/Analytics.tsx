@@ -290,17 +290,24 @@ export default function Analytics() {
             {(() => {
               const rate = savingsRate;
               const cls = rate !== null && rate >= 0 ? "text-emerald-600" : "text-rose-600";
-              const label =
+              const tip =
                 "Savings rate = net / income. Based on current filters. If income is 0, savings rate is not defined.";
               return (
-                <>
-                  <span title={label} aria-label={label} className="cursor-help">
-                    Savings rate:
-                  </span>{" "}
-                  <strong className={cls}>
-                    {rate === null ? "—" : percentFormatter(rate)}
-                  </strong>
-                </>
+                <div className="inline-flex items-center gap-1">
+                  <span>Savings rate:</span>
+                  <span className="relative group inline-flex">
+                    <span
+                      aria-label="Savings rate definition"
+                      className="inline-flex h-4 w-4 select-none items-center justify-center rounded-full border border-slate-300 text-[10px] leading-none text-slate-600 bg-white cursor-help"
+                    >
+                      i
+                    </span>
+                    <span className="absolute left-1/2 z-10 hidden -translate-x-1/2 whitespace-nowrap rounded border bg-white px-2 py-1 text-xs text-slate-700 shadow group-hover:block mt-1">
+                      {tip}
+                    </span>
+                  </span>
+                  <strong className={cls}>{rate === null ? "—" : percentFormatter(rate)}</strong>
+                </div>
               );
             })()}
           </div>
