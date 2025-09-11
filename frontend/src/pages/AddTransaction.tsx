@@ -40,11 +40,12 @@ export default function AddTransaction() {
     const recent: Array<{ name: string; type: "income" | "expense" }> = [];
     const seen = new Set<string>();
 
+    // txns from our API are already normalized: { date, type, category, ... }
     for (const r of txns as any[]) {
-      const name = String(r?.Category ?? "").trim();
-      const type = String(r?.Type ?? "")
-        .trim()
-        .toLowerCase() as "income" | "expense";
+      const name = String(r?.category ?? "").trim();
+      const type = (String(r?.type ?? "").trim().toLowerCase() as
+        | "income"
+        | "expense") as "income" | "expense";
       if (!name || (type !== "income" && type !== "expense")) continue;
       if (!seen.has(name)) {
         seen.add(name);
