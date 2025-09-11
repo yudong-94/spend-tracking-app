@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { listTransactions, listCategories } from "@/lib/api";
+import { listTransactions, listCategories, getBudget } from "@/lib/api";
 import type { Category } from "@/lib/api";
 import { useAuth } from "@/state/auth";
 
@@ -12,6 +12,26 @@ export type Tx = {
   amount: number;
 };
 
+// Minimal shape for Budget response (current month)
+export type BudgetResp = {
+  month: string;
+  totalBudget: number;
+  totalActualMTD: number;
+  totalRemaining: number;
+  manualTotal: number;
+  manualNote: string;
+  overAllocated: boolean;
+  series: Array<{ day: number; cumActual: number | null }>;
+  rows: Array<{
+    category: string;
+    budget: number;
+    actual: number;
+    remaining: number;
+    source: "avg-12" | "last-month" | "derived";
+  }>;
+  manualItems?: Array<{ amount: number; notes: string }>;
+};
+
 type Ctx = {
   txns: Tx[];
   isLoading: boolean;
@@ -20,6 +40,10 @@ type Ctx = {
   addLocal: (tx: Tx) => void;
   categories: Category[];
   getCategories: (type?: "income" | "expense") => Category[];
+  // Budget cache (current month)
+  budget: BudgetResp | null;
+  isBudgetLoading: boolean;
+  refreshBudget: () => Promise<void>;
   getSummary: (
     start?: string,
     end?: string,
@@ -48,13 +72,18 @@ const DataCacheContext = createContext<Ctx>({
   addLocal: () => {},
   categories: [],
   getCategories: () => [],
+  budget: null,
+  isBudgetLoading: false,
+  refreshBudget: async () => {},
   getSummary: () => ({ totalIncome: 0, totalExpense: 0, netCashFlow: 0 }),
   getBreakdown: () => [],
   getMonthlySeries: () => [],
 });
 
 const LS_KEY = "st-cache-v2";
+const LS_BUDGET_KEY = "st-budget-v1"; // separate key to avoid migrations
 const STALE_MS = 5 * 60 * 1000; // 5 minutes
+const BUDGET_STALE_MS = 5 * 60 * 1000; // 5 minutes (tweak as needed)
 
 type PersistShape = { txns: Tx[]; lastSyncAt: number; categories: Category[] };
 
@@ -80,6 +109,10 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
   const [lastSyncAt, setLastSyncAt] = useState<number | undefined>();
   const [lastError, setLastError] = useState<string | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
+  // Budget state (current month)
+  const [budget, setBudget] = useState<BudgetResp | null>(null);
+  const [isBudgetLoading, setBudgetLoading] = useState(false);
+  const [budgetLastSyncAt, setBudgetLastSyncAt] = useState<number | undefined>();
 
   const refresh = useCallback(async () => {
     if (!token) {
@@ -135,6 +168,15 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
       setCategories(persisted.categories || []);
       setLastSyncAt(persisted.lastSyncAt);
     }
+    // hydrate budget from its own storage
+    try {
+      const raw = localStorage.getItem(LS_BUDGET_KEY);
+      if (raw) {
+        const b = JSON.parse(raw) as { data: BudgetResp; ts: number };
+        setBudget(b.data);
+        setBudgetLastSyncAt(b.ts);
+      }
+    } catch {}
     if (!token) {
       // no token -> ensure not “stuck” loading
       setLoading(false);
@@ -147,6 +189,10 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
         Date.now() - (persisted.lastSyncAt || 0) > STALE_MS ||
         !persisted.categories?.length;
       if (stale) void refresh();
+      // prefetch budget too
+      const budgetStale =
+        !budget || !budgetLastSyncAt || Date.now() - budgetLastSyncAt > BUDGET_STALE_MS;
+      if (budgetStale) void (async () => await refreshBudget())();
     }
   }, [token, refresh]);
 
@@ -163,6 +209,26 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
         .sort(sortCats),
     [categories],
   );
+
+  // Prefetch and cache current-month budget
+  const refreshBudget = useCallback(async () => {
+    if (!token) return;
+    setBudgetLoading(true);
+    try {
+      const d = await getBudget();
+      setBudget(d as BudgetResp);
+      const ts = Date.now();
+      setBudgetLastSyncAt(ts);
+      try {
+        localStorage.setItem(LS_BUDGET_KEY, JSON.stringify({ data: d, ts }));
+      } catch {}
+    } catch (e: any) {
+      if (e?.status === 401) clear();
+      console.error(e);
+    } finally {
+      setBudgetLoading(false);
+    }
+  }, [token, clear]);
 
   // Optimistic local add (used after POST)
   const addLocal = useCallback(
@@ -230,6 +296,9 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
       addLocal,
       categories,
       getCategories,
+      budget,
+      isBudgetLoading,
+      refreshBudget,
       getSummary,
       getBreakdown,
       getMonthlySeries,
@@ -243,6 +312,9 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
       addLocal,
       categories,
       getCategories,
+      budget,
+      isBudgetLoading,
+      refreshBudget,
       getSummary,
       getBreakdown,
       getMonthlySeries,

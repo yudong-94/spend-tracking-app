@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { Info } from "lucide-react";
-import { getBudget, createBudgetOverride } from "@/lib/api";
+import { createBudgetOverride } from "@/lib/api";
+import { useDataCache } from "@/state/data-cache";
 import PageHeader from "@/components/PageHeader";
 import { fmtUSD } from "@/lib/format";
 import { estimateYAxisWidthFromMax } from "@/lib/chart";
@@ -35,6 +36,7 @@ type BudgetResp = {
 };
 
 export default function Budget() {
+  const { budget, isBudgetLoading, refreshBudget } = useDataCache();
   const [data, setData] = useState<BudgetResp | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -43,8 +45,7 @@ export default function Budget() {
     try {
       setLoading(true);
       setErr(null);
-      const d = await getBudget();
-      setData(d);
+      await refreshBudget();
     } catch (e: any) {
       setErr(e?.message || "Failed");
     } finally {
@@ -53,8 +54,15 @@ export default function Budget() {
   };
 
   useEffect(() => {
-    fetchIt();
+    // If cache already has data, use it; otherwise prefetch
+    if (budget) setData(budget as BudgetResp);
+    else void fetchIt();
+    // keep in sync with provider updates
   }, []);
+
+  useEffect(() => {
+    if (budget) setData(budget as BudgetResp);
+  }, [budget]);
 
   const totalBudget = data?.totalBudget ?? 0;
   const cards: Array<{ label: string; value: string; note?: string }> = [
@@ -92,7 +100,7 @@ export default function Budget() {
 
   return (
     <div className="space-y-6">
-      <PageHeader onRefresh={fetchIt} isRefreshing={loading} />
+      <PageHeader onRefresh={fetchIt} isRefreshing={loading || isBudgetLoading} />
 
       {err ? (
         <div className="text-sm px-3 py-2 rounded border bg-rose-50 border-rose-200 text-rose-700">
