@@ -50,6 +50,8 @@ const ym = (d: string) => d.slice(0, 7);
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const MIN_Y_AXIS = 56; // lower bound for Y-axis width
 
+type Tab = "monthly" | "annual" | "breakdown";
+
 export default function Analytics() {
   const { txns: all, getCategories, refresh } = useDataCache();
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -57,6 +59,7 @@ export default function Analytics() {
   const [start, setStart] = useState<string>("");
   const [end, setEnd] = useState<string>("");
   const [categories, setCategories] = useState<string[]>([]);
+  const [tab, setTab] = useState<Tab>("monthly");
 
   async function onRefresh() {
     setIsRefreshing(true);
@@ -123,6 +126,12 @@ export default function Analytics() {
     const net = totalIncome - totalExpense;
     return { totalIncome, totalExpense, net };
   }, [filtered]);
+
+  const savingsRate = useMemo(() => {
+    return totals.totalIncome > 0 ? totals.net / totals.totalIncome : null;
+  }, [totals]);
+
+  // (Overview removed) – no deltas computation needed
 
   // Annual aggregation (respects start/end + category like monthly)
   const annualSeries: YearPoint[] = useMemo<YearPoint[]>(() => {
@@ -197,74 +206,116 @@ export default function Analytics() {
     <div className="space-y-6">
       <PageHeader lastUpdated={lastUpdated} onRefresh={onRefresh} isRefreshing={isRefreshing} />
       {/* Filters */}
-      <div className="flex flex-wrap gap-3 items-end">
-        <div className="grid">
-          <label className="text-sm">Start</label>
-          <input
-            type="date"
-            className="border rounded px-3 py-2"
-            value={start}
-            onChange={(e) => setStart(e.target.value)}
-          />
+      <div className="sticky top-0 z-10 bg-white/90 backdrop-blur supports-[backdrop-filter]:bg-white/70 border-b py-2">
+        <div className="flex flex-wrap gap-3 items-end">
+          <div className="grid">
+            <label className="text-sm">Start</label>
+            <input
+              type="date"
+              className="border rounded px-3 py-2"
+              value={start}
+              onChange={(e) => setStart(e.target.value)}
+            />
+          </div>
+          <div className="grid">
+            <label className="text-sm">End</label>
+            <input
+              type="date"
+              className="border rounded px-3 py-2"
+              value={end}
+              onChange={(e) => setEnd(e.target.value)}
+            />
+          </div>
+          <div className="grid">
+            <label className="text-sm">Category</label>
+            <CategorySelect
+              multiple
+              value={categories}
+              onChange={setCategories}
+              options={getCategories()}
+              className="w-56"
+              placeholder="All Categories"
+            />
+          </div>
         </div>
-        <div className="grid">
-          <label className="text-sm">End</label>
-          <input
-            type="date"
-            className="border rounded px-3 py-2"
-            value={end}
-            onChange={(e) => setEnd(e.target.value)}
-          />
-        </div>
-        <div className="grid">
-          <label className="text-sm">Category</label>
-          <CategorySelect
-            multiple
-            value={categories}
-            onChange={setCategories}
-            options={getCategories()}
-            className="w-56"
-            placeholder="All Categories"
-          />
-        </div>
+
+        {/* Tabs */}
+        <nav className="mt-3 text-sm" role="tablist" aria-label="Analytics sections">
+          <div className="flex gap-4">
+            {([
+              ["monthly", "Monthly"],
+              ["annual", "Annual"],
+              ["breakdown", "Breakdown"],
+            ] as Array<[Tab, string]>).map(([key, label]) => (
+              <button
+                key={key}
+                role="tab"
+                aria-selected={tab === key}
+                onClick={() => setTab(key)}
+                className={`-mb-px border-b-2 px-1.5 pb-2 transition-colors ${
+                  tab === key
+                    ? "border-slate-900 text-slate-900 font-medium"
+                    : "border-transparent text-slate-500 hover:text-slate-700"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </nav>
       </div>
 
-      {/* Totals (match Dashboard KPI style; based on filters above) */}
-      <section className="grid gap-3 sm:grid-cols-3">
-        <div>
-          Income: <strong className="text-emerald-600">{fmtUSD(totals.totalIncome)}</strong>
-        </div>
-        <div>
-          Expense: <strong className="text-rose-600">{fmtUSD(totals.totalExpense)}</strong>
-        </div>
-        <div>
-          {(() => {
-            const net = totals.net;
-            const netClass =
-              net > 0 ? "text-emerald-600" : net < 0 ? "text-rose-600" : "text-slate-600";
-            return (
-              <>
-                Net: <strong className={netClass}>{fmtUSD(net)}</strong>
-              </>
-            );
-          })()}
-        </div>
-      </section>
-      {/* Savings rate (based on filters) */}
-      <div className="text-sm text-slate-600">
-        {(() => {
-          const rate = totals.totalIncome > 0 ? totals.net / totals.totalIncome : null;
-          const cls = rate !== null && rate >= 0 ? "text-emerald-600" : "text-rose-600";
-          return (
-            <>
-              Savings rate:{" "}
-              <strong className={cls}>{rate === null ? "—" : percentFormatter(rate)}</strong>
-            </>
-          );
-        })()}
-      </div>
+      {/* Simple totals for Monthly and Annual tabs */}
+      {(tab === "monthly" || tab === "annual") && (
+        <section className="grid gap-3 sm:grid-cols-4">
+          <div>
+            Income: <strong className="text-emerald-600">{fmtUSD(totals.totalIncome)}</strong>
+          </div>
+          <div>
+            Expense: <strong className="text-rose-600">{fmtUSD(totals.totalExpense)}</strong>
+          </div>
+          <div>
+            {(() => {
+              const net = totals.net;
+              const netClass =
+                net > 0 ? "text-emerald-600" : net < 0 ? "text-rose-600" : "text-slate-600";
+              return (
+                <>
+                  Net: <strong className={netClass}>{fmtUSD(net)}</strong>
+                </>
+              );
+            })()}
+          </div>
+          <div>
+            {(() => {
+              const rate = savingsRate;
+              const cls = rate !== null && rate >= 0 ? "text-emerald-600" : "text-rose-600";
+              const tip =
+                "Savings rate = net / income. Based on current filters. If income is 0, savings rate is not defined.";
+              return (
+                <div className="inline-flex items-center gap-1">
+                  <span>Savings rate:</span>
+                  <span className="relative group inline-flex">
+                    <span
+                      aria-label="Savings rate definition"
+                      className="inline-flex h-4 w-4 select-none items-center justify-center rounded-full border border-slate-300 text-[10px] leading-none text-slate-600 bg-white cursor-help"
+                    >
+                      i
+                    </span>
+                    <span className="absolute left-1/2 z-10 hidden -translate-x-1/2 whitespace-nowrap rounded border bg-white px-2 py-1 text-xs text-slate-700 shadow group-hover:block mt-1">
+                      {tip}
+                    </span>
+                  </span>
+                  <strong className={cls}>{rate === null ? "—" : percentFormatter(rate)}</strong>
+                </div>
+              );
+            })()}
+          </div>
+        </section>
+      )}
 
       {/* Monthly Income */}
+      {tab === "monthly" && (
       <div className="p-4 rounded-lg border bg-white">
         <h3 className="font-medium mb-2">Monthly total income</h3>
         <div className="h-64">
@@ -288,8 +339,10 @@ export default function Analytics() {
           </ResponsiveContainer>
         </div>
       </div>
+      )}
 
       {/* Monthly Expenses */}
+      {tab === "monthly" && (
       <div className="p-4 rounded-lg border bg-white">
         <h3 className="font-medium mb-2">Monthly total expenses</h3>
         <div className="h-64">
@@ -313,8 +366,10 @@ export default function Analytics() {
           </ResponsiveContainer>
         </div>
       </div>
+      )}
 
       {/* Monthly Net */}
+      {tab === "monthly" && (
       <div className="p-4 rounded-lg border bg-white">
         <h3 className="font-medium mb-2">Monthly net</h3>
         <div className="h-64">
@@ -338,14 +393,18 @@ export default function Analytics() {
           </ResponsiveContainer>
         </div>
       </div>
+      )}
 
-      {/* Combined monthly: Income vs Expense with Net line */}
+      {/* Monthly: Combined monthly */}
+      {tab === "monthly" && (
       <div className="p-4 rounded-lg border bg-white">
         <h3 className="font-medium mb-2">Monthly income vs expense (with net)</h3>
         <CombinedMonthlyChart data={series} />
       </div>
+      )}
 
       {/* Annual Income */}
+      {tab === "annual" && (
       <div className="p-4 rounded-lg border bg-white">
         <h3 className="font-medium mb-2">Annual total income</h3>
         <div className="h-64">
@@ -369,8 +428,10 @@ export default function Analytics() {
           </ResponsiveContainer>
         </div>
       </div>
+      )}
 
       {/* Annual Expenses */}
+      {tab === "annual" && (
       <div className="p-4 rounded-lg border bg-white">
         <h3 className="font-medium mb-2">Annual total expenses</h3>
         <div className="h-64">
@@ -394,8 +455,10 @@ export default function Analytics() {
           </ResponsiveContainer>
         </div>
       </div>
+      )}
 
       {/* Annual Net */}
+      {tab === "annual" && (
       <div className="p-4 rounded-lg border bg-white">
         <h3 className="font-medium mb-2">Annual net</h3>
         <div className="h-64">
@@ -419,8 +482,10 @@ export default function Analytics() {
           </ResponsiveContainer>
         </div>
       </div>
+      )}
 
       {/* Annual Savings Rate */}
+      {tab === "annual" && (
       <div className="p-4 rounded-lg border bg-white">
         <h3 className="font-medium mb-2">Annual savings rate</h3>
         <div className="h-64">
@@ -454,8 +519,10 @@ export default function Analytics() {
           </ResponsiveContainer>
         </div>
       </div>
+      )}
 
       {/* NEW: YoY cumulative net (YTD) */}
+      {tab === "annual" && (
       <div className="p-4 rounded-lg border bg-white">
         <h3 className="font-medium mb-2">YoY cumulative net (YTD)</h3>
         <div className="text-xs text-neutral-500 mb-2">
@@ -507,12 +574,14 @@ export default function Analytics() {
           </ResponsiveContainer>
         </div>
       </div>
+      )}
 
       {/* Category breakdown (based on filters) */}
+      {tab === "breakdown" && (
       <section className="grid gap-6 lg:grid-cols-2">
         {/* Income by category */}
         <div className="p-4 rounded-lg border bg-white">
-          <h3 className="font-medium mb-2">Income by category (filtered)</h3>
+          <h3 className="font-medium mb-2">Income by category</h3>
           {(() => {
             const MAX_BARS = 15;
             const sorted = [...incomeCats].sort((a, b) => (b.amount || 0) - (a.amount || 0));
@@ -547,7 +616,7 @@ export default function Analytics() {
 
         {/* Expense by category */}
         <div className="p-4 rounded-lg border bg-white">
-          <h3 className="font-medium mb-2">Expense by category (filtered)</h3>
+          <h3 className="font-medium mb-2">Expense by category</h3>
           {(() => {
             const MAX_BARS = 15;
             const sorted = [...expenseCats].sort((a, b) => (b.amount || 0) - (a.amount || 0));
@@ -580,6 +649,7 @@ export default function Analytics() {
           })()}
         </div>
       </section>
+      )}
     </div>
   );
 }
