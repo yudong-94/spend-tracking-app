@@ -121,19 +121,7 @@ export default function Budget() {
 
   const rows = data?.rows ?? [];
 
-  // Pacing badge for current month
-  const pacing = useMemo(() => {
-    if (!data || data.month !== CUR_MONTH) return null;
-    const total = data.totalBudget || 0;
-    if (total <= 0) return null;
-    const today = now.getDate();
-    const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-    const allowed = (total * today) / daysInMonth; // linear pacing
-    const actual = data.totalActualMTD || 0;
-    const delta = Math.round((actual - allowed) * 100) / 100;
-    const onTrack = delta <= 0;
-    return { onTrack, delta, allowed, actual };
-  }, [data]);
+  // removed pacing badge – linear pacing not appropriate for seasonal spend
 
   const [showAdjust, setShowAdjust] = useState(false);
 
@@ -176,23 +164,7 @@ export default function Budget() {
           </button>
         </div>
 
-        {pacing && (
-          <div
-            className={`text-sm px-2.5 py-1 rounded border ${
-              pacing.onTrack
-                ? "bg-emerald-50 border-emerald-200 text-emerald-700"
-                : "bg-rose-50 border-rose-200 text-rose-700"
-            }`}
-          >
-            {pacing.onTrack ? (
-              <span>On track (≤ {fmtUSD(pacing.allowed)})</span>
-            ) : (
-              <span>
-                Over pace by {fmtUSD(Math.abs(pacing.delta))} (allowed {fmtUSD(pacing.allowed)})
-              </span>
-            )}
-          </div>
-        )}
+        {/* pacing badge removed */}
       </div>
 
       {err ? (
