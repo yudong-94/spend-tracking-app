@@ -168,7 +168,8 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
   const addLocal = useCallback(
     (tx: Tx) => {
       setTxns((prev) => {
-        const next = [tx, ...prev].sort((a, b) => a.date.localeCompare(b.date));
+        // Keep newest first to align with API ordering and UI expectations
+        const next = [tx, ...prev].sort((a, b) => b.date.localeCompare(a.date));
         saveToStorage(next, lastSyncAt ?? Date.now(), categories);
         return next;
       });

@@ -14,7 +14,7 @@ type FormTx = {
 };
 
 export default function AddTransaction() {
-  const { categories, txns, refresh } = useDataCache();
+  const { categories, txns, refresh, addLocal } = useDataCache();
 
   // Sort: expenses A→Z, then income A→Z
   const sortedOptions = useMemo(() => {
@@ -69,15 +69,28 @@ export default function AddTransaction() {
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const Amount = Math.round((form.Amount || 0) * 100) / 100; // 2dp
-    await createTransaction({
+    const res = await createTransaction({
       date: form.Date,
       type: form.Type,
       category: form.Category,
       amount: Amount,
       description: form.Description || undefined,
     });
+    // Optimistic local cache add with returned id
+    try {
+      const id = (res as any)?.id as string | undefined;
+      addLocal({
+        id,
+        date: form.Date,
+        type: form.Type,
+        category: form.Category,
+        amount: Amount,
+        description: form.Description || undefined,
+      });
+    } catch {}
     setForm((f) => ({ ...f, Amount: 0, Description: "" }));
-    refresh?.();
+    // Background refresh to sync with server state
+    void refresh?.();
     alert("Saved!");
   };
 
