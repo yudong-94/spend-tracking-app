@@ -50,7 +50,7 @@ const ym = (d: string) => d.slice(0, 7);
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const MIN_Y_AXIS = 56; // lower bound for Y-axis width
 
-type Tab = "overview" | "monthly" | "annual" | "breakdown";
+type Tab = "monthly" | "annual" | "breakdown";
 
 export default function Analytics() {
   const { txns: all, getCategories, refresh } = useDataCache();
@@ -59,7 +59,7 @@ export default function Analytics() {
   const [start, setStart] = useState<string>("");
   const [end, setEnd] = useState<string>("");
   const [categories, setCategories] = useState<string[]>([]);
-  const [tab, setTab] = useState<Tab>("overview");
+  const [tab, setTab] = useState<Tab>("monthly");
 
   async function onRefresh() {
     setIsRefreshing(true);
@@ -127,50 +127,7 @@ export default function Analytics() {
     return { totalIncome, totalExpense, net };
   }, [filtered]);
 
-  // Month-over-month and 3-month average comparisons based on the monthly series above
-  const deltas = useMemo(() => {
-    const n = series.length;
-    if (n === 0) return null;
-    const cur = series[n - 1];
-    const prev = n >= 2 ? series[n - 2] : undefined;
-    const tail = n >= 2 ? series.slice(Math.max(0, n - 4), n - 1) : [];
-    const avg3 = tail.length
-      ? {
-          income: tail.reduce((s, p) => s + (p.income || 0), 0) / tail.length,
-          expense: tail.reduce((s, p) => s + (p.expense || 0), 0) / tail.length,
-          net: tail.reduce((s, p) => s + (p.net || 0), 0) / tail.length,
-        }
-      : undefined;
-
-    const mk = (curVal: number, base?: number) => {
-      if (base == null) return { abs: null as number | null, pct: null as number | null };
-      const d = curVal - base;
-      const pct = base !== 0 ? d / base : null;
-      return { abs: d, pct };
-    };
-
-    return {
-      month: cur.month,
-      // compare against previous month if available
-      vsLast: {
-        income: prev ? mk(cur.income, prev.income) : { abs: null, pct: null },
-        expense: prev ? mk(cur.expense, prev.expense) : { abs: null, pct: null },
-        net: prev ? mk(cur.net, prev.net) : { abs: null, pct: null },
-      },
-      // compare against average of previous up-to-3 months (excluding current)
-      vsAvg3: avg3
-        ? {
-            income: mk(cur.income, avg3.income),
-            expense: mk(cur.expense, avg3.expense),
-            net: mk(cur.net, avg3.net),
-          }
-        : {
-            income: { abs: null, pct: null },
-            expense: { abs: null, pct: null },
-            net: { abs: null, pct: null },
-          },
-    } as const;
-  }, [series]);
+  // (Overview removed) – no deltas computation needed
 
   // Annual aggregation (respects start/end + category like monthly)
   const annualSeries: YearPoint[] = useMemo<YearPoint[]>(() => {
@@ -282,7 +239,6 @@ export default function Analytics() {
         <nav className="mt-3 text-sm" role="tablist" aria-label="Analytics sections">
           <div className="flex gap-4">
             {([
-              ["overview", "Overview"],
               ["monthly", "Monthly"],
               ["annual", "Annual"],
               ["breakdown", "Breakdown"],
@@ -305,71 +261,7 @@ export default function Analytics() {
         </nav>
       </div>
 
-      {/* Totals (match Dashboard KPI style; based on filters above) */}
-      {tab === "overview" && (
-        <section className="grid gap-3 sm:grid-cols-3">
-        {(() => {
-          // helper to render a small colored delta snippet
-          const renderDelta = (
-            metric: "income" | "expense" | "net",
-            which: "vsLast" | "vsAvg3",
-          ) => {
-            const d = deltas?.[which]?.[metric];
-            if (!d || d.abs == null) return null;
-            const abs = d.abs;
-            const pct = d.pct;
-            const goodPositive = metric === "expense" ? false : true;
-            const isGood = goodPositive ? abs >= 0 : abs <= 0;
-            const color = isGood ? "text-emerald-600" : "text-rose-600";
-            const label = which === "vsLast" ? "vs last mo" : "vs 3-mo avg";
-            const sign = abs > 0 ? "+" : abs < 0 ? "−" : "";
-            const amount = fmtUSD(Math.abs(abs));
-            const pctStr = pct == null ? "" : ` (${percentFormatter(pct)})`;
-            return (
-              <span className="ml-2 text-xs text-slate-500">
-                {label}:{" "}
-                <span className={color}>
-                  {sign}
-                  {amount}
-                  {pctStr}
-                </span>
-              </span>
-            );
-          };
-
-          return (
-            <>
-              <div>
-                Income: <strong className="text-emerald-600">{fmtUSD(totals.totalIncome)}</strong>
-                {renderDelta("income", "vsLast")}
-                {renderDelta("income", "vsAvg3")}
-              </div>
-              <div>
-                Expense: <strong className="text-rose-600">{fmtUSD(totals.totalExpense)}</strong>
-                {renderDelta("expense", "vsLast")}
-                {renderDelta("expense", "vsAvg3")}
-              </div>
-              <div>
-                {(() => {
-                  const net = totals.net;
-                  const netClass =
-                    net > 0 ? "text-emerald-600" : net < 0 ? "text-rose-600" : "text-slate-600";
-                  return (
-                    <>
-                      Net: <strong className={netClass}>{fmtUSD(net)}</strong>
-                      {renderDelta("net", "vsLast")}
-                      {renderDelta("net", "vsAvg3")}
-                    </>
-                  );
-                })()}
-              </div>
-            </>
-          );
-        })()}
-      </section>
-      )}
-
-      {/* Simple totals for Monthly and Annual tabs (no deltas) */}
+      {/* Simple totals for Monthly and Annual tabs */}
       {(tab === "monthly" || tab === "annual") && (
         <section className="grid gap-3 sm:grid-cols-3">
           <div>
@@ -391,29 +283,6 @@ export default function Analytics() {
             })()}
           </div>
         </section>
-      )}
-      {/* Savings rate (based on filters) */}
-      {tab === "overview" && (
-      <div className="text-sm text-slate-600">
-        {(() => {
-          const rate = totals.totalIncome > 0 ? totals.net / totals.totalIncome : null;
-          const cls = rate !== null && rate >= 0 ? "text-emerald-600" : "text-rose-600";
-          return (
-            <>
-              Savings rate:{" "}
-              <strong className={cls}>{rate === null ? "—" : percentFormatter(rate)}</strong>
-            </>
-          );
-        })()}
-      </div>
-      )}
-
-      {/* Monthly: Combined monthly */}
-      {tab === "monthly" && (
-      <div className="p-4 rounded-lg border bg-white">
-        <h3 className="font-medium mb-2">Monthly income vs expense (with net)</h3>
-        <CombinedMonthlyChart data={series} />
-      </div>
       )}
 
       {/* Monthly Income */}
@@ -497,6 +366,13 @@ export default function Analytics() {
       </div>
       )}
 
+      {/* Monthly: Combined monthly */}
+      {tab === "monthly" && (
+      <div className="p-4 rounded-lg border bg-white">
+        <h3 className="font-medium mb-2">Monthly income vs expense (with net)</h3>
+        <CombinedMonthlyChart data={series} />
+      </div>
+      )}
 
       {/* Annual Income */}
       {tab === "annual" && (
@@ -676,7 +552,7 @@ export default function Analytics() {
       <section className="grid gap-6 lg:grid-cols-2">
         {/* Income by category */}
         <div className="p-4 rounded-lg border bg-white">
-          <h3 className="font-medium mb-2">Income by category (filtered)</h3>
+          <h3 className="font-medium mb-2">Income by category</h3>
           {(() => {
             const MAX_BARS = 15;
             const sorted = [...incomeCats].sort((a, b) => (b.amount || 0) - (a.amount || 0));
@@ -711,7 +587,7 @@ export default function Analytics() {
 
         {/* Expense by category */}
         <div className="p-4 rounded-lg border bg-white">
-          <h3 className="font-medium mb-2">Expense by category (filtered)</h3>
+          <h3 className="font-medium mb-2">Expense by category</h3>
           {(() => {
             const MAX_BARS = 15;
             const sorted = [...expenseCats].sort((a, b) => (b.amount || 0) - (a.amount || 0));
