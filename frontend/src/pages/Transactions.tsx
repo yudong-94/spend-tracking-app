@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useDataCache, Tx } from "@/state/data-cache";
 import PageHeader from "@/components/PageHeader";
 import CategorySelect from "@/components/CategorySelect";
@@ -11,6 +11,8 @@ export default function TransactionsPage() {
   const [q, setQ] = useState("");
   const [type, setType] = useState<"" | "income" | "expense">("");
   const [categories, setCategories] = useState<string[]>([]);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
 
   async function onRefresh() {
     setIsRefreshing(true);
@@ -34,13 +36,28 @@ export default function TransactionsPage() {
     });
   }, [rows, q, type, categories]);
 
-  const total = filtered.reduce(
+  // Reset/adjust pagination when filters change
+  useEffect(() => {
+    setPage(1);
+  }, [q, type, categories]);
+
+  const total = filtered.length;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [totalPages, page]);
+
+  const startIdx = (page - 1) * pageSize;
+  const endIdx = Math.min(total, startIdx + pageSize);
+  const pageRows = useMemo(() => filtered.slice(startIdx, endIdx), [filtered, startIdx, endIdx]);
+
+  const totalAmount = filtered.reduce(
     (s: number, r: Tx) => s + (r.type === "income" ? r.amount : -r.amount),
     0,
   );
-  const totalKind: "income" | "expense" = total >= 0 ? "income" : "expense";
+  const totalKind: "income" | "expense" = totalAmount >= 0 ? "income" : "expense";
   const totalClass =
-    total > 0 ? "text-emerald-600" : total < 0 ? "text-rose-600" : "text-slate-600";
+    totalAmount > 0 ? "text-emerald-600" : totalAmount < 0 ? "text-rose-600" : "text-slate-600";
 
   return (
     <div>
@@ -74,11 +91,49 @@ export default function TransactionsPage() {
         />
       </div>
 
-      <div className="ml-auto text-sm">
-        Total:{" "}
-        <span className={`font-semibold ${totalClass}`}>
-          {fmtUSDSigned(Math.abs(total), totalKind)}
-        </span>
+      <div className="ml-auto text-sm flex items-center gap-3">
+        <div>
+          Total:{" "}
+          <span className={`font-semibold ${totalClass}`}>
+            {fmtUSDSigned(Math.abs(totalAmount), totalKind)}
+          </span>
+        </div>
+        <div className="text-slate-500">
+          Showing {total === 0 ? 0 : startIdx + 1}–{endIdx} of {total}
+        </div>
+        <div className="inline-flex items-center gap-1">
+          <button
+            className="px-2 py-1 border rounded disabled:opacity-50"
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={page <= 1}
+          >
+            Prev
+          </button>
+          <span className="text-sm text-slate-600 px-1">
+            {page} / {totalPages}
+          </span>
+          <button
+            className="px-2 py-1 border rounded disabled:opacity-50"
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            disabled={page >= totalPages}
+          >
+            Next
+          </button>
+          <select
+            className="ml-2 border rounded px-2 py-1 text-sm"
+            value={pageSize}
+            onChange={(e) => {
+              setPageSize(Number(e.target.value));
+              setPage(1);
+            }}
+          >
+            {[25, 50, 100, 200].map((n) => (
+              <option key={n} value={n}>
+                {n}/page
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {loading ? (
@@ -98,7 +153,7 @@ export default function TransactionsPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((r: Tx, i: number) => (
+              {pageRows.map((r: Tx, i: number) => (
                 <tr key={r.id || i} className="border-b last:border-0">
                   <td className="py-2 pr-4">{r.date}</td>
                   <td className="py-2 px-3">
