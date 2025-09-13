@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { ArrowUpDown, ChevronUp, ChevronDown } from "lucide-react";
 import { useDataCache, Tx } from "@/state/data-cache";
 import PageHeader from "@/components/PageHeader";
 import CategorySelect from "@/components/CategorySelect";
@@ -13,6 +14,35 @@ export default function TransactionsPage() {
   const [categories, setCategories] = useState<string[]>([]);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
+  const [sortBy, setSortBy] = useState<"date" | "type" | "category" | "description" | "amount">(
+    "date",
+  );
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+
+  // Persist sort + page size
+  const LS_KEY = "tx-table-state-v1";
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(LS_KEY);
+      if (!raw) return;
+      const s = JSON.parse(raw) as {
+        sortBy?: typeof sortBy;
+        sortDir?: typeof sortDir;
+        pageSize?: number;
+      };
+      if (s.sortBy) setSortBy(s.sortBy);
+      if (s.sortDir === "asc" || s.sortDir === "desc") setSortDir(s.sortDir);
+      if (s.pageSize && [25, 50, 100, 200].includes(Number(s.pageSize))) {
+        setPageSize(Number(s.pageSize));
+      }
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    try {
+      localStorage.setItem(LS_KEY, JSON.stringify({ sortBy, sortDir, pageSize }));
+    } catch {}
+  }, [sortBy, sortDir, pageSize]);
 
   async function onRefresh() {
     setIsRefreshing(true);
@@ -36,10 +66,32 @@ export default function TransactionsPage() {
     });
   }, [rows, q, type, categories]);
 
+  const sorted = useMemo<Tx[]>(() => {
+    const arr = filtered.slice();
+    const dir = sortDir === "asc" ? 1 : -1;
+    arr.sort((a, b) => {
+      switch (sortBy) {
+        case "date":
+          return a.date.localeCompare(b.date) * dir;
+        case "type":
+          return a.type.localeCompare(b.type) * dir;
+        case "category":
+          return a.category.localeCompare(b.category) * dir;
+        case "description":
+          return (a.description || "").localeCompare(b.description || "") * dir;
+        case "amount":
+          return (a.amount - b.amount) * dir;
+        default:
+          return 0;
+      }
+    });
+    return arr;
+  }, [filtered, sortBy, sortDir]);
+
   // Reset/adjust pagination when filters change
   useEffect(() => {
     setPage(1);
-  }, [q, type, categories]);
+  }, [q, type, categories, sortBy, sortDir, pageSize]);
 
   const total = filtered.length;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
@@ -49,7 +101,7 @@ export default function TransactionsPage() {
 
   const startIdx = (page - 1) * pageSize;
   const endIdx = Math.min(total, startIdx + pageSize);
-  const pageRows = useMemo(() => filtered.slice(startIdx, endIdx), [filtered, startIdx, endIdx]);
+  const pageRows = useMemo(() => sorted.slice(startIdx, endIdx), [sorted, startIdx, endIdx]);
 
   const totalAmount = filtered.reduce(
     (s: number, r: Tx) => s + (r.type === "income" ? r.amount : -r.amount),
@@ -145,11 +197,37 @@ export default function TransactionsPage() {
           <table className="min-w-full text-sm">
             <thead className="text-left border-b">
               <tr>
-                <th className="py-2 pr-4">Date</th>
-                <th className="py-2 pr-4">Type</th>
-                <th className="py-2 pr-4">Category</th>
-                <th className="py-2 pr-4">Description</th>
-                <th className="py-2 px-3 text-right">Amount</th>
+                {([
+                  ["date", "Date"],
+                  ["type", "Type"],
+                  ["category", "Category"],
+                  ["description", "Description"],
+                  ["amount", "Amount"],
+                ] as Array<[typeof sortBy, string]>).map(([key, label]) => (
+                  <th key={key} className={`py-2 ${key === "amount" ? "px-3 text-right" : "pr-4"}`}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPage(1);
+                        setSortBy(key);
+                        setSortDir((d) => (key === sortBy ? (d === "asc" ? "desc" : "asc") : d));
+                        if (key !== sortBy) setSortDir(key === "date" ? "desc" : "asc");
+                      }}
+                      className="inline-flex items-center gap-1 text-left hover:text-slate-900 text-slate-700"
+                    >
+                      <span>{label}</span>
+                      <span className="inline-flex">
+                        {sortBy !== key ? (
+                          <ArrowUpDown className="h-3.5 w-3.5 text-slate-400" />
+                        ) : sortDir === "asc" ? (
+                          <ChevronUp className="h-3.5 w-3.5" />
+                        ) : (
+                          <ChevronDown className="h-3.5 w-3.5" />
+                        )}
+                      </span>
+                    </button>
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
