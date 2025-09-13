@@ -27,8 +27,16 @@ export default function AddTransaction() {
     return [...exp, ...inc];
   }, [categories]);
 
+  // Helper to get YYYY-MM-DD in local time (not UTC)
+  const todayLocal = () => {
+    const d = new Date();
+    const tz = d.getTimezoneOffset();
+    const local = new Date(d.getTime() - tz * 60 * 1000);
+    return local.toISOString().slice(0, 10);
+  };
+
   const [form, setForm] = useState<FormTx>({
-    Date: new Date().toISOString().slice(0, 10),
+    Date: todayLocal(),
     Type: "expense",
     Category: "",
     Amount: 0,
