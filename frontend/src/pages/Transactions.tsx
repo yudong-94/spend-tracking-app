@@ -4,6 +4,7 @@ import { useDataCache, Tx } from "@/state/data-cache";
 import PageHeader from "@/components/PageHeader";
 import CategorySelect from "@/components/CategorySelect";
 import { fmtUSDSigned } from "@/lib/format";
+import { updateTransaction } from "@/lib/api";
 
 export default function TransactionsPage() {
   const { txns: rows, isLoading: loading, getCategories, refresh } = useDataCache();
@@ -18,6 +19,18 @@ export default function TransactionsPage() {
     "date",
   );
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draft, setDraft] = useState<
+    | null
+    | {
+        date: string;
+        type: "income" | "expense";
+        category: string;
+        description?: string;
+        amount: number;
+      }
+  >(null);
+  const [saving, setSaving] = useState(false);
 
   // Persist sort + page size
   const LS_KEY = "tx-table-state-v1";
@@ -228,31 +241,151 @@ export default function TransactionsPage() {
                     </button>
                   </th>
                 ))}
+                <th className="py-2 pl-3 pr-2 text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {pageRows.map((r: Tx, i: number) => (
-                <tr key={r.id || i} className="border-b last:border-0">
-                  <td className="py-2 pr-4">{r.date}</td>
-                  <td className="py-2 px-3">
-                    <span className="inline-flex items-center gap-2">
-                      <span
-                        className={`h-2.5 w-2.5 rounded-full ${
-                          r.type === "income" ? "bg-emerald-500" : "bg-rose-500"
-                        }`}
-                      />
-                      {r.type === "income" ? "Income" : "Expense"}
-                    </span>
-                  </td>
-                  <td className="py-2 pr-4">{r.category}</td>
-                  <td className="py-2 pr-4">{r.description}</td>
-                  <td className="py-2 px-3 text-right font-medium">
-                    <span className={r.type === "income" ? "text-emerald-600" : "text-rose-600"}>
-                      {fmtUSDSigned(r.amount, r.type)}
-                    </span>
-                  </td>
-                </tr>
-              ))}
+              {pageRows.map((r: Tx, i: number) => {
+                const isEdit = editingId === r.id;
+                return (
+                  <tr key={r.id || i} className="border-b last:border-0">
+                    <td className="py-2 pr-4">
+                      {isEdit ? (
+                        <input
+                          type="date"
+                          className="border rounded px-2 py-1 text-sm"
+                          value={draft?.date || r.date}
+                          onChange={(e) => setDraft((d) => ({ ...(d as any), date: e.target.value }))}
+                        />
+                      ) : (
+                        r.date
+                      )}
+                    </td>
+                    <td className="py-2 px-3">
+                      {isEdit ? (
+                        <select
+                          className="border rounded px-2 py-1 text-sm"
+                          value={draft?.type || r.type}
+                          onChange={(e) =>
+                            setDraft((d) => ({ ...(d as any), type: e.target.value as any }))
+                          }
+                        >
+                          <option value="income">Income</option>
+                          <option value="expense">Expense</option>
+                        </select>
+                      ) : (
+                        <span className="inline-flex items-center gap-2">
+                          <span
+                            className={`h-2.5 w-2.5 rounded-full ${
+                              r.type === "income" ? "bg-emerald-500" : "bg-rose-500"
+                            }`}
+                          />
+                          {r.type === "income" ? "Income" : "Expense"}
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-2 pr-4">
+                      {isEdit ? (
+                        <CategorySelect
+                          multiple={false}
+                          value={draft?.category || r.category}
+                          onChange={(val: any) => setDraft((d) => ({ ...(d as any), category: val }))}
+                          options={getCategories()}
+                          className="w-48"
+                          placeholder="Category"
+                        />
+                      ) : (
+                        r.category
+                      )}
+                    </td>
+                    <td className="py-2 pr-4">
+                      {isEdit ? (
+                        <input
+                          className="border rounded px-2 py-1 text-sm w-60"
+                          value={draft?.description ?? r.description ?? ""}
+                          onChange={(e) =>
+                            setDraft((d) => ({ ...(d as any), description: e.target.value }))
+                          }
+                        />
+                      ) : (
+                        r.description
+                      )}
+                    </td>
+                    <td className="py-2 px-3 text-right font-medium">
+                      {isEdit ? (
+                        <input
+                          type="number"
+                          step="0.01"
+                          className="border rounded px-2 py-1 text-sm w-28 text-right"
+                          value={draft?.amount ?? r.amount}
+                          onChange={(e) =>
+                            setDraft((d) => ({ ...(d as any), amount: Number(e.target.value) }))
+                          }
+                        />
+                      ) : (
+                        <span className={r.type === "income" ? "text-emerald-600" : "text-rose-600"}>
+                          {fmtUSDSigned(r.amount, r.type)}
+                        </span>
+                      )}
+                    </td>
+                    {/* Actions */}
+                    <td className="py-2 pl-3 pr-2 text-right">
+                      {r.id ? (
+                        isEdit ? (
+                          <div className="inline-flex gap-2">
+                            <button
+                              className="px-2 py-1 rounded bg-slate-900 text-white text-xs disabled:opacity-50"
+                              disabled={saving}
+                              onClick={async () => {
+                                if (!draft) return;
+                                setSaving(true);
+                                try {
+                                  await updateTransaction({ id: r.id!, ...draft });
+                                  await refresh();
+                                  setEditingId(null);
+                                  setDraft(null);
+                                } catch (e) {
+                                  alert("Failed to save changes");
+                                  console.error(e);
+                                } finally {
+                                  setSaving(false);
+                                }
+                              }}
+                            >
+                              Save
+                            </button>
+                            <button
+                              className="px-2 py-1 rounded border text-xs"
+                              onClick={() => {
+                                setEditingId(null);
+                                setDraft(null);
+                              }}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            className="px-2 py-1 rounded border text-xs"
+                            onClick={() => {
+                              setEditingId(r.id!);
+                              setDraft({
+                                date: r.date,
+                                type: r.type,
+                                category: r.category,
+                                description: r.description,
+                                amount: r.amount,
+                              });
+                            }}
+                          >
+                            Edit
+                          </button>
+                        )
+                      ) : null}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
