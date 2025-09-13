@@ -168,7 +168,8 @@ export default function TransactionsPage() {
         getCategories={getCategories}
       />
 
-      <div className="ml-auto text-sm flex items-center gap-3">
+      {/* Totals + pagination (desktop) */}
+      <div className="ml-auto text-sm hidden md:flex items-center gap-3">
         <div>
           Total:{" "}
           <span className={`font-semibold ${totalClass}`}>
@@ -210,6 +211,55 @@ export default function TransactionsPage() {
               </option>
             ))}
           </select>
+        </div>
+      </div>
+
+      {/* Totals + pagination (mobile) */}
+      <div className="md:hidden mt-2 space-y-2">
+        <div className="text-sm">
+          Total:{" "}
+          <span className={`font-semibold ${totalClass}`}>
+            {fmtUSDSigned(Math.abs(totalAmount), totalKind)}
+          </span>
+        </div>
+        <div className="flex items-center justify-between">
+          <div className="text-xs text-slate-500">
+            Showing {total === 0 ? 0 : startIdx + 1}–{endIdx} of {total}
+          </div>
+          <div className="inline-flex items-center gap-1">
+            <button
+              className="px-2 py-1 border rounded disabled:opacity-50 text-xs"
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page <= 1}
+            >
+              Prev
+            </button>
+            <span className="text-xs text-slate-600 px-1">
+              {page}/{totalPages}
+            </span>
+            <button
+              className="px-2 py-1 border rounded disabled:opacity-50 text-xs"
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page >= totalPages}
+            >
+              Next
+            </button>
+            <select
+              aria-label="Rows per page"
+              className="ml-2 border rounded px-1.5 py-1 text-xs"
+              value={pageSize}
+              onChange={(e) => {
+                setPageSize(Number(e.target.value));
+                setPage(1);
+              }}
+            >
+              {[25, 50, 100, 200].map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 
