@@ -187,17 +187,7 @@ export default function Analytics() {
     return [...by.entries()].map(([category, amount]) => ({ category, amount }));
   }, [filtered]);
 
-  // Totals based on current Analytics filters
-  const totals = useMemo(() => {
-    let totalIncome = 0;
-    let totalExpense = 0;
-    for (const r of filtered as Tx[]) {
-      if (r.type === "income") totalIncome += r.amount;
-      else totalExpense += r.amount;
-    }
-    const net = totalIncome - totalExpense;
-    return { totalIncome, totalExpense, net };
-  }, [filtered]);
+  // Removed aggregate totals; KPI cards pull "current" month directly from series
 
   // savingsRate previously computed here; replaced by per-period rate comparisons
 
