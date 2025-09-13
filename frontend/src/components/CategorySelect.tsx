@@ -69,6 +69,8 @@ export default function CategorySelect(props: SingleProps | MultiProps) {
     return arr;
   }, [q, props.options]);
 
+  const allNames = useMemo(() => props.options.map((c) => c.name), [props.options]);
+
   const isSelected = (name: string) => selectedNames.includes(name);
 
   const toggleMulti = (name: string) => {
@@ -184,13 +186,22 @@ export default function CategorySelect(props: SingleProps | MultiProps) {
 
           {isMulti && (
             <div className="flex justify-between items-center p-2 border-t">
-              <button
-                type="button"
-                className="text-sm text-slate-600 hover:underline"
-                onClick={() => (props as MultiProps).onChange([])}
-              >
-                Clear
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  className="text-sm text-slate-600 hover:underline"
+                  onClick={() => (props as MultiProps).onChange(allNames)}
+                >
+                  Select all
+                </button>
+                <button
+                  type="button"
+                  className="text-sm text-slate-600 hover:underline"
+                  onClick={() => (props as MultiProps).onChange([])}
+                >
+                  Clear
+                </button>
+              </div>
               <button
                 type="button"
                 className="px-2 py-1 rounded bg-slate-900 text-white text-sm"
