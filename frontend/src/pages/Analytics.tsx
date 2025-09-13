@@ -146,6 +146,9 @@ export default function Analytics() {
     };
 
     return {
+      current: cur,
+      prev,
+      avg,
       vsLast: prev
         ? {
             income: mk(cur.income, prev.income),
@@ -351,23 +354,40 @@ export default function Analytics() {
       {(tab === "monthly" || tab === "annual") && (
         <section className="grid gap-3 sm:grid-cols-4">
           {(() => {
-            const vs = tab === "monthly" ? kpiCompare?.vsLast : kpiCompare?.vsAvg12;
-            const label = tab === "monthly" ? "vs last month" : "vs 12‑mo avg";
-            const tipText =
+            if (!kpiCompare) return null;
+            const cur = kpiCompare.current;
+            const base = tab === "monthly" ? kpiCompare.prev : kpiCompare.avg;
+            const vs = tab === "monthly" ? kpiCompare.vsLast : kpiCompare.vsAvg12;
+            const label = tab === "monthly" ? "Current vs last month" : "Current vs 12‑mo avg";
+
+            const tipIncome =
               tab === "monthly"
-                ? "Income/Expense/Net show % change: (this − last) ÷ last. Savings rate shows absolute difference in percentage points."
-                : "Income/Expense/Net show % change: (this − 12‑mo avg) ÷ avg. Savings rate shows absolute difference in percentage points. 12‑mo avg excludes the current month.";
+                ? "Income comparison with last month. % change = (this − last) ÷ last. Uses current filters."
+                : "Income compared to the average of the last 12 complete months (excludes current). % change = (this − avg) ÷ avg.";
+            const tipExpense = tipIncome.replace("Income", "Expense");
+            const tipNet =
+              tab === "monthly"
+                ? "Net (income − expense) vs last month. % change = (this − last) ÷ last."
+                : "Net (income − expense) vs 12‑mo average. % change = (this − avg) ÷ avg.";
+            const tipRate =
+              tab === "monthly"
+                ? "Savings rate = net ÷ income. Shows difference in percentage points vs last month. If income is 0, rate is not defined."
+                : "Savings rate = net ÷ income. Shows difference in percentage points vs 12‑mo average (excludes current). If income is 0, rate is not defined.";
 
             const renderPct = (pct: number | null, positiveGood = true) => {
               if (pct == null) return <span className="text-slate-500">—</span>;
               const cls = (positiveGood ? pct >= 0 : pct <= 0) ? "text-emerald-600" : "text-rose-600";
               return <span className={cls}>{percentFormatter(pct)}</span>;
             };
-            const renderRateDiff = (diff: number | null) => {
+            const fmtPP = (diff: number | null) => {
               if (diff == null) return <span className="text-slate-500">—</span>;
-              const cls = diff >= 0 ? "text-emerald-600" : "text-rose-600";
-              return <span className={cls}>{percentFormatter(diff)}</span>;
+              const sign = diff > 0 ? "+" : diff < 0 ? "−" : "";
+              const val = Math.abs(Math.round(diff * 100)).toLocaleString();
+              const cls = diff >= 0 ? "text-emerald-600" : diff < 0 ? "text-rose-600" : "text-slate-600";
+              return <span className={cls}>{`${sign}${val}pp`}</span>;
             };
+            const rateVal = (p: Point | { income: number; net: number } | undefined) =>
+              p && p.income > 0 ? p.net / p.income : null;
 
             return (
               <>
@@ -375,11 +395,12 @@ export default function Analytics() {
                 <div className="rounded-lg border bg-white p-3">
                   <div className="text-xs text-slate-500 flex items-center gap-1">
                     <span>Income</span>
-                    <TooltipInfo text={tipText} />
+                    <TooltipInfo text={tipIncome} />
                   </div>
-                  <div className="text-lg font-semibold text-emerald-600">{fmtUSD(totals.totalIncome)}</div>
+                  <div className="text-lg font-semibold text-emerald-600">{fmtUSD(cur.income)}</div>
                   <div className="text-xs text-slate-600 mt-1">
-                    {label}: {renderPct(vs?.income.pct ?? null, true)}
+                    {label}: {fmtUSD(cur.income)} vs. {base ? fmtUSD(base.income) : "—"} (
+                    {renderPct(vs?.income.pct ?? null, true)})
                   </div>
                 </div>
 
@@ -387,11 +408,12 @@ export default function Analytics() {
                 <div className="rounded-lg border bg-white p-3">
                   <div className="text-xs text-slate-500 flex items-center gap-1">
                     <span>Expense</span>
-                    <TooltipInfo text={tipText} />
+                    <TooltipInfo text={tipExpense} />
                   </div>
-                  <div className="text-lg font-semibold text-rose-600">{fmtUSD(totals.totalExpense)}</div>
+                  <div className="text-lg font-semibold text-rose-600">{fmtUSD(cur.expense)}</div>
                   <div className="text-xs text-slate-600 mt-1">
-                    {label}: {renderPct(vs?.expense.pct ?? null, false)}
+                    {label}: {fmtUSD(cur.expense)} vs. {base ? fmtUSD(base.expense) : "—"} (
+                    {renderPct(vs?.expense.pct ?? null, false)})
                   </div>
                 </div>
 
@@ -399,13 +421,14 @@ export default function Analytics() {
                 <div className="rounded-lg border bg-white p-3">
                   <div className="text-xs text-slate-500 flex items-center gap-1">
                     <span>Net</span>
-                    <TooltipInfo text={tipText} />
+                    <TooltipInfo text={tipNet} />
                   </div>
-                  <div className={`text-lg font-semibold ${totals.net >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
-                    {fmtUSD(totals.net)}
+                  <div className={`text-lg font-semibold ${cur.net >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                    {fmtUSD(cur.net)}
                   </div>
                   <div className="text-xs text-slate-600 mt-1">
-                    {label}: {renderPct(vs?.net.pct ?? null, true)}
+                    {label}: {fmtUSD(cur.net)} vs. {base ? fmtUSD(base.net) : "—"} (
+                    {renderPct(vs?.net.pct ?? null, true)})
                   </div>
                 </div>
 
@@ -413,14 +436,23 @@ export default function Analytics() {
                 <div className="rounded-lg border bg-white p-3">
                   <div className="text-xs text-slate-500 flex items-center gap-1">
                     <span>Savings rate</span>
-                    <TooltipInfo text={`Savings rate = net / income. ${tipText}`} />
+                    <TooltipInfo text={tipRate} />
                   </div>
-                  <div className={`text-lg font-semibold ${savingsRate != null && savingsRate >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
-                    {savingsRate == null ? "—" : percentFormatter(savingsRate)}
-                  </div>
-                  <div className="text-xs text-slate-600 mt-1">
-                    {label}: {renderRateDiff(vs?.rate.diff ?? null)}
-                  </div>
+                  {(() => {
+                    const curR = rateVal(cur);
+                    const baseR = rateVal(base as any);
+                    return (
+                      <>
+                        <div className={`text-lg font-semibold ${curR != null && curR >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                          {curR == null ? "—" : percentFormatter(curR)}
+                        </div>
+                        <div className="text-xs text-slate-600 mt-1">
+                          {label}: {curR == null ? "—" : percentFormatter(curR)} vs. {baseR == null ? "—" : percentFormatter(baseR)} (
+                          {fmtPP(vs?.rate.diff ?? null)})
+                        </div>
+                      </>
+                    );
+                  })()}
                 </div>
               </>
             );
