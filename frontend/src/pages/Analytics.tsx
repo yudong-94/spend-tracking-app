@@ -461,6 +461,76 @@ export default function Analytics() {
         </section>
       )}
 
+      {/* KPI cards for Breakdown: show totals and top categories */}
+      {tab === "breakdown" && (
+        <section className="grid gap-3 sm:grid-cols-4">
+          {(() => {
+            const totalInc = totals.totalIncome;
+            const totalExp = totals.totalExpense;
+            const topIncome = [...incomeCats]
+              .sort((a, b) => (b.amount || 0) - (a.amount || 0))
+              .slice(0, 3);
+            const topExpense = [...expenseCats]
+              .sort((a, b) => (b.amount || 0) - (a.amount || 0))
+              .slice(0, 3);
+
+            return (
+              <>
+                {/* Income */}
+                <div className="rounded-lg border bg-white p-3">
+                  <div className="text-xs text-slate-500">Income</div>
+                  <div className="text-lg font-semibold text-emerald-600">{fmtUSD(totalInc)}</div>
+                  <div className="mt-1 space-y-0.5 text-xs text-slate-600">
+                    {totalInc > 0 && topIncome.length > 0 ? (
+                      topIncome.map((x) => (
+                        <div key={x.category}>
+                          {x.category}: {fmtUSD(x.amount)} ({percentFormatter(x.amount / totalInc)})
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-slate-500">No income</div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Expense */}
+                <div className="rounded-lg border bg-white p-3">
+                  <div className="text-xs text-slate-500">Expense</div>
+                  <div className="text-lg font-semibold text-rose-600">{fmtUSD(totalExp)}</div>
+                  <div className="mt-1 space-y-0.5 text-xs text-slate-600">
+                    {totalExp > 0 && topExpense.length > 0 ? (
+                      topExpense.map((x) => (
+                        <div key={x.category}>
+                          {x.category}: {fmtUSD(x.amount)} ({percentFormatter(x.amount / totalExp)})
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-slate-500">No expenses</div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Net */}
+                <div className="rounded-lg border bg-white p-3">
+                  <div className="text-xs text-slate-500">Net</div>
+                  <div className={`text-lg font-semibold ${totals.net >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                    {fmtUSD(totals.net)}
+                  </div>
+                </div>
+
+                {/* Savings rate */}
+                <div className="rounded-lg border bg-white p-3">
+                  <div className="text-xs text-slate-500">Savings rate</div>
+                  <div className={`text-lg font-semibold ${periodRate != null && periodRate >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                    {periodRate == null ? "—" : percentFormatter(periodRate)}
+                  </div>
+                </div>
+              </>
+            );
+          })()}
+        </section>
+      )}
+
       {/* Monthly Income */}
       {tab === "monthly" && (
       <div className="p-4 rounded-lg border bg-white">
