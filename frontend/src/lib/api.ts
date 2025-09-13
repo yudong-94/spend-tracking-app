@@ -75,6 +75,18 @@ export async function createTransaction(tx: NewTransaction) {
   return jsonOrThrow(res);
 }
 
+export async function updateTransaction(input: Partial<NewTransaction> & { id: string }) {
+  const res = await fetch(
+    "/api/transactions",
+    withAuth({
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    }),
+  );
+  return jsonOrThrow(res);
+}
+
 export async function getSummary(period?: Period) {
   const res = await fetch(buildUrl("/api/summary", period), withAuth());
   return jsonOrThrow(res);

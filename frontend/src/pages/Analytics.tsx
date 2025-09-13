@@ -120,15 +120,53 @@ export default function Analytics() {
     return [...by.values()].sort((a, b) => a.month.localeCompare(b.month));
   }, [filtered]);
 
-  // Prep last 12 months for KPI sparklines
-  const last12 = useMemo(() => (series.length > 12 ? series.slice(series.length - 12) : series), [series]);
-  const kpiData = useMemo(() => {
-    const income = last12.map((p, i) => ({ x: i, v: p.income }));
-    const expense = last12.map((p, i) => ({ x: i, v: p.expense }));
-    const net = last12.map((p, i) => ({ x: i, v: p.net }));
-    const rate = last12.map((p, i) => ({ x: i, v: p.income > 0 ? p.net / p.income : null }));
-    return { income, expense, net, rate };
-  }, [last12]);
+  // KPI comparisons: vs last month and vs 12‑mo avg
+  const kpiCompare = useMemo(() => {
+    const n = series.length;
+    if (n === 0) return null;
+    const cur = series[n - 1];
+    const prev = n >= 2 ? series[n - 2] : undefined;
+    const tail = n >= 2 ? series.slice(Math.max(0, n - 13), n - 1) : [];
+    const avg = tail.length
+      ? {
+          income: tail.reduce((s, p) => s + (p.income || 0), 0) / tail.length,
+          expense: tail.reduce((s, p) => s + (p.expense || 0), 0) / tail.length,
+          net: tail.reduce((s, p) => s + (p.net || 0), 0) / tail.length,
+        }
+      : undefined;
+
+    const rate = (p: Point | { income: number; net: number }) =>
+      p.income > 0 ? p.net / p.income : null;
+
+    const mk = (now: number, base?: number | null) => {
+      if (base == null) return { diff: null as number | null, pct: null as number | null };
+      const diff = now - base;
+      const pct = base !== 0 ? diff / base : null;
+      return { diff, pct };
+    };
+
+    return {
+      current: cur,
+      prev,
+      avg,
+      vsLast: prev
+        ? {
+            income: mk(cur.income, prev.income),
+            expense: mk(cur.expense, prev.expense),
+            net: mk(cur.net, prev.net),
+            rate: mk((rate(cur) ?? 0) as number, rate(prev)),
+          }
+        : null,
+      vsAvg12: avg
+        ? {
+            income: mk(cur.income, avg.income),
+            expense: mk(cur.expense, avg.expense),
+            net: mk(cur.net, avg.net),
+            rate: mk((rate(cur) ?? 0) as number, rate(avg as any)),
+          }
+        : null,
+    } as const;
+  }, [series]);
 
   // Category breakdowns based on current filters
   const incomeCats = useMemo(() => {
@@ -149,7 +187,7 @@ export default function Analytics() {
     return [...by.entries()].map(([category, amount]) => ({ category, amount }));
   }, [filtered]);
 
-  // Totals based on current Analytics filters
+  // Totals across the entire filtered period (used as primary KPI values)
   const totals = useMemo(() => {
     let totalIncome = 0;
     let totalExpense = 0;
@@ -161,7 +199,8 @@ export default function Analytics() {
     return { totalIncome, totalExpense, net };
   }, [filtered]);
 
-  const savingsRate = useMemo(() => {
+  // Savings rate over the filtered period (net ÷ income)
+  const periodRate = useMemo(() => {
     return totals.totalIncome > 0 ? totals.net / totals.totalIncome : null;
   }, [totals]);
 
@@ -239,8 +278,8 @@ export default function Analytics() {
   return (
     <div className="space-y-6">
       <PageHeader lastUpdated={lastUpdated} onRefresh={onRefresh} isRefreshing={isRefreshing} />
-      {/* Filters */}
-      <div className="sticky top-0 z-10 bg-white/90 backdrop-blur supports-[backdrop-filter]:bg-white/70 border-b py-2">
+      {/* Filters – desktop */}
+      <div className="sticky top-0 z-10 bg-white/90 backdrop-blur supports-[backdrop-filter]:bg-white/70 border-b py-2 hidden md:block">
         <div className="flex flex-wrap gap-3 items-end">
           <div className="grid">
             <label className="text-sm">Start</label>
@@ -299,74 +338,196 @@ export default function Analytics() {
         </nav>
       </div>
 
-      {/* KPI cards with mini sparklines (Monthly, Annual) */}
+      {/* Filters – mobile collapsible */}
+      <MobileAnalyticsFilters
+        start={start}
+        setStart={setStart}
+        end={end}
+        setEnd={setEnd}
+        categories={categories}
+        setCategories={setCategories}
+        getCategories={getCategories}
+        tab={tab}
+        setTab={setTab}
+      />
+
+      {/* KPI cards with comparisons (Monthly: vs last month, Annual: vs 12‑mo avg) */}
       {(tab === "monthly" || tab === "annual") && (
         <section className="grid gap-3 sm:grid-cols-4">
-          {/* Income */}
-          <div className="rounded-lg border bg-white p-3">
-            <div className="text-xs text-slate-500">Income</div>
-            <div className="text-lg font-semibold text-emerald-600">{fmtUSD(totals.totalIncome)}</div>
-            <div className="mt-2 h-10">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={kpiData.income} margin={{ left: 0, right: 0, top: 4, bottom: 0 }}>
-                  <Line type="monotone" dataKey="v" stroke={COL.income} strokeWidth={2} dot={false} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-          {/* Expense */}
-          <div className="rounded-lg border bg-white p-3">
-            <div className="text-xs text-slate-500">Expense</div>
-            <div className="text-lg font-semibold text-rose-600">{fmtUSD(totals.totalExpense)}</div>
-            <div className="mt-2 h-10">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={kpiData.expense} margin={{ left: 0, right: 0, top: 4, bottom: 0 }}>
-                  <Line type="monotone" dataKey="v" stroke={COL.expense} strokeWidth={2} dot={false} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-          {/* Net */}
-          <div className="rounded-lg border bg-white p-3">
-            <div className="text-xs text-slate-500">Net</div>
-            <div className={`text-lg font-semibold ${totals.net >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
-              {fmtUSD(totals.net)}
-            </div>
-            <div className="mt-2 h-10">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={kpiData.net} margin={{ left: 0, right: 0, top: 4, bottom: 0 }}>
-                  <Line type="monotone" dataKey="v" stroke={COL.net} strokeWidth={2} dot={false} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-          {/* Savings rate */}
-          <div className="rounded-lg border bg-white p-3">
-            <div className="text-xs text-slate-500 flex items-center gap-1">
-              <span>Savings rate</span>
-              <span className="relative group inline-flex">
-                <span
-                  aria-label="Savings rate definition"
-                  className="inline-flex h-4 w-4 select-none items-center justify-center rounded-full border border-slate-300 text-[10px] leading-none text-slate-600 bg-white cursor-help"
-                >
-                  i
-                </span>
-                <span className="absolute left-1/2 z-10 hidden -translate-x-1/2 whitespace-nowrap rounded border bg-white px-2 py-1 text-xs text-slate-700 shadow group-hover:block mt-1">
-                  Savings rate = net / income. Based on current filters. If income is 0, savings rate is not defined.
-                </span>
-              </span>
-            </div>
-            <div className={`text-lg font-semibold ${savingsRate != null && savingsRate >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
-              {savingsRate == null ? "—" : percentFormatter(savingsRate)}
-            </div>
-            <div className="mt-2 h-10">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={kpiData.rate} margin={{ left: 0, right: 0, top: 4, bottom: 0 }}>
-                  <Line type="monotone" dataKey="v" stroke={COL.net} strokeWidth={2} dot={false} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
+          {(() => {
+            if (!kpiCompare) return null;
+            const cur = kpiCompare.current;
+            const base = tab === "monthly" ? kpiCompare.prev : kpiCompare.avg;
+            const vs = tab === "monthly" ? kpiCompare.vsLast : kpiCompare.vsAvg12;
+            const label = tab === "monthly" ? "Current vs last month" : "Current vs 12‑mo avg";
+
+            const tipIncome =
+              tab === "monthly"
+                ? "Income comparison with last month. % change = (this − last) ÷ last. Uses current filters."
+                : "Income compared to the average of the last 12 complete months (excludes current). % change = (this − avg) ÷ avg.";
+            const tipExpense = tipIncome.replace("Income", "Expense");
+            const tipNet =
+              tab === "monthly"
+                ? "Net (income − expense) vs last month. % change = (this − last) ÷ last."
+                : "Net (income − expense) vs 12‑mo average. % change = (this − avg) ÷ avg.";
+            const tipRate =
+              tab === "monthly"
+                ? "Savings rate = net ÷ income. Shows difference in percentage points vs last month. If income is 0, rate is not defined."
+                : "Savings rate = net ÷ income. Shows difference in percentage points vs 12‑mo average (excludes current). If income is 0, rate is not defined.";
+
+            const renderPct = (pct: number | null, positiveGood = true) => {
+              if (pct == null) return <span className="text-slate-500">—</span>;
+              const cls = (positiveGood ? pct >= 0 : pct <= 0) ? "text-emerald-600" : "text-rose-600";
+              return <span className={cls}>{percentFormatter(pct)}</span>;
+            };
+            const fmtPP = (diff: number | null) => {
+              if (diff == null) return <span className="text-slate-500">—</span>;
+              const sign = diff > 0 ? "+" : diff < 0 ? "−" : "";
+              const val = Math.abs(Math.round(diff * 100)).toLocaleString();
+              const cls = diff >= 0 ? "text-emerald-600" : diff < 0 ? "text-rose-600" : "text-slate-600";
+              return <span className={cls}>{`${sign}${val}pp`}</span>;
+            };
+            const rateVal = (p: Point | { income: number; net: number } | undefined) =>
+              p && p.income > 0 ? p.net / p.income : null;
+
+            return (
+              <>
+                {/* Income */}
+                <div className="rounded-lg border bg-white p-3">
+                  <div className="text-xs text-slate-500 flex items-center gap-1">
+                    <span>Income</span>
+                    <TooltipInfo text={tipIncome} />
+                  </div>
+                  <div className="text-lg font-semibold text-emerald-600">{fmtUSD(totals.totalIncome)}</div>
+                  <div className="text-xs text-slate-600 mt-1">
+                    {label}: {fmtUSD(cur.income)} vs. {base ? fmtUSD(base.income) : "—"} (
+                    {renderPct(vs?.income.pct ?? null, true)})
+                  </div>
+                </div>
+
+                {/* Expense */}
+                <div className="rounded-lg border bg-white p-3">
+                  <div className="text-xs text-slate-500 flex items-center gap-1">
+                    <span>Expense</span>
+                    <TooltipInfo text={tipExpense} />
+                  </div>
+                  <div className="text-lg font-semibold text-rose-600">{fmtUSD(totals.totalExpense)}</div>
+                  <div className="text-xs text-slate-600 mt-1">
+                    {label}: {fmtUSD(cur.expense)} vs. {base ? fmtUSD(base.expense) : "—"} (
+                    {renderPct(vs?.expense.pct ?? null, false)})
+                  </div>
+                </div>
+
+                {/* Net */}
+                <div className="rounded-lg border bg-white p-3">
+                  <div className="text-xs text-slate-500 flex items-center gap-1">
+                    <span>Net</span>
+                    <TooltipInfo text={tipNet} />
+                  </div>
+                  <div className={`text-lg font-semibold ${totals.net >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                    {fmtUSD(totals.net)}
+                  </div>
+                  <div className="text-xs text-slate-600 mt-1">
+                    {label}: {fmtUSD(cur.net)} vs. {base ? fmtUSD(base.net) : "—"} (
+                    {renderPct(vs?.net.pct ?? null, true)})
+                  </div>
+                </div>
+
+                {/* Savings rate */}
+                <div className="rounded-lg border bg-white p-3">
+                  <div className="text-xs text-slate-500 flex items-center gap-1">
+                    <span>Savings rate</span>
+                    <TooltipInfo text={tipRate} />
+                  </div>
+                  {(() => {
+                    const curR = rateVal(cur);
+                    const baseR = rateVal(base as any);
+                    return (
+                      <>
+                        <div className={`text-lg font-semibold ${periodRate != null && periodRate >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                          {periodRate == null ? "—" : percentFormatter(periodRate)}
+                        </div>
+                        <div className="text-xs text-slate-600 mt-1">
+                          {label}: {curR == null ? "—" : percentFormatter(curR)} vs. {baseR == null ? "—" : percentFormatter(baseR)} (
+                          {fmtPP(vs?.rate.diff ?? null)})
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
+              </>
+            );
+          })()}
+        </section>
+      )}
+
+      {/* KPI cards for Breakdown: show totals and top categories */}
+      {tab === "breakdown" && (
+        <section className="grid gap-3 sm:grid-cols-4">
+          {(() => {
+            const totalInc = totals.totalIncome;
+            const totalExp = totals.totalExpense;
+            const topIncome = [...incomeCats]
+              .sort((a, b) => (b.amount || 0) - (a.amount || 0))
+              .slice(0, 3);
+            const topExpense = [...expenseCats]
+              .sort((a, b) => (b.amount || 0) - (a.amount || 0))
+              .slice(0, 3);
+
+            return (
+              <>
+                {/* Income */}
+                <div className="rounded-lg border bg-white p-3">
+                  <div className="text-xs text-slate-500">Income</div>
+                  <div className="text-lg font-semibold text-emerald-600">{fmtUSD(totalInc)}</div>
+                  <div className="mt-1 space-y-0.5 text-xs text-slate-600">
+                    {totalInc > 0 && topIncome.length > 0 ? (
+                      topIncome.map((x) => (
+                        <div key={x.category}>
+                          {x.category}: {fmtUSD(x.amount)} ({percentFormatter(x.amount / totalInc)})
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-slate-500">No income</div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Expense */}
+                <div className="rounded-lg border bg-white p-3">
+                  <div className="text-xs text-slate-500">Expense</div>
+                  <div className="text-lg font-semibold text-rose-600">{fmtUSD(totalExp)}</div>
+                  <div className="mt-1 space-y-0.5 text-xs text-slate-600">
+                    {totalExp > 0 && topExpense.length > 0 ? (
+                      topExpense.map((x) => (
+                        <div key={x.category}>
+                          {x.category}: {fmtUSD(x.amount)} ({percentFormatter(x.amount / totalExp)})
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-slate-500">No expenses</div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Net */}
+                <div className="rounded-lg border bg-white p-3">
+                  <div className="text-xs text-slate-500">Net</div>
+                  <div className={`text-lg font-semibold ${totals.net >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                    {fmtUSD(totals.net)}
+                  </div>
+                </div>
+
+                {/* Savings rate */}
+                <div className="rounded-lg border bg-white p-3">
+                  <div className="text-xs text-slate-500">Savings rate</div>
+                  <div className={`text-lg font-semibold ${periodRate != null && periodRate >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                    {periodRate == null ? "—" : percentFormatter(periodRate)}
+                  </div>
+                </div>
+              </>
+            );
+          })()}
         </section>
       )}
 
@@ -705,6 +866,103 @@ export default function Analytics() {
           })()}
         </div>
       </section>
+      )}
+    </div>
+  );
+}
+
+// Collapsible mobile filter + tabs for Analytics
+function TooltipInfo({ text }: { text: string }) {
+  return (
+    <span className="relative group inline-flex">
+      <span
+        aria-label="Info"
+        className="inline-flex h-4 w-4 select-none items-center justify-center rounded-full border border-slate-300 text-[10px] leading-none text-slate-600 bg-white cursor-help"
+      >
+        i
+      </span>
+      <span className="absolute left-1/2 z-10 hidden -translate-x-1/2 whitespace-nowrap rounded border bg-white px-2 py-1 text-xs text-slate-700 shadow group-hover:block mt-1">
+        {text}
+      </span>
+    </span>
+  );
+}
+
+// Collapsible mobile filter + tabs for Analytics
+function MobileAnalyticsFilters({
+  start,
+  setStart,
+  end,
+  setEnd,
+  categories,
+  setCategories,
+  getCategories,
+  tab,
+  setTab,
+}: {
+  start: string;
+  setStart: (v: string) => void;
+  end: string;
+  setEnd: (v: string) => void;
+  categories: string[];
+  setCategories: (v: string[]) => void;
+  getCategories: () => { id: string; name: string; type: "income" | "expense" }[];
+  tab: Tab;
+  setTab: (t: Tab) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="md:hidden sticky top-0 z-10 bg-white/90 backdrop-blur supports-[backdrop-filter]:bg-white/70 border-b py-2">
+      <button
+        className="px-3 py-2 border rounded w-full text-left bg-white"
+        onClick={() => setOpen((v) => !v)}
+      >
+        {open ? "Hide filters" : "Show filters"}
+      </button>
+      {open && (
+        <div className="mt-2 space-y-2">
+          <div className="grid grid-cols-2 gap-2">
+            <input
+              type="date"
+              className="border rounded px-3 py-2"
+              value={start}
+              onChange={(e) => setStart(e.target.value)}
+            />
+            <input
+              type="date"
+              className="border rounded px-3 py-2"
+              value={end}
+              onChange={(e) => setEnd(e.target.value)}
+            />
+          </div>
+          <CategorySelect
+            multiple
+            value={categories}
+            onChange={setCategories}
+            options={getCategories()}
+            className="w-full"
+            placeholder="All Categories"
+          />
+          <div className="pt-1">
+            <div className="flex gap-3 text-sm overflow-x-auto">
+              {([
+                ["monthly", "Monthly"],
+                ["annual", "Annual"],
+                ["breakdown", "Breakdown"],
+              ] as Array<[Tab, string]>).map(([key, label]) => (
+                <button
+                  key={key}
+                  onClick={() => setTab(key as Tab)}
+                  className={`px-2 py-1.5 rounded ${
+                    tab === key ? "bg-slate-900 text-white" : "bg-white border"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

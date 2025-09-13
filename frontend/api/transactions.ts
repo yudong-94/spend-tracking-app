@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { requireAuth } from "./_lib/auth.js";
-import { readTable, appendRow } from "./_lib/sheets.js";
+import { readTable, appendRow, updateRowById } from "./_lib/sheets.js";
 
 type Tx = {
   id?: string;
@@ -123,6 +123,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       await appendRow(toSheetRow);
       return res.status(201).json({ ok: true, id }); // <-- return ID to client
+    }
+
+    if (req.method === "PUT" || req.method === "PATCH") {
+      const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
+      const id = String(body?.id || body?.ID || "").trim();
+      if (!id) return res.status(400).json({ error: "missing_id" });
+
+      const pick = (k: string) => body?.[k] ?? body?.[k[0].toUpperCase() + k.slice(1)];
+      const patch: Record<string, any> = {};
+      if (pick("date")) patch["Date"] = pick("date");
+      if (pick("category")) patch["Category"] = pick("category");
+      if (pick("description") !== undefined) patch["Description"] = pick("description") || "";
+      if (pick("amount") !== undefined) patch["Amount"] = parseAmount(pick("amount"));
+      if (pick("type")) {
+        const t = String(pick("type")).toLowerCase();
+        patch["Type"] = t === "income" ? "income" : "expense";
+      }
+
+      try {
+        await updateRowById(id, patch);
+        return res.status(200).json({ ok: true, id });
+      } catch (e: any) {
+        if (e?.message === "not_found") return res.status(404).json({ error: "not_found" });
+        console.error(e);
+        return res.status(500).json({ error: "update_failed" });
+      }
     }
 
     res.setHeader("Allow", "GET, POST");

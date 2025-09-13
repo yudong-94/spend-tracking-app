@@ -80,6 +80,62 @@ export async function appendRow(row: Record<string, any>) {
   });
 }
 
+/** Update a row in the default Transactions sheet by `ID`. */
+export async function updateRowById(
+  id: string,
+  patch: Partial<Record<string, any>>,
+) {
+  const { sheets, spreadsheetId, sheetName } = await getSheetsClient();
+  // Read headers
+  const headerRes = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: `${sheetName}!1:1`,
+  });
+  const headers: string[] = (headerRes.data.values?.[0] || []).map((h: any) => String(h).trim());
+
+  // Read all rows to find the row index
+  const dataRes = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: `${sheetName}!A2:ZZZ`,
+  });
+  const rows: any[][] = dataRes.data.values || [];
+  let foundIndex = -1;
+  let existing: Record<string, any> | null = null;
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
+    // Assume the first column is ID; also map by headers for resilience
+    const obj: Record<string, any> = {};
+    headers.forEach((h, idx) => (obj[h] = r[idx] ?? ""));
+    const curId = String(obj["ID"] ?? obj["id"] ?? "").trim();
+    if (curId === id) {
+      foundIndex = i; // zero-based from A2
+      existing = obj;
+      break;
+    }
+  }
+  if (foundIndex === -1 || !existing) throw new Error("not_found");
+
+  const now = new Date();
+  const updated: Record<string, any> = { ...existing, ...patch };
+  // Ensure ID preserved and timestamps handled
+  updated["ID"] = id;
+  updated["Updated At"] = now.toLocaleString();
+  // Keep Created At from existing if not provided
+  if (!updated["Created At"]) updated["Created At"] = existing["Created At"] || now.toLocaleString();
+
+  // Map to header order for the update
+  const values = headers.map((h) => updated[h] ?? "");
+  const rowNumber = foundIndex + 2; // +2 because header is row 1 and we started at A2
+  await sheets.spreadsheets.values.update({
+    spreadsheetId,
+    range: `${sheetName}!A${rowNumber}`,
+    valueInputOption: "USER_ENTERED",
+    requestBody: { values: [values] },
+  });
+
+  return updated;
+}
+
 /** Read any sheet into array of objects (header row determines keys). */
 export async function readSheetAsObjects(sheetName: string) {
   const { sheets, spreadsheetId } = await getSheetsClient();
