@@ -239,8 +239,8 @@ export default function Analytics() {
   return (
     <div className="space-y-6">
       <PageHeader lastUpdated={lastUpdated} onRefresh={onRefresh} isRefreshing={isRefreshing} />
-      {/* Filters */}
-      <div className="sticky top-0 z-10 bg-white/90 backdrop-blur supports-[backdrop-filter]:bg-white/70 border-b py-2">
+      {/* Filters – desktop */}
+      <div className="sticky top-0 z-10 bg-white/90 backdrop-blur supports-[backdrop-filter]:bg-white/70 border-b py-2 hidden md:block">
         <div className="flex flex-wrap gap-3 items-end">
           <div className="grid">
             <label className="text-sm">Start</label>
@@ -298,6 +298,19 @@ export default function Analytics() {
           </div>
         </nav>
       </div>
+
+      {/* Filters – mobile collapsible */}
+      <MobileAnalyticsFilters
+        start={start}
+        setStart={setStart}
+        end={end}
+        setEnd={setEnd}
+        categories={categories}
+        setCategories={setCategories}
+        getCategories={getCategories}
+        tab={tab}
+        setTab={setTab}
+      />
 
       {/* KPI cards with mini sparklines (Monthly, Annual) */}
       {(tab === "monthly" || tab === "annual") && (
@@ -705,6 +718,86 @@ export default function Analytics() {
           })()}
         </div>
       </section>
+      )}
+    </div>
+  );
+}
+
+// Collapsible mobile filter + tabs for Analytics
+function MobileAnalyticsFilters({
+  start,
+  setStart,
+  end,
+  setEnd,
+  categories,
+  setCategories,
+  getCategories,
+  tab,
+  setTab,
+}: {
+  start: string;
+  setStart: (v: string) => void;
+  end: string;
+  setEnd: (v: string) => void;
+  categories: string[];
+  setCategories: (v: string[]) => void;
+  getCategories: () => { id: string; name: string; type: "income" | "expense" }[];
+  tab: Tab;
+  setTab: (t: Tab) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="md:hidden sticky top-0 z-10 bg-white/90 backdrop-blur supports-[backdrop-filter]:bg-white/70 border-b py-2">
+      <button
+        className="px-3 py-2 border rounded w-full text-left bg-white"
+        onClick={() => setOpen((v) => !v)}
+      >
+        {open ? "Hide filters" : "Show filters"}
+      </button>
+      {open && (
+        <div className="mt-2 space-y-2">
+          <div className="grid grid-cols-2 gap-2">
+            <input
+              type="date"
+              className="border rounded px-3 py-2"
+              value={start}
+              onChange={(e) => setStart(e.target.value)}
+            />
+            <input
+              type="date"
+              className="border rounded px-3 py-2"
+              value={end}
+              onChange={(e) => setEnd(e.target.value)}
+            />
+          </div>
+          <CategorySelect
+            multiple
+            value={categories}
+            onChange={setCategories}
+            options={getCategories()}
+            className="w-full"
+            placeholder="All Categories"
+          />
+          <div className="pt-1">
+            <div className="flex gap-3 text-sm overflow-x-auto">
+              {([
+                ["monthly", "Monthly"],
+                ["annual", "Annual"],
+                ["breakdown", "Breakdown"],
+              ] as Array<[Tab, string]>).map(([key, label]) => (
+                <button
+                  key={key}
+                  onClick={() => setTab(key as Tab)}
+                  className={`px-2 py-1.5 rounded ${
+                    tab === key ? "bg-slate-900 text-white" : "bg-white border"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

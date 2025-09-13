@@ -129,7 +129,8 @@ export default function TransactionsPage() {
       <div className="mb-3">
         <PageHeader lastUpdated={lastUpdated} onRefresh={onRefresh} isRefreshing={isRefreshing} />
       </div>
-      <div className="flex gap-3 mb-3">
+      {/* Filters – desktop */}
+      <div className="hidden md:flex gap-3 mb-3">
         <input
           className="border rounded px-3 py-2 flex-1"
           placeholder="Search by category or description..."
@@ -155,6 +156,17 @@ export default function TransactionsPage() {
           placeholder="All Categories"
         />
       </div>
+
+      {/* Filters – mobile toggle */}
+      <MobileFilters
+        q={q}
+        setQ={setQ}
+        type={type}
+        setType={setType}
+        categories={categories}
+        setCategories={setCategories}
+        getCategories={getCategories}
+      />
 
       <div className="ml-auto text-sm flex items-center gap-3">
         <div>
@@ -206,8 +218,138 @@ export default function TransactionsPage() {
       ) : filtered.length === 0 ? (
         <div className="text-neutral-500">No transactions found</div>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-sm">
+        <>
+          {/* Mobile list */}
+          <div className="md:hidden space-y-2">
+            {pageRows.map((r: Tx, i: number) => {
+              const isEdit = editingId === r.id;
+              return (
+                <div key={r.id || i} className="rounded border bg-white p-3">
+                  {!isEdit ? (
+                    <div className="flex items-start gap-2">
+                      <div className="flex-1">
+                        <div className="text-xs text-slate-500">{r.date}</div>
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`h-2.5 w-2.5 rounded-full ${
+                              r.type === "income" ? "bg-emerald-500" : "bg-rose-500"
+                            }`}
+                          />
+                          <span className="font-medium">{r.category}</span>
+                        </div>
+                        {r.description ? (
+                          <div className="text-sm text-slate-600 mt-1">{r.description}</div>
+                        ) : null}
+                      </div>
+                      <div className={`text-right font-semibold ${
+                        r.type === "income" ? "text-emerald-600" : "text-rose-600"
+                      }`}>
+                        {fmtUSDSigned(r.amount, r.type)}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="grid grid-cols-2 gap-2">
+                        <input
+                          type="date"
+                          className="border rounded px-2 py-1 text-sm"
+                          value={draft?.date || r.date}
+                          onChange={(e) => setDraft((d) => ({ ...(d as any), date: e.target.value }))}
+                        />
+                        <select
+                          className="border rounded px-2 py-1 text-sm"
+                          value={draft?.type || r.type}
+                          onChange={(e) => setDraft((d) => ({ ...(d as any), type: e.target.value as any }))}
+                        >
+                          <option value="income">Income</option>
+                          <option value="expense">Expense</option>
+                        </select>
+                      </div>
+                      <CategorySelect
+                        multiple={false}
+                        value={draft?.category || r.category}
+                        onChange={(val: any) => setDraft((d) => ({ ...(d as any), category: val }))}
+                        options={getCategories()}
+                        className="w-full"
+                        placeholder="Category"
+                      />
+                      <input
+                        className="border rounded px-2 py-1 text-sm w-full"
+                        value={draft?.description ?? r.description ?? ""}
+                        onChange={(e) => setDraft((d) => ({ ...(d as any), description: e.target.value }))}
+                        placeholder="Description"
+                      />
+                      <input
+                        type="number"
+                        step="0.01"
+                        className="border rounded px-2 py-1 text-sm w-full text-right"
+                        value={draft?.amount ?? r.amount}
+                        onChange={(e) => setDraft((d) => ({ ...(d as any), amount: Number(e.target.value) }))}
+                      />
+                    </div>
+                  )}
+                  {r.id && (
+                    <div className="mt-2 text-right">
+                      {!isEdit ? (
+                        <button
+                          className="px-2 py-1 rounded border text-xs"
+                          onClick={() => {
+                            setEditingId(r.id!);
+                            setDraft({
+                              date: r.date,
+                              type: r.type,
+                              category: r.category,
+                              description: r.description,
+                              amount: r.amount,
+                            });
+                          }}
+                        >
+                          Edit
+                        </button>
+                      ) : (
+                        <div className="inline-flex gap-2">
+                          <button
+                            className="px-2 py-1 rounded bg-slate-900 text-white text-xs disabled:opacity-50"
+                            disabled={saving}
+                            onClick={async () => {
+                              if (!draft) return;
+                              setSaving(true);
+                              try {
+                                await updateTransaction({ id: r.id!, ...draft });
+                                await refresh();
+                                setEditingId(null);
+                                setDraft(null);
+                              } catch (e) {
+                                alert("Failed to save changes");
+                                console.error(e);
+                              } finally {
+                                setSaving(false);
+                              }
+                            }}
+                          >
+                            Save
+                          </button>
+                          <button
+                            className="px-2 py-1 rounded border text-xs"
+                            onClick={() => {
+                              setEditingId(null);
+                              setDraft(null);
+                            }}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Desktop table */}
+          <div className="overflow-x-auto hidden md:block">
+            <table className="min-w-full text-sm">
             <thead className="text-left border-b">
               <tr>
                 {([
@@ -388,6 +530,65 @@ export default function TransactionsPage() {
               })}
             </tbody>
           </table>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// Collapsible mobile filter controls
+function MobileFilters({
+  q,
+  setQ,
+  type,
+  setType,
+  categories,
+  setCategories,
+  getCategories,
+}: {
+  q: string;
+  setQ: (v: string) => void;
+  type: "" | "income" | "expense";
+  setType: (t: "" | "income" | "expense") => void;
+  categories: string[];
+  setCategories: (v: string[]) => void;
+  getCategories: () => { id: string; name: string; type: "income" | "expense" }[];
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="md:hidden mb-3">
+      <button
+        className="px-3 py-2 border rounded w-full text-left bg-white"
+        onClick={() => setOpen((v) => !v)}
+      >
+        {open ? "Hide filters" : "Show filters"}
+      </button>
+      {open && (
+        <div className="mt-2 space-y-2">
+          <input
+            className="border rounded px-3 py-2 w-full"
+            placeholder="Search by category or description..."
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+          />
+          <select
+            className="border rounded px-3 py-2 w-full"
+            value={type}
+            onChange={(e) => setType(e.target.value as any)}
+          >
+            <option value="">All Types</option>
+            <option value="income">Income</option>
+            <option value="expense">Expense</option>
+          </select>
+          <CategorySelect
+            multiple
+            value={categories}
+            onChange={setCategories}
+            options={getCategories()}
+            className="w-full"
+            placeholder="All Categories"
+          />
         </div>
       )}
     </div>
