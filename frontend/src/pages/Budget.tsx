@@ -230,55 +230,105 @@ export default function Budget() {
         </div>
       </div>
 
-      {/* Table */}
+      {/* Breakdown */}
       <div className="rounded-lg border bg-white p-4">
         <div className="text-sm font-medium mb-3">Breakdown</div>
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-sm">
-            <thead>
-              <tr className="text-left text-slate-500">
-                <th className="py-2 pr-4">Category</th>
-                <th className="py-2 pr-4">Budget</th>
-                <th className="py-2 pr-4">Actual</th>
-                <th className="py-2 pr-4">Remaining</th>
-                <th className="py-2 px-3 w-1/5">Methodology</th>
-                <th className="py-2">Usage</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => {
-                const pct = r.budget
-                  ? Math.min(1, (r.actual || 0) / r.budget)
-                  : r.actual > 0
-                    ? 1
-                    : 0;
-                const color =
-                  pct < 0.8 ? "bg-emerald-500" : pct <= 1 ? "bg-amber-500" : "bg-rose-500";
-                return (
-                  <tr key={r.category} className="border-t">
-                    <td className="py-2 pr-4">{r.category}</td>
-                    <td className="py-2 pr-4">{fmtUSD(r.budget)}</td>
-                    <td className="py-2 pr-4">{fmtUSD(r.actual)}</td>
-                    <td className="py-2 pr-4">{fmtUSD(r.remaining)}</td>
-                    <td className="py-2 px-3 text-slate-500">{methodLabel(r.source)}</td>
-                    <td className="py-2">
-                      <div className="h-2 w-40 bg-slate-200 rounded">
-                        <div
-                          className={`h-2 rounded ${color}`}
-                          style={{ width: `${pct * 100}%` }}
-                        />
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+        {/* Mobile: stacked cards */}
+        <div className="md:hidden space-y-2">
+          {rows.map((r) => {
+            const pct = r.budget
+              ? Math.min(1, (r.actual || 0) / r.budget)
+              : r.actual > 0
+                ? 1
+                : 0;
+            const color = pct < 0.8 ? "bg-emerald-500" : pct <= 1 ? "bg-amber-500" : "bg-rose-500";
+            return (
+              <div key={r.category} className="border rounded p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="font-medium truncate">{r.category}</div>
+                    <div className="text-xs text-slate-500 mt-0.5">{methodLabel(r.source)}</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-xs text-slate-500">Remaining</div>
+                    <div className="font-semibold">{fmtUSD(r.remaining)}</div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-2 mt-2 text-sm">
+                  <div>
+                    <div className="text-xs text-slate-500">Budget</div>
+                    <div className="font-medium">{fmtUSD(r.budget)}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-slate-500">Actual</div>
+                    <div className="font-medium">{fmtUSD(r.actual)}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-slate-500">Usage</div>
+                    <div className="mt-1 h-2 w-full bg-slate-200 rounded">
+                      <div className={`h-2 rounded ${color}`} style={{ width: `${pct * 100}%` }} />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
           {data?.overAllocated ? (
-            <div className="text-xs text-rose-600 mt-3">
+            <div className="text-xs text-rose-600 mt-2">
               Note: budgets are over-allocated (Miscellaneous went below 0).
             </div>
           ) : null}
+        </div>
+
+        {/* Desktop: table */}
+        <div className="hidden md:block">
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="text-left text-slate-500">
+                  <th className="py-2 pr-4">Category</th>
+                  <th className="py-2 pr-4">Budget</th>
+                  <th className="py-2 pr-4">Actual</th>
+                  <th className="py-2 pr-4">Remaining</th>
+                  <th className="py-2 px-3 w-1/5">Methodology</th>
+                  <th className="py-2">Usage</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => {
+                  const pct = r.budget
+                    ? Math.min(1, (r.actual || 0) / r.budget)
+                    : r.actual > 0
+                      ? 1
+                      : 0;
+                  const color =
+                    pct < 0.8 ? "bg-emerald-500" : pct <= 1 ? "bg-amber-500" : "bg-rose-500";
+                  return (
+                    <tr key={r.category} className="border-t">
+                      <td className="py-2 pr-4">{r.category}</td>
+                      <td className="py-2 pr-4">{fmtUSD(r.budget)}</td>
+                      <td className="py-2 pr-4">{fmtUSD(r.actual)}</td>
+                      <td className="py-2 pr-4">{fmtUSD(r.remaining)}</td>
+                      <td className="py-2 px-3 text-slate-500">{methodLabel(r.source)}</td>
+                      <td className="py-2">
+                        <div className="h-2 w-40 bg-slate-200 rounded">
+                          <div
+                            className={`h-2 rounded ${color}`}
+                            style={{ width: `${pct * 100}%` }}
+                          />
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            {data?.overAllocated ? (
+              <div className="text-xs text-rose-600 mt-3">
+                Note: budgets are over-allocated (Miscellaneous went below 0).
+              </div>
+            ) : null}
+          </div>
         </div>
       </div>
 
