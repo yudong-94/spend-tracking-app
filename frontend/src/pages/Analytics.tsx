@@ -187,9 +187,22 @@ export default function Analytics() {
     return [...by.entries()].map(([category, amount]) => ({ category, amount }));
   }, [filtered]);
 
-  // Removed aggregate totals; KPI cards pull "current" month directly from series
+  // Totals across the entire filtered period (used as primary KPI values)
+  const totals = useMemo(() => {
+    let totalIncome = 0;
+    let totalExpense = 0;
+    for (const r of filtered as Tx[]) {
+      if (r.type === "income") totalIncome += r.amount;
+      else totalExpense += r.amount;
+    }
+    const net = totalIncome - totalExpense;
+    return { totalIncome, totalExpense, net };
+  }, [filtered]);
 
-  // savingsRate previously computed here; replaced by per-period rate comparisons
+  // Savings rate over the filtered period (net ÷ income)
+  const periodRate = useMemo(() => {
+    return totals.totalIncome > 0 ? totals.net / totals.totalIncome : null;
+  }, [totals]);
 
   // (Overview removed) – no deltas computation needed
 
@@ -385,7 +398,7 @@ export default function Analytics() {
                     <span>Income</span>
                     <TooltipInfo text={tipIncome} />
                   </div>
-                  <div className="text-lg font-semibold text-emerald-600">{fmtUSD(cur.income)}</div>
+                  <div className="text-lg font-semibold text-emerald-600">{fmtUSD(totals.totalIncome)}</div>
                   <div className="text-xs text-slate-600 mt-1">
                     {label}: {fmtUSD(cur.income)} vs. {base ? fmtUSD(base.income) : "—"} (
                     {renderPct(vs?.income.pct ?? null, true)})
@@ -398,7 +411,7 @@ export default function Analytics() {
                     <span>Expense</span>
                     <TooltipInfo text={tipExpense} />
                   </div>
-                  <div className="text-lg font-semibold text-rose-600">{fmtUSD(cur.expense)}</div>
+                  <div className="text-lg font-semibold text-rose-600">{fmtUSD(totals.totalExpense)}</div>
                   <div className="text-xs text-slate-600 mt-1">
                     {label}: {fmtUSD(cur.expense)} vs. {base ? fmtUSD(base.expense) : "—"} (
                     {renderPct(vs?.expense.pct ?? null, false)})
@@ -411,8 +424,8 @@ export default function Analytics() {
                     <span>Net</span>
                     <TooltipInfo text={tipNet} />
                   </div>
-                  <div className={`text-lg font-semibold ${cur.net >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
-                    {fmtUSD(cur.net)}
+                  <div className={`text-lg font-semibold ${totals.net >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                    {fmtUSD(totals.net)}
                   </div>
                   <div className="text-xs text-slate-600 mt-1">
                     {label}: {fmtUSD(cur.net)} vs. {base ? fmtUSD(base.net) : "—"} (
@@ -431,8 +444,8 @@ export default function Analytics() {
                     const baseR = rateVal(base as any);
                     return (
                       <>
-                        <div className={`text-lg font-semibold ${curR != null && curR >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
-                          {curR == null ? "—" : percentFormatter(curR)}
+                        <div className={`text-lg font-semibold ${periodRate != null && periodRate >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                          {periodRate == null ? "—" : percentFormatter(periodRate)}
                         </div>
                         <div className="text-xs text-slate-600 mt-1">
                           {label}: {curR == null ? "—" : percentFormatter(curR)} vs. {baseR == null ? "—" : percentFormatter(baseR)} (
