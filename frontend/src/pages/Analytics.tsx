@@ -199,9 +199,7 @@ export default function Analytics() {
     return { totalIncome, totalExpense, net };
   }, [filtered]);
 
-  const savingsRate = useMemo(() => {
-    return totals.totalIncome > 0 ? totals.net / totals.totalIncome : null;
-  }, [totals]);
+  // savingsRate previously computed here; replaced by per-period rate comparisons
 
   // (Overview removed) – no deltas computation needed
 
