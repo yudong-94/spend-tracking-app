@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { listTransactions, listCategories, getBudget } from "@/lib/api";
 import type { Category, TransactionResponse, BudgetResponse } from "@/lib/api";
 import { useAuth } from "@/state/auth";
@@ -93,6 +93,17 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
   const [budget, setBudget] = useState<BudgetResp | null>(null);
   const [isBudgetLoading, setBudgetLoading] = useState(false);
   const [budgetLastSyncAt, setBudgetLastSyncAt] = useState<number | undefined>();
+  const budgetRef = useRef<BudgetResp | null>(null);
+  const budgetSyncRef = useRef<number | undefined>();
+
+  useEffect(() => {
+    budgetRef.current = budget;
+  }, [budget]);
+
+  useEffect(() => {
+    budgetSyncRef.current = budgetLastSyncAt;
+  }, [budgetLastSyncAt]);
+
 
   const refresh = useCallback(async () => {
     if (!token) {
@@ -206,11 +217,13 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
         !persisted.categories?.length;
       if (stale) void refresh();
       // prefetch budget too
+      const cachedBudget = budgetRef.current;
+      const cachedBudgetSyncAt = budgetSyncRef.current ?? 0;
       const budgetStale =
-        !budget || !budgetLastSyncAt || Date.now() - budgetLastSyncAt > BUDGET_STALE_MS;
+        !cachedBudget || !cachedBudgetSyncAt || Date.now() - cachedBudgetSyncAt > BUDGET_STALE_MS;
       if (budgetStale) void refreshBudget();
     }
-  }, [token, refresh, budget, budgetLastSyncAt, refreshBudget]);
+  }, [token, refresh, refreshBudget]);
 
   // Optimistic local add (used after POST)
   const addLocal = useCallback(
