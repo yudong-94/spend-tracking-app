@@ -1,36 +1,12 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { listTransactions, listCategories, getBudget } from "@/lib/api";
-import type { Category } from "@/lib/api";
+import type { Category, TransactionResponse, BudgetResponse } from "@/lib/api";
 import { useAuth } from "@/state/auth";
 
-export type Tx = {
-  id?: string;
-  date: string; // YYYY-MM-DD
-  type: "income" | "expense";
-  category: string;
-  description?: string;
-  amount: number;
-};
+export type Tx = TransactionResponse;
 
 // Minimal shape for Budget response (current month)
-export type BudgetResp = {
-  month: string;
-  totalBudget: number;
-  totalActualMTD: number;
-  totalRemaining: number;
-  manualTotal: number;
-  manualNote: string;
-  overAllocated: boolean;
-  series: Array<{ day: number; cumActual: number | null }>;
-  rows: Array<{
-    category: string;
-    budget: number;
-    actual: number;
-    remaining: number;
-    source: "avg-12" | "last-month" | "derived";
-  }>;
-  manualItems?: Array<{ amount: number; notes: string }>;
-};
+export type BudgetResp = BudgetResponse;
 
 type Ctx = {
   txns: Tx[];
@@ -94,14 +70,17 @@ function loadFromStorage(): PersistShape | null {
     const raw = localStorage.getItem(LS_KEY);
     if (!raw) return null;
     return JSON.parse(raw) as PersistShape;
-  } catch {
+  } catch (error) {
+    console.debug("Unable to read cached transactions", error);
     return null;
   }
 }
 function saveToStorage(txns: Tx[], lastSyncAt: number, categories: Category[]) {
   try {
     localStorage.setItem(LS_KEY, JSON.stringify({ txns, lastSyncAt, categories }));
-  } catch {}
+  } catch (error) {
+    console.debug("Unable to persist cached transactions", error);
+  }
 }
 
 export function DataCacheProvider({ children }: { children: React.ReactNode }) {
@@ -109,7 +88,6 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
   const [txns, setTxns] = useState<Tx[]>([]);
   const [isLoading, setLoading] = useState(true);
   const [lastSyncAt, setLastSyncAt] = useState<number | undefined>();
-  const [lastError, setLastError] = useState<string | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   // Budget state (current month)
   const [budget, setBudget] = useState<BudgetResp | null>(null);
@@ -123,39 +101,36 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     setLoading(true);
-    setLastError(null);
     try {
       const [rows, cats] = await Promise.all([listTransactions({}), listCategories()]);
-      setTxns(rows as Tx[]);
+      setTxns(rows);
 
       // If Categories sheet is empty for some reason, derive fallback from txns
-      const fallback =
-        (rows as Tx[])?.reduce((acc, r) => {
-          const key = `${r.type}:${r.category}`;
-          if (!acc.has(key)) acc.set(key, { id: key, name: r.category, type: r.type });
-          return acc;
-        }, new Map<string, { id: string; name: string; type: "income" | "expense" }>()) ??
-        new Map();
-      const usableCats = (cats as any[])?.length ? (cats as any[]) : Array.from(fallback.values());
+      const fallback = rows.reduce((acc, r) => {
+        const key = `${r.type}:${r.category}`;
+        if (!acc.has(key)) acc.set(key, { id: key, name: r.category, type: r.type });
+        return acc;
+      }, new Map<string, Category>());
+      const usableCats = cats.length ? cats : Array.from(fallback.values());
 
-      setCategories(usableCats as Category[]);
+      setCategories(usableCats);
       const ts = Date.now();
       setLastSyncAt(ts);
-      saveToStorage(rows as Tx[], ts, usableCats as Category[]);
-    } catch (e: any) {
+      saveToStorage(rows, ts, usableCats);
+    } catch (error) {
       // Missing key: just stop; AccessGate will show if token isn’t set
-      if (e?.code === "NO_KEY" || e?.message === "missing_access_key") {
-        setLastError("no-key");
+      if (
+        error instanceof Error &&
+        (error.message === "missing_access_key" || (error as { code?: string }).code === "NO_KEY")
+      ) {
         return;
       }
       // Server says unauthorized -> wipe key so gate re-appears
-      if (e?.status === 401) {
-        setLastError("unauthorized");
+      if ((error as { status?: number }).status === 401) {
         clear();
         return;
       }
-      setLastError("fetch-failed");
-      console.error(e);
+      console.error(error);
     } finally {
       setLoading(false);
     }
@@ -178,7 +153,9 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
         setBudget(b.data);
         setBudgetLastSyncAt(b.ts);
       }
-    } catch {}
+    } catch (error) {
+      console.debug("Unable to hydrate budget cache", error);
+    }
     if (!token) {
       // no token -> ensure not “stuck” loading
       setLoading(false);
@@ -194,9 +171,9 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
       // prefetch budget too
       const budgetStale =
         !budget || !budgetLastSyncAt || Date.now() - budgetLastSyncAt > BUDGET_STALE_MS;
-      if (budgetStale) void (async () => await refreshBudget())();
+      if (budgetStale) void refreshBudget();
     }
-  }, [token, refresh]);
+  }, [token, refresh, budget, budgetLastSyncAt, refreshBudget]);
 
   const sortCats = (a: Category, b: Category) => {
     if (a.type !== b.type) return a.type === "expense" ? -1 : 1; // expenses first
@@ -218,15 +195,17 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
     setBudgetLoading(true);
     try {
       const d = await getBudget();
-      setBudget(d as BudgetResp);
+      setBudget(d);
       const ts = Date.now();
       setBudgetLastSyncAt(ts);
       try {
         localStorage.setItem(LS_BUDGET_KEY, JSON.stringify({ data: d, ts }));
-      } catch {}
-    } catch (e: any) {
-      if (e?.status === 401) clear();
-      console.error(e);
+      } catch (error) {
+        console.debug("Unable to persist budget cache", error);
+      }
+    } catch (error) {
+      if ((error as { status?: number }).status === 401) clear();
+      console.error(error);
     } finally {
       setBudgetLoading(false);
     }
@@ -323,7 +302,6 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
       txns,
       isLoading,
       lastSyncAt,
-      lastError,
       refresh,
       addLocal,
       removeLocal,

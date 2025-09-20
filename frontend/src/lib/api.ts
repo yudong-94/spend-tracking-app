@@ -26,12 +26,12 @@ function withAuth(init: RequestInit = {}): RequestInit {
   };
 }
 
-async function jsonOrThrow(res: Response) {
+async function jsonOrThrow<T>(res: Response): Promise<T> {
   if (!res.ok) {
     const err = new Error(`http_${res.status}`);
     throw Object.assign(err, { status: res.status });
   }
-  return res.json();
+  return res.json() as Promise<T>;
 }
 
 export type NewTransaction = {
@@ -40,6 +40,34 @@ export type NewTransaction = {
   category: string;
   amount: number;
   description?: string;
+};
+
+export type TransactionResponse = {
+  id?: string;
+  date: string;
+  type: "income" | "expense";
+  category: string;
+  description?: string;
+  amount: number;
+};
+
+export type BudgetResponse = {
+  month: string;
+  totalBudget: number;
+  totalActualMTD: number;
+  totalRemaining: number;
+  manualTotal: number;
+  manualNote: string;
+  manualItems?: Array<{ amount: number; notes: string }>;
+  overAllocated: boolean;
+  series: Array<{ day: number; cumActual: number | null }>;
+  rows: Array<{
+    category: string;
+    budget: number;
+    actual: number;
+    remaining: number;
+    source: "avg-12" | "last-month" | "derived";
+  }>;
 };
 
 type Period = { start?: string; end?: string };
@@ -56,7 +84,7 @@ function buildUrl(path: string, params?: Record<string, string | number | undefi
 
 export async function listTransactions(period?: Period) {
   const res = await fetch(buildUrl("/api/transactions", period), withAuth());
-  return jsonOrThrow(res);
+  return jsonOrThrow<TransactionResponse[]>(res);
 }
 
 export type CreateTransactionResponse = { ok: true; id: string };
@@ -70,7 +98,7 @@ export async function createTransaction(tx: NewTransaction) {
       body: JSON.stringify(tx),
     }),
   );
-  return jsonOrThrow(res);
+  return jsonOrThrow<CreateTransactionResponse>(res);
 }
 
 export async function updateTransaction(input: Partial<NewTransaction> & { id: string }) {
@@ -82,52 +110,36 @@ export async function updateTransaction(input: Partial<NewTransaction> & { id: s
       body: JSON.stringify(input),
     }),
   );
-  return jsonOrThrow(res);
+  return jsonOrThrow<{ ok: true; id: string }>(res);
 }
 
 export async function deleteTransaction(id: string) {
   const res = await fetch(buildUrl("/api/transactions", { id }), withAuth({ method: "DELETE" }));
-  return jsonOrThrow(res);
+  return jsonOrThrow<{ ok: true; id: string }>(res);
 }
 
 export async function getSummary(period?: Period) {
   const res = await fetch(buildUrl("/api/summary", period), withAuth());
-  return jsonOrThrow(res);
+  return jsonOrThrow<{ totalIncome: number; totalExpense: number; netCashFlow: number }>(res);
 }
 
 export async function getBreakdown(type: "income" | "expense", period?: Period) {
   const res = await fetch(buildUrl("/api/breakdown", { type, ...period }), withAuth());
-  return jsonOrThrow(res);
+  return jsonOrThrow<Array<{ category: string; amount: number }>>(res);
 }
 
 export type Category = { id: string; name: string; type: "income" | "expense" };
 
 export async function listCategories() {
   const res = await fetch("/api/categories", withAuth());
-  return jsonOrThrow(res);
+  return jsonOrThrow<Category[]>(res);
 }
 
 export async function getBudget(month?: string) {
   const qs = month ? `?month=${encodeURIComponent(month)}` : "";
   const res = await fetch(`/api/budget${qs}`, { headers: withAuth({}).headers });
   if (!res.ok) throw new Error(`getBudget failed: ${res.status}`);
-  return res.json() as Promise<{
-    month: string;
-    totalBudget: number;
-    totalActualMTD: number;
-    totalRemaining: number;
-    manualTotal: number;
-    manualNote: string;
-    overAllocated: boolean;
-    series: Array<{ day: number; cumActual: number }>;
-    rows: Array<{
-      category: string;
-      budget: number;
-      actual: number;
-      remaining: number;
-      source: "avg-12" | "last-month" | "derived";
-    }>;
-  }>;
+  return res.json() as Promise<BudgetResponse>;
 }
 
 // Save/append a budget override for a month

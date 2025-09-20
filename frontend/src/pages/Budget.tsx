@@ -1,7 +1,8 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { Info, ChevronLeft, ChevronRight } from "lucide-react";
 import { getBudget, createBudgetOverride } from "@/lib/api";
 import { useDataCache } from "@/state/data-cache";
+import type { BudgetResp } from "@/state/data-cache";
 import PageHeader from "@/components/PageHeader";
 import { fmtUSD } from "@/lib/format";
 import { estimateYAxisWidthFromMax } from "@/lib/chart";
@@ -15,25 +16,7 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from "recharts";
-
-type BudgetResp = {
-  month: string;
-  totalBudget: number;
-  totalActualMTD: number;
-  totalRemaining: number;
-  manualTotal: number;
-  manualNote: string;
-  manualItems?: Array<{ amount: number; notes: string }>; // <-- add
-  overAllocated: boolean;
-  series: Array<{ day: number; cumActual: number }>;
-  rows: Array<{
-    category: string;
-    budget: number;
-    actual: number;
-    remaining: number;
-    source: "avg-12" | "last-month" | "derived";
-  }>;
-};
+import type { TooltipProps } from "recharts";
 
 export default function Budget() {
   const { budget, isBudgetLoading, refreshBudget } = useDataCache();
@@ -41,12 +24,15 @@ export default function Budget() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
+  const currencyTooltip: TooltipProps<number | string, string>["formatter"] = (value) =>
+    fmtUSD(typeof value === "number" ? value : Number(value));
+
   const now = new Date();
   const monthKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
   const CUR_MONTH = monthKey(now);
   const [selectedMonth, setSelectedMonth] = useState<string>(CUR_MONTH);
 
-  const fetchIt = async (m?: string) => {
+  const fetchIt = useCallback(async (m?: string) => {
     try {
       setLoading(true);
       setErr(null);
@@ -55,39 +41,39 @@ export default function Budget() {
         await refreshBudget();
       } else {
         const d = await getBudget(target);
-        setData(d as BudgetResp);
+        setData(d);
       }
-    } catch (e: any) {
-      setErr(e?.message || "Failed");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed";
+      setErr(message);
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedMonth, CUR_MONTH, refreshBudget]);
 
   useEffect(() => {
     // If cache already has data, use it; otherwise prefetch
     if (budget) {
-      setData(budget as BudgetResp);
-      setSelectedMonth((budget as BudgetResp).month || CUR_MONTH);
+      setData(budget);
+      setSelectedMonth(budget.month || CUR_MONTH);
     } else void fetchIt(CUR_MONTH);
     // keep in sync with provider updates
-  }, []);
+  }, [budget, CUR_MONTH, fetchIt]);
 
   useEffect(() => {
-    if (budget) setData(budget as BudgetResp);
+    if (budget) setData(budget);
   }, [budget]);
 
   // When switching months, load appropriate data
   useEffect(() => {
     if (!selectedMonth) return;
     if (selectedMonth === CUR_MONTH) {
-      if (budget) setData(budget as BudgetResp);
+      if (budget) setData(budget);
       else void fetchIt(CUR_MONTH);
     } else {
       void fetchIt(selectedMonth);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedMonth]);
+  }, [selectedMonth, CUR_MONTH, budget, fetchIt]);
 
   const totalBudget = data?.totalBudget ?? 0;
   const cards: Array<{ label: string; value: string; note?: string }> = [
@@ -116,7 +102,9 @@ export default function Budget() {
     if (data.month !== thisMonthKey) return data.series; // historical month -> show full series
     const today = now.getDate();
     // Recharts breaks the line on null/undefined, so null out future points
-    return data.series.map((p: any) => (p.day <= today ? p : { ...p, cumActual: null }));
+    return data.series.map((point) =>
+      point.day <= today ? point : { ...point, cumActual: null },
+    );
   }, [data]);
 
   const rows = data?.rows ?? [];
@@ -209,12 +197,12 @@ export default function Budget() {
                 width={(() => {
                   const maxVal = Math.max(
                     totalBudget || 0,
-                    ...seriesForChart.map((p: any) => Math.abs(Number(p?.cumActual || 0))),
+                    ...seriesForChart.map((point) => Math.abs(Number(point.cumActual || 0))),
                   );
                   return Math.max(56, estimateYAxisWidthFromMax(maxVal, fmtUSD));
                 })()}
               />
-              <Tooltip formatter={(v: number) => fmtUSD(Number(v))} />
+              <Tooltip formatter={currencyTooltip} />
               <Line type="monotone" dataKey="cumActual" stroke="#2563eb" dot={false} />
               <ReferenceLine
                 y={totalBudget}

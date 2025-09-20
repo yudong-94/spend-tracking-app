@@ -2,8 +2,8 @@ import { google } from "googleapis";
 
 const SCOPES = ["https://www.googleapis.com/auth/spreadsheets"];
 
-type SheetPrimitive = string | number | boolean | null | undefined;
-type SheetRowObject = Record<string, SheetPrimitive>;
+export type SheetPrimitive = string | number | boolean | null | undefined;
+export type SheetRowObject = Record<string, SheetPrimitive>;
 type SheetMatrix = SheetPrimitive[][];
 
 function getCreds() {

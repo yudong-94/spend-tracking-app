@@ -1,6 +1,7 @@
 // frontend/src/pages/AddTransaction.tsx
 import { useMemo, useState } from "react";
 import { useDataCache } from "@/state/data-cache";
+import type { Tx } from "@/state/data-cache";
 import CurrencyInput from "@/components/CurrencyInput";
 import CategorySelect from "@/components/CategorySelect";
 import { createTransaction } from "@/lib/api";
@@ -46,15 +47,13 @@ export default function AddTransaction() {
 
   // Quick presets: last 6 used categories; fallback to first 6 expense cats if no history
   const presets = useMemo(() => {
-    const recent: Array<{ name: string; type: "income" | "expense" }> = [];
+    const recent: Array<{ name: string; type: Tx["type"] }> = [];
     const seen = new Set<string>();
 
     // txns from our API are already normalized: { date, type, category, ... }
-    for (const r of txns as any[]) {
-      const name = String(r?.category ?? "").trim();
-      const type = (String(r?.type ?? "").trim().toLowerCase() as
-        | "income"
-        | "expense") as "income" | "expense";
+    for (const r of txns) {
+      const name = r.category.trim();
+      const type = r.type;
       if (!name || (type !== "income" && type !== "expense")) continue;
       if (!seen.has(name)) {
         seen.add(name);
@@ -95,7 +94,7 @@ export default function AddTransaction() {
     }
 
     setErrors({});
-    const res = await createTransaction({
+    const { id } = await createTransaction({
       date: form.Date,
       type: form.Type,
       category,
@@ -103,17 +102,14 @@ export default function AddTransaction() {
       description: form.Description || undefined,
     });
     // Optimistic local cache add with returned id
-    try {
-      const id = (res as any)?.id as string | undefined;
-      addLocal({
-        id,
-        date: form.Date,
-        type: form.Type,
-        category,
-        amount: Amount,
-        description: form.Description || undefined,
-      });
-    } catch {}
+    addLocal({
+      id,
+      date: form.Date,
+      type: form.Type,
+      category,
+      amount: Amount,
+      description: form.Description || undefined,
+    });
     setForm((f) => ({ ...f, Amount: 0, Description: "" }));
     // Background refresh to sync with server state
     void refresh?.();

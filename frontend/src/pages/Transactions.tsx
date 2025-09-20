@@ -28,19 +28,24 @@ export default function TransactionsPage() {
   );
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [draft, setDraft] = useState<
-    | null
-    | {
-        date: string;
-        type: "income" | "expense";
-        category: string;
-        description?: string;
-        amount: number;
-      }
-  >(null);
+  type DraftTx = {
+    date: string;
+    type: "income" | "expense";
+    category: string;
+    description?: string;
+    amount: number;
+  };
+  const [draft, setDraft] = useState<DraftTx | null>(null);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [quickRange, setQuickRange] = useState<QuickRangeKey | "custom">("all");
+
+  const parseTypeValue = (value: string): "" | "income" | "expense" =>
+    value === "income" || value === "expense" ? value : "";
+
+  const updateDraft = (patch: Partial<DraftTx>) => {
+    setDraft((prev) => (prev ? { ...prev, ...patch } : prev));
+  };
 
   // Persist sort + page size
   const LS_KEY = "tx-table-state-v1";
@@ -71,8 +76,9 @@ export default function TransactionsPage() {
         if (typeof s.end === "string") setEnd(s.end);
         setQuickRange("custom");
       }
-    } catch {}
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    } catch (error) {
+      console.debug("Unable to load transactions table state", error);
+    }
   }, []);
   useEffect(() => {
     try {
@@ -80,7 +86,9 @@ export default function TransactionsPage() {
         LS_KEY,
         JSON.stringify({ sortBy, sortDir, pageSize, start, end, quickRange }),
       );
-    } catch {}
+    } catch (error) {
+      console.debug("Unable to persist transactions table state", error);
+    }
   }, [sortBy, sortDir, pageSize, start, end, quickRange]);
 
   const applyQuickRange = (key: QuickRangeKey) => {
@@ -221,7 +229,7 @@ export default function TransactionsPage() {
           <select
             className="w-full border rounded px-3 py-2"
             value={type}
-            onChange={(e) => setType(e.target.value as any)}
+            onChange={(e) => setType(parseTypeValue(e.target.value))}
           >
             <option value="">All Types</option>
             <option value="income">Income</option>
@@ -333,12 +341,15 @@ export default function TransactionsPage() {
                           type="date"
                           className="border rounded px-2 py-1 text-sm"
                           value={draft?.date || r.date}
-                          onChange={(e) => setDraft((d) => ({ ...(d as any), date: e.target.value }))}
+                          onChange={(e) => updateDraft({ date: e.target.value })}
                         />
                         <select
                           className="border rounded px-2 py-1 text-sm"
                           value={draft?.type || r.type}
-                          onChange={(e) => setDraft((d) => ({ ...(d as any), type: e.target.value as any }))}
+                          onChange={(e) => {
+                            const value = e.target.value === "income" ? "income" : "expense";
+                            updateDraft({ type: value });
+                          }}
                         >
                           <option value="income">Income</option>
                           <option value="expense">Expense</option>
@@ -347,7 +358,9 @@ export default function TransactionsPage() {
                       <CategorySelect
                         multiple={false}
                         value={draft?.category || r.category}
-                        onChange={(val: any) => setDraft((d) => ({ ...(d as any), category: val }))}
+                        onChange={(val) => {
+                          if (typeof val === "string") updateDraft({ category: val });
+                        }}
                         options={getCategories()}
                         className="w-full"
                         placeholder="Category"
@@ -355,7 +368,7 @@ export default function TransactionsPage() {
                       <input
                         className="border rounded px-2 py-1 text-sm w-full"
                         value={draft?.description ?? r.description ?? ""}
-                        onChange={(e) => setDraft((d) => ({ ...(d as any), description: e.target.value }))}
+                        onChange={(e) => updateDraft({ description: e.target.value })}
                         placeholder="Description"
                       />
                       <input
@@ -363,7 +376,7 @@ export default function TransactionsPage() {
                         step="0.01"
                         className="border rounded px-2 py-1 text-sm w-full text-right"
                         value={draft?.amount ?? r.amount}
-                        onChange={(e) => setDraft((d) => ({ ...(d as any), amount: Number(e.target.value) }))}
+                        onChange={(e) => updateDraft({ amount: Number(e.target.value) })}
                       />
                     </div>
                   )}
@@ -493,7 +506,7 @@ export default function TransactionsPage() {
                           type="date"
                           className="border rounded px-2 py-1 text-sm"
                           value={draft?.date || r.date}
-                          onChange={(e) => setDraft((d) => ({ ...(d as any), date: e.target.value }))}
+                          onChange={(e) => updateDraft({ date: e.target.value })}
                         />
                       ) : (
                         r.date
@@ -504,9 +517,10 @@ export default function TransactionsPage() {
                         <select
                           className="border rounded px-2 py-1 text-sm"
                           value={draft?.type || r.type}
-                          onChange={(e) =>
-                            setDraft((d) => ({ ...(d as any), type: e.target.value as any }))
-                          }
+                          onChange={(e) => {
+                            const value = e.target.value === "income" ? "income" : "expense";
+                            updateDraft({ type: value });
+                          }}
                         >
                           <option value="income">Income</option>
                           <option value="expense">Expense</option>
@@ -527,7 +541,9 @@ export default function TransactionsPage() {
                         <CategorySelect
                           multiple={false}
                           value={draft?.category || r.category}
-                          onChange={(val: any) => setDraft((d) => ({ ...(d as any), category: val }))}
+                          onChange={(val) => {
+                            if (typeof val === "string") updateDraft({ category: val });
+                          }}
                           options={getCategories()}
                           className="w-48"
                           placeholder="Category"
@@ -541,9 +557,7 @@ export default function TransactionsPage() {
                         <input
                           className="border rounded px-2 py-1 text-sm w-60"
                           value={draft?.description ?? r.description ?? ""}
-                          onChange={(e) =>
-                            setDraft((d) => ({ ...(d as any), description: e.target.value }))
-                          }
+                          onChange={(e) => updateDraft({ description: e.target.value })}
                         />
                       ) : (
                         r.description
@@ -556,9 +570,7 @@ export default function TransactionsPage() {
                           step="0.01"
                           className="border rounded px-2 py-1 text-sm w-28 text-right"
                           value={draft?.amount ?? r.amount}
-                          onChange={(e) =>
-                            setDraft((d) => ({ ...(d as any), amount: Number(e.target.value) }))
-                          }
+                          onChange={(e) => updateDraft({ amount: Number(e.target.value) })}
                         />
                       ) : (
                         <span className={r.type === "income" ? "text-emerald-600" : "text-rose-600"}>
@@ -705,12 +717,12 @@ function MobileFilters({
         <div className="mt-2 space-y-2">
           <input
             type="date"
-            className="border rounded px-3 py-2 w-full"
-            value={start}
-            onChange={(e) => {
-              setQuickRange("custom");
-              setStart(e.target.value);
-            }}
+              className="border rounded px-3 py-2 w-full"
+              value={start}
+              onChange={(e) => {
+                setQuickRange("custom");
+                setStart(e.target.value);
+              }}
           />
           <input
             type="date"
@@ -747,7 +759,7 @@ function MobileFilters({
           <select
             className="border rounded px-3 py-2 w-full"
             value={type}
-            onChange={(e) => setType(e.target.value as any)}
+            onChange={(e) => setType(parseTypeValue(e.target.value))}
           >
             <option value="">All Types</option>
             <option value="income">Income</option>

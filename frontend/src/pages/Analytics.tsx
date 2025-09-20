@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useDataCache } from "@/state/data-cache";
+import type { Tx } from "@/state/data-cache";
 import { fmtUSD } from "@/lib/format";
 import { COL } from "@/lib/colors";
 import PageHeader from "@/components/PageHeader";
@@ -16,6 +17,7 @@ import {
   Line,
   Legend,
 } from "recharts";
+import type { TooltipProps } from "recharts";
 import { estimateYAxisWidthFromMax, percentFormatter } from "@/lib/chart";
 import CombinedMonthlyChart from "@/components/CombinedMonthlyChart";
 import {
@@ -26,20 +28,23 @@ import {
 } from "@/lib/date-range";
 
 // Tooltip for savings rate charts
+type SavingsTooltipPayload = TooltipProps<number | string, string>["payload"];
+
 function RateTooltip({
   active,
   payload,
   label,
 }: {
   active?: boolean;
-  payload?: any[];
-  label?: any;
+  payload?: SavingsTooltipPayload;
+  label?: string;
 }) {
   if (!active || !payload || payload.length === 0) return null;
-  const v = Number(payload[0]?.value);
+  const rawValue = payload[0]?.value;
+  const v = typeof rawValue === "number" ? rawValue : Number(rawValue);
   return (
     <div className="rounded border bg-white p-2 text-sm shadow">
-      <div className="font-medium">{String(label)}</div>
+      <div className="font-medium">{label ?? ""}</div>
       <div>Saving rate: {Number.isFinite(v) ? percentFormatter(v) : "—"}</div>
       <div className="mt-1 text-xs text-slate-500">
         Formula: net ÷ income. Years with zero income are omitted.
@@ -47,10 +52,11 @@ function RateTooltip({
     </div>
   );
 }
-
-type Tx = { date: string; type: "income" | "expense"; category: string; amount: number };
 type Point = { month: string; income: number; expense: number; net: number };
 type YearPoint = { year: string; income: number; expense: number; net: number };
+
+const formatTooltipValue: TooltipProps<number | string, string>["formatter"] = (value) =>
+  fmtUSD(typeof value === "number" ? value : Number(value));
 
 const ym = (d: string) => d.slice(0, 7);
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -92,8 +98,9 @@ export default function Analytics() {
       }
       if (Array.isArray(s.categories)) setCategories(s.categories);
       if (s.tab) setTab(s.tab);
-    } catch {}
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    } catch (error) {
+      console.debug("Unable to load analytics filters", error);
+    }
   }, []);
   useEffect(() => {
     try {
@@ -101,7 +108,9 @@ export default function Analytics() {
         LS_KEY,
         JSON.stringify({ start, end, categories, tab, quickRange }),
       );
-    } catch {}
+    } catch (error) {
+      console.debug("Unable to persist analytics filters", error);
+    }
   }, [start, end, categories, tab, quickRange]);
 
   const applyQuickRange = (key: QuickRangeKey) => {
@@ -125,7 +134,7 @@ export default function Analytics() {
 
   // Existing filtered series for the bar charts (respects start/end + category)
   const filtered = useMemo<Tx[]>(() => {
-    return all.filter((r: Tx) => {
+    return all.filter((r) => {
       if (start && r.date < start) return false;
       if (end && r.date > end) return false;
       if (categories.length && !categories.includes(r.category)) return false;
@@ -161,14 +170,20 @@ export default function Analytics() {
         }
       : undefined;
 
-    const rate = (p: Point | { income: number; net: number }) =>
-      p.income > 0 ? p.net / p.income : null;
+    const rate = (p?: { income: number; net: number } | null) =>
+      p && p.income > 0 ? p.net / p.income : null;
 
     const mk = (now: number, base?: number | null) => {
       if (base == null) return { diff: null as number | null, pct: null as number | null };
       const diff = now - base;
       const pct = base !== 0 ? diff / base : null;
       return { diff, pct };
+    };
+
+    const rateComparison = (base?: { income: number; net: number } | null) => {
+      const currentRate = rate(cur);
+      const baseRate = rate(base);
+      return currentRate != null && baseRate != null ? mk(currentRate, baseRate) : null;
     };
 
     return {
@@ -180,7 +195,7 @@ export default function Analytics() {
             income: mk(cur.income, prev.income),
             expense: mk(cur.expense, prev.expense),
             net: mk(cur.net, prev.net),
-            rate: mk((rate(cur) ?? 0) as number, rate(prev)),
+            rate: rateComparison(prev),
           }
         : null,
       vsAvg12: avg
@@ -188,7 +203,7 @@ export default function Analytics() {
             income: mk(cur.income, avg.income),
             expense: mk(cur.expense, avg.expense),
             net: mk(cur.net, avg.net),
-            rate: mk((rate(cur) ?? 0) as number, rate(avg as any)),
+            rate: rateComparison(avg),
           }
         : null,
     } as const;
@@ -197,7 +212,7 @@ export default function Analytics() {
   // Category breakdowns based on current filters
   const incomeCats = useMemo(() => {
     const by = new Map<string, number>();
-    for (const r of filtered as Tx[]) {
+    for (const r of filtered) {
       if (r.type !== "income") continue;
       by.set(r.category, (by.get(r.category) || 0) + r.amount);
     }
@@ -206,7 +221,7 @@ export default function Analytics() {
 
   const expenseCats = useMemo(() => {
     const by = new Map<string, number>();
-    for (const r of filtered as Tx[]) {
+    for (const r of filtered) {
       if (r.type !== "expense") continue;
       by.set(r.category, (by.get(r.category) || 0) + r.amount);
     }
@@ -217,7 +232,7 @@ export default function Analytics() {
   const totals = useMemo(() => {
     let totalIncome = 0;
     let totalExpense = 0;
-    for (const r of filtered as Tx[]) {
+    for (const r of filtered) {
       if (r.type === "income") totalIncome += r.amount;
       else totalExpense += r.amount;
     }
@@ -235,7 +250,7 @@ export default function Analytics() {
   // Annual aggregation (respects start/end + category like monthly)
   const annualSeries: YearPoint[] = useMemo<YearPoint[]>(() => {
     const by = new Map<string, YearPoint>();
-    for (const r of filtered as Tx[]) {
+    for (const r of filtered) {
       const key = r.date.slice(0, 4); // YYYY
       const p = by.get(key) ?? { year: key, income: 0, expense: 0, net: 0 };
       if (r.type === "income") p.income += r.amount;
@@ -267,7 +282,7 @@ export default function Analytics() {
       [lastYear]: Array(12).fill(0),
     };
 
-    for (const r of all as Tx[]) {
+    for (const r of all) {
       const y = Number(r.date.slice(0, 4));
       if (y !== thisYear && y !== lastYear) continue;
       if (categories.length && !categories.includes(r.category)) continue;
@@ -493,7 +508,7 @@ export default function Analytics() {
                   </div>
                   {(() => {
                     const curR = rateVal(cur);
-                    const baseR = rateVal(base as any);
+                    const baseR = base ? rateVal(base) : null;
                     return (
                       <>
                         <div className={`text-lg font-semibold ${periodRate != null && periodRate >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
@@ -602,7 +617,7 @@ export default function Analytics() {
                 )}
                 tickFormatter={(v: number) => fmtUSD(v)}
               />
-              <Tooltip formatter={(v: any) => fmtUSD(Number(v))} />
+          <Tooltip formatter={formatTooltipValue} />
               <Bar dataKey="income" fill={COL.income} radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
@@ -629,7 +644,7 @@ export default function Analytics() {
                 )}
                 tickFormatter={(v: number) => fmtUSD(v)}
               />
-              <Tooltip formatter={(v: any) => fmtUSD(Number(v))} />
+          <Tooltip formatter={formatTooltipValue} />
               <Bar dataKey="expense" fill={COL.expense} radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
@@ -656,7 +671,7 @@ export default function Analytics() {
                 )}
                 tickFormatter={(v: number) => fmtUSD(v)}
               />
-              <Tooltip formatter={(v: any) => fmtUSD(Number(v))} />
+          <Tooltip formatter={formatTooltipValue} />
               <Bar dataKey="net" fill={COL.net} radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
@@ -691,7 +706,7 @@ export default function Analytics() {
                 )}
                 tickFormatter={(v: number) => fmtUSD(v)}
               />
-              <Tooltip formatter={(v: any) => fmtUSD(Number(v))} />
+          <Tooltip formatter={formatTooltipValue} />
               <Bar dataKey="income" fill={COL.income} radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
@@ -718,7 +733,7 @@ export default function Analytics() {
                 )}
                 tickFormatter={(v: number) => fmtUSD(v)}
               />
-              <Tooltip formatter={(v: any) => fmtUSD(Number(v))} />
+          <Tooltip formatter={formatTooltipValue} />
               <Bar dataKey="expense" fill={COL.expense} radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
@@ -745,7 +760,7 @@ export default function Analytics() {
                 )}
                 tickFormatter={(v: number) => fmtUSD(v)}
               />
-              <Tooltip formatter={(v: any) => fmtUSD(Number(v))} />
+          <Tooltip formatter={formatTooltipValue} />
               <Bar dataKey="net" fill={COL.net} radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
@@ -819,7 +834,7 @@ export default function Analytics() {
                 )}
                 tickFormatter={(v: number) => fmtUSD(v)}
               />
-              <Tooltip formatter={(v: any) => fmtUSD(Number(v))} />
+              <Tooltip formatter={formatTooltipValue} />
               <Legend />
               <Line
                 type="monotone"
@@ -874,7 +889,7 @@ export default function Analytics() {
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis type="number" tickFormatter={(v: number) => fmtUSD(Number(v))} />
                     <YAxis type="category" dataKey="name" width={yCatWidth} tick={{ fontSize: 12 }} />
-                    <Tooltip formatter={(v: any) => fmtUSD(Number(v))} />
+                    <Tooltip formatter={formatTooltipValue} />
                     <Bar dataKey="amount" fill={COL.income} radius={[0, 4, 4, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
@@ -909,7 +924,7 @@ export default function Analytics() {
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis type="number" tickFormatter={(v: number) => fmtUSD(Number(v))} />
                     <YAxis type="category" dataKey="name" width={yCatWidth} tick={{ fontSize: 12 }} />
-                    <Tooltip formatter={(v: any) => fmtUSD(Number(v))} />
+                    <Tooltip formatter={formatTooltipValue} />
                     <Bar dataKey="amount" fill={COL.expense} radius={[0, 4, 4, 0]} />
                   </BarChart>
                 </ResponsiveContainer>

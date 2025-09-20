@@ -1,6 +1,12 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { requireAuth } from "./_lib/auth.js";
-import { readTable, appendRow, updateRowById, deleteRowById } from "./_lib/sheets.js";
+import {
+  readTable,
+  appendRow,
+  updateRowById,
+  deleteRowById,
+  type SheetRowObject,
+} from "./_lib/sheets.js";
 
 type Tx = {
   id?: string;
@@ -115,12 +121,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       const now = new Date();
-      const toSheetRow: Record<string, unknown> = {
+      const toSheetRow: SheetRowObject = {
         ID: id,
-        Date: date,
+        Date: typeof date === "string" ? date : "",
         Amount: amount,
         Type: type,
-        Category: category,
+        Category: typeof category === "string" ? category : "",
         Description: description,
         "Created At": now.toLocaleString(),
         "Updated At": now.toLocaleString(),
@@ -137,10 +143,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!id) return res.status(400).json({ error: "missing_id" });
 
       const pick = (k: string) => body?.[k] ?? body?.[k[0].toUpperCase() + k.slice(1)];
-      const patch: Record<string, unknown> = {};
-      if (pick("date")) patch["Date"] = pick("date");
-      if (pick("category")) patch["Category"] = pick("category");
-      if (pick("description") !== undefined) patch["Description"] = pick("description") || "";
+      const patch: Partial<SheetRowObject> = {};
+      const pickedDate = pick("date");
+      if (typeof pickedDate === "string" && pickedDate) patch["Date"] = pickedDate;
+      const pickedCategory = pick("category");
+      if (typeof pickedCategory === "string" && pickedCategory) patch["Category"] = pickedCategory;
+      const pickedDescription = pick("description");
+      if (pickedDescription !== undefined) patch["Description"] = String(pickedDescription ?? "");
       if (pick("amount") !== undefined) patch["Amount"] = parseAmount(pick("amount"));
       if (pick("type")) {
         const t = String(pick("type")).toLowerCase();

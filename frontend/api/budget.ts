@@ -188,7 +188,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Manual TOTAL override from Budgets tab (sum up all the overrides of the current month)
 
     let manualTotal = 0;
-    let manualItems: Array<{ amount: number; notes: string }> = [];
+    const manualItems: Array<{ amount: number; notes: string }> = [];
     let manualNote = ""; // keep for backward-compatible display
 
     try {
