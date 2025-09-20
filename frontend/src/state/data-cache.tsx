@@ -136,7 +136,44 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
     }
   }, [token, clear]);
 
-  // Initial hydrate from localStorage, load when token becomes available, then refresh if stale
+    const sortCats = (a: Category, b: Category) => {
+    if (a.type !== b.type) return a.type === "expense" ? -1 : 1; // expenses first
+    return a.name.localeCompare(b.name);
+  };
+
+  const getCategories = useCallback(
+    (type?: "income" | "expense") =>
+      (categories || [])
+        .filter((c) => !type || c.type === type)
+        .slice()
+        .sort(sortCats),
+    [categories],
+  );
+
+  // Prefetch and cache current-month budget
+  const refreshBudget = useCallback(async () => {
+    if (!token) return;
+    setBudgetLoading(true);
+    try {
+      const d = await getBudget();
+      setBudget(d);
+      const ts = Date.now();
+      setBudgetLastSyncAt(ts);
+      try {
+        localStorage.setItem(LS_BUDGET_KEY, JSON.stringify({ data: d, ts }));
+      } catch (error) {
+        console.debug("Unable to persist budget cache", error);
+      }
+    } catch (error) {
+      if ((error as { status?: number }).status === 401) clear();
+      console.error(error);
+    } finally {
+      setBudgetLoading(false);
+    }
+  }, [token, clear]);
+
+
+// Initial hydrate from localStorage, load when token becomes available, then refresh if stale
   useEffect(() => {
     // hydrate from localStorage immediately (no network)
     const persisted = loadFromStorage();
@@ -174,42 +211,6 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
       if (budgetStale) void refreshBudget();
     }
   }, [token, refresh, budget, budgetLastSyncAt, refreshBudget]);
-
-  const sortCats = (a: Category, b: Category) => {
-    if (a.type !== b.type) return a.type === "expense" ? -1 : 1; // expenses first
-    return a.name.localeCompare(b.name);
-  };
-
-  const getCategories = useCallback(
-    (type?: "income" | "expense") =>
-      (categories || [])
-        .filter((c) => !type || c.type === type)
-        .slice()
-        .sort(sortCats),
-    [categories],
-  );
-
-  // Prefetch and cache current-month budget
-  const refreshBudget = useCallback(async () => {
-    if (!token) return;
-    setBudgetLoading(true);
-    try {
-      const d = await getBudget();
-      setBudget(d);
-      const ts = Date.now();
-      setBudgetLastSyncAt(ts);
-      try {
-        localStorage.setItem(LS_BUDGET_KEY, JSON.stringify({ data: d, ts }));
-      } catch (error) {
-        console.debug("Unable to persist budget cache", error);
-      }
-    } catch (error) {
-      if ((error as { status?: number }).status === 401) clear();
-      console.error(error);
-    } finally {
-      setBudgetLoading(false);
-    }
-  }, [token, clear]);
 
   // Optimistic local add (used after POST)
   const addLocal = useCallback(

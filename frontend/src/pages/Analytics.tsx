@@ -17,7 +17,6 @@ import {
   Line,
   Legend,
 } from "recharts";
-import type { TooltipProps } from "recharts";
 import { estimateYAxisWidthFromMax, percentFormatter } from "@/lib/chart";
 import CombinedMonthlyChart from "@/components/CombinedMonthlyChart";
 import {
@@ -28,7 +27,15 @@ import {
 } from "@/lib/date-range";
 
 // Tooltip for savings rate charts
-type SavingsTooltipPayload = TooltipProps<number | string, string>["payload"];
+type SavingsTooltipPayload = Array<{ value?: number | string }>;
+
+type SimpleTooltipFormatter = (
+  value: number | string,
+  name: string,
+  payload: unknown,
+  index: number,
+) => string;
+
 
 function RateTooltip({
   active,
@@ -55,7 +62,7 @@ function RateTooltip({
 type Point = { month: string; income: number; expense: number; net: number };
 type YearPoint = { year: string; income: number; expense: number; net: number };
 
-const formatTooltipValue: TooltipProps<number | string, string>["formatter"] = (value) =>
+const formatTooltipValue: SimpleTooltipFormatter = (value) =>
   fmtUSD(typeof value === "number" ? value : Number(value));
 
 const ym = (d: string) => d.slice(0, 7);
@@ -516,7 +523,7 @@ export default function Analytics() {
                         </div>
                         <div className="text-xs text-slate-600 mt-1">
                           {label}: {curR == null ? "—" : percentFormatter(curR)} vs. {baseR == null ? "—" : percentFormatter(baseR)} (
-                          {fmtPP(vs?.rate.diff ?? null)})
+                          {fmtPP(vs?.rate?.diff ?? null)})
                         </div>
                       </>
                     );

@@ -12,11 +12,15 @@ import {
   Bar,
   Line,
 } from "recharts";
-import type { TooltipProps } from "recharts";
-
 export type MonthlyPoint = { month: string; income: number; expense: number; net: number };
+type SimpleTooltipFormatter = (
+  value: number | string,
+  name: string,
+  payload: unknown,
+  index: number,
+) => string;
 
-const formatTooltip: TooltipProps<number | string, string>["formatter"] = (value) =>
+const formatTooltip: SimpleTooltipFormatter = (value) =>
   fmtUSD(typeof value === "number" ? value : Number(value));
 
 export default function CombinedMonthlyChart({ data }: { data: MonthlyPoint[] }) {

@@ -16,16 +16,12 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from "recharts";
-import type { TooltipProps } from "recharts";
 
 export default function Budget() {
   const { budget, isBudgetLoading, refreshBudget } = useDataCache();
   const [data, setData] = useState<BudgetResp | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-
-  const currencyTooltip: TooltipProps<number | string, string>["formatter"] = (value) =>
-    fmtUSD(typeof value === "number" ? value : Number(value));
 
   const now = new Date();
   const monthKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
@@ -202,7 +198,7 @@ export default function Budget() {
                   return Math.max(56, estimateYAxisWidthFromMax(maxVal, fmtUSD));
                 })()}
               />
-              <Tooltip formatter={currencyTooltip} />
+              <Tooltip formatter={(value: number | string) => fmtUSD(typeof value === "number" ? value : Number(value))} />
               <Line type="monotone" dataKey="cumActual" stroke="#2563eb" dot={false} />
               <ReferenceLine
                 y={totalBudget}

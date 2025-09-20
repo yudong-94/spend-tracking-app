@@ -4,7 +4,6 @@ import { COL } from "@/lib/colors";
 import PageHeader from "@/components/PageHeader";
 import { useState } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
-import type { TooltipProps } from "recharts";
 
 type Summary = { totalIncome: number; totalExpense: number; netCashFlow: number };
 type CatAmt = { category: string; amount: number };
@@ -55,8 +54,6 @@ function CategoryChart({ title, data, color }: { title: string; data: CatAmt[]; 
   const maxLabelLen = Math.max(0, ...chartData.map((x) => (x.category || "").length));
   const yCatWidth = Math.max(90, Math.min(260, Math.round(maxLabelLen * 7.2 + 16)));
   const containerHeight = Math.max(260, Math.min(560, 28 * shownCount + 40));
-  const tooltipFormatter: TooltipProps<number | string, string>["formatter"] = (value) =>
-    fmtUSD(typeof value === "number" ? value : Number(value));
   return (
     <div className="p-4 rounded-lg border bg-white">
       <h3 className="font-medium mb-2">{title}</h3>
@@ -73,7 +70,7 @@ function CategoryChart({ title, data, color }: { title: string; data: CatAmt[]; 
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis type="number" tickFormatter={(v: number) => fmtUSD(Number(v))} />
               <YAxis type="category" dataKey="name" width={yCatWidth} tick={{ fontSize: 12 }} />
-              <Tooltip formatter={tooltipFormatter} />
+              <Tooltip formatter={(value: number | string) => fmtUSD(typeof value === "number" ? value : Number(value))} />
               <Bar dataKey="amount" fill={color} radius={[0, 4, 4, 0]} />
             </BarChart>
           </ResponsiveContainer>

@@ -12,6 +12,9 @@ import {
 } from "@/lib/date-range";
 import { updateTransaction, deleteTransaction } from "@/lib/api";
 
+const parseTypeValue = (value: string): "" | "income" | "expense" =>
+  value === "income" || value === "expense" ? value : "";
+
 export default function TransactionsPage() {
   const { txns: rows, isLoading: loading, getCategories, refresh, removeLocal } = useDataCache();
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -39,9 +42,6 @@ export default function TransactionsPage() {
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [quickRange, setQuickRange] = useState<QuickRangeKey | "custom">("all");
-
-  const parseTypeValue = (value: string): "" | "income" | "expense" =>
-    value === "income" || value === "expense" ? value : "";
 
   const updateDraft = (patch: Partial<DraftTx>) => {
     setDraft((prev) => (prev ? { ...prev, ...patch } : prev));
