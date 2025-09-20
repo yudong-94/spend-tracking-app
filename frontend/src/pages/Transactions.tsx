@@ -186,32 +186,59 @@ export default function TransactionsPage() {
         <PageHeader lastUpdated={lastUpdated} onRefresh={onRefresh} isRefreshing={isRefreshing} />
       </div>
       {/* Filters – desktop */}
-      <div className="hidden md:flex gap-3 mb-3">
-        <input
-          className="border rounded px-3 py-2 flex-1"
-          placeholder="Search by category or description..."
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-        />
-        <input
-          type="date"
-          className="border rounded px-3 py-2"
-          value={start}
-          onChange={(e) => {
-            setQuickRange("custom");
-            setStart(e.target.value);
-          }}
-        />
-        <input
-          type="date"
-          className="border rounded px-3 py-2"
-          value={end}
-          onChange={(e) => {
-            setQuickRange("custom");
-            setEnd(e.target.value);
-          }}
-        />
-        <div className="flex flex-wrap gap-2 items-center">
+      <div className="hidden md:flex flex-wrap items-end gap-3 mb-3">
+        <div className="flex-1 min-w-[220px]">
+          <input
+            className="w-full border rounded px-3 py-2"
+            placeholder="Search by category or description..."
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+          />
+        </div>
+        <div className="w-44">
+          <input
+            type="date"
+            className="w-full border rounded px-3 py-2"
+            value={start}
+            onChange={(e) => {
+              setQuickRange("custom");
+              setStart(e.target.value);
+            }}
+          />
+        </div>
+        <div className="w-44">
+          <input
+            type="date"
+            className="w-full border rounded px-3 py-2"
+            value={end}
+            onChange={(e) => {
+              setQuickRange("custom");
+              setEnd(e.target.value);
+            }}
+          />
+        </div>
+        <div className="w-40">
+          <select
+            className="w-full border rounded px-3 py-2"
+            value={type}
+            onChange={(e) => setType(e.target.value as any)}
+          >
+            <option value="">All Types</option>
+            <option value="income">Income</option>
+            <option value="expense">Expense</option>
+          </select>
+        </div>
+        <div className="w-56">
+          <CategorySelect
+            multiple
+            value={categories}
+            onChange={setCategories}
+            options={getCategories()} // expense first, then income
+            className="w-full"
+            placeholder="All Categories"
+          />
+        </div>
+        <div className="flex flex-wrap gap-2 basis-full">
           {QUICK_RANGE_OPTIONS.map((opt) => (
             <button
               key={opt.key}
@@ -228,24 +255,6 @@ export default function TransactionsPage() {
             </button>
           ))}
         </div>
-        <select
-          className="border rounded px-3 py-2"
-          value={type}
-          onChange={(e) => setType(e.target.value as any)}
-        >
-          <option value="">All Types</option>
-          <option value="income">Income</option>
-          <option value="expense">Expense</option>
-        </select>
-        {/* Category select (multi) */}
-        <CategorySelect
-          multiple
-          value={categories}
-          onChange={setCategories}
-          options={getCategories()} // expense first, then income
-          className="w-56"
-          placeholder="All Categories"
-        />
       </div>
 
       {/* Filters – mobile toggle */}

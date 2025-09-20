@@ -307,7 +307,7 @@ export default function Analytics() {
       {/* Filters – desktop */}
       <div className="sticky top-0 z-10 bg-white/90 backdrop-blur supports-[backdrop-filter]:bg-white/70 border-b py-2 hidden md:block">
         <div className="flex flex-wrap gap-3 items-end">
-          <div className="grid">
+          <div className="grid w-44">
             <label className="text-sm">Start</label>
             <input
               type="date"
@@ -319,7 +319,7 @@ export default function Analytics() {
               }}
             />
           </div>
-          <div className="grid">
+          <div className="grid w-44">
             <label className="text-sm">End</label>
             <input
               type="date"
@@ -331,7 +331,18 @@ export default function Analytics() {
               }}
             />
           </div>
-          <div className="flex flex-wrap gap-2 items-center">
+          <div className="grid w-56">
+            <label className="text-sm">Category</label>
+            <CategorySelect
+              multiple
+              value={categories}
+              onChange={setCategories}
+              options={getCategories()}
+              className="w-full"
+              placeholder="All Categories"
+            />
+          </div>
+          <div className="flex flex-wrap gap-2 basis-full">
             {QUICK_RANGE_OPTIONS.map((opt) => (
               <button
                 key={opt.key}
@@ -347,17 +358,6 @@ export default function Analytics() {
                 {opt.label}
               </button>
             ))}
-          </div>
-          <div className="grid">
-            <label className="text-sm">Category</label>
-            <CategorySelect
-              multiple
-              value={categories}
-              onChange={setCategories}
-              options={getCategories()}
-              className="w-56"
-              placeholder="All Categories"
-            />
           </div>
         </div>
 
