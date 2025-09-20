@@ -4,10 +4,10 @@ import { useDataCache, Tx } from "@/state/data-cache";
 import PageHeader from "@/components/PageHeader";
 import CategorySelect from "@/components/CategorySelect";
 import { fmtUSDSigned } from "@/lib/format";
-import { updateTransaction } from "@/lib/api";
+import { updateTransaction, deleteTransaction } from "@/lib/api";
 
 export default function TransactionsPage() {
-  const { txns: rows, isLoading: loading, getCategories, refresh } = useDataCache();
+  const { txns: rows, isLoading: loading, getCategories, refresh, removeLocal } = useDataCache();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<number | null>(null);
   const [q, setQ] = useState("");
@@ -31,6 +31,7 @@ export default function TransactionsPage() {
       }
   >(null);
   const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   // Persist sort + page size
   const LS_KEY = "tx-table-state-v1";
@@ -64,6 +65,26 @@ export default function TransactionsPage() {
       setLastUpdated(Date.now());
     } finally {
       setIsRefreshing(false);
+    }
+  }
+
+  async function handleDelete(id: string) {
+    if (!id) return;
+    const confirmed = window.confirm("Delete this transaction? This cannot be undone.");
+    if (!confirmed) return;
+    setDeletingId(id);
+    try {
+      await deleteTransaction(id);
+      removeLocal(id);
+      if (editingId === id) {
+        setEditingId(null);
+        setDraft(null);
+      }
+    } catch (e) {
+      alert("Failed to delete transaction");
+      console.error(e);
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -273,6 +294,7 @@ export default function TransactionsPage() {
           <div className="md:hidden space-y-2">
             {pageRows.map((r: Tx, i: number) => {
               const isEdit = editingId === r.id;
+              const isDeleting = deletingId === r.id;
               return (
                 <div key={r.id || i} className="rounded border bg-white p-3">
                   {!isEdit ? (
@@ -341,21 +363,30 @@ export default function TransactionsPage() {
                   {r.id && (
                     <div className="mt-2 text-right">
                       {!isEdit ? (
-                        <button
-                          className="px-2 py-1 rounded border text-xs"
-                          onClick={() => {
-                            setEditingId(r.id!);
-                            setDraft({
-                              date: r.date,
-                              type: r.type,
-                              category: r.category,
-                              description: r.description,
-                              amount: r.amount,
-                            });
-                          }}
-                        >
-                          Edit
-                        </button>
+                        <div className="inline-flex gap-2">
+                          <button
+                            className="px-2 py-1 rounded border text-xs"
+                            onClick={() => {
+                              setEditingId(r.id!);
+                              setDraft({
+                                date: r.date,
+                                type: r.type,
+                                category: r.category,
+                                description: r.description,
+                                amount: r.amount,
+                              });
+                            }}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            className="px-2 py-1 rounded border text-xs text-rose-600 border-rose-200 disabled:opacity-50"
+                            disabled={isDeleting}
+                            onClick={() => handleDelete(r.id!)}
+                          >
+                            {isDeleting ? "Deleting…" : "Delete"}
+                          </button>
+                        </div>
                       ) : (
                         <div className="inline-flex gap-2">
                           <button
@@ -387,6 +418,13 @@ export default function TransactionsPage() {
                             }}
                           >
                             Cancel
+                          </button>
+                          <button
+                            className="px-2 py-1 rounded border text-xs text-rose-600 border-rose-200 disabled:opacity-50"
+                            disabled={isDeleting || saving}
+                            onClick={() => handleDelete(r.id!)}
+                          >
+                            {isDeleting ? "Deleting…" : "Delete"}
                           </button>
                         </div>
                       )}
@@ -439,6 +477,7 @@ export default function TransactionsPage() {
             <tbody>
               {pageRows.map((r: Tx, i: number) => {
                 const isEdit = editingId === r.id;
+                const isDeleting = deletingId === r.id;
                 return (
                   <tr key={r.id || i} className="border-b last:border-0">
                     <td className="py-2 pr-4">
@@ -555,23 +594,39 @@ export default function TransactionsPage() {
                             >
                               Cancel
                             </button>
+                            <button
+                              className="px-2 py-1 rounded border text-xs text-rose-600 border-rose-200 disabled:opacity-50"
+                              disabled={isDeleting || saving}
+                              onClick={() => handleDelete(r.id!)}
+                            >
+                              {isDeleting ? "Deleting…" : "Delete"}
+                            </button>
                           </div>
                         ) : (
-                          <button
-                            className="px-2 py-1 rounded border text-xs"
-                            onClick={() => {
-                              setEditingId(r.id!);
-                              setDraft({
-                                date: r.date,
-                                type: r.type,
-                                category: r.category,
-                                description: r.description,
-                                amount: r.amount,
-                              });
-                            }}
-                          >
-                            Edit
-                          </button>
+                          <div className="inline-flex gap-2 justify-end">
+                            <button
+                              className="px-2 py-1 rounded border text-xs"
+                              onClick={() => {
+                                setEditingId(r.id!);
+                                setDraft({
+                                  date: r.date,
+                                  type: r.type,
+                                  category: r.category,
+                                  description: r.description,
+                                  amount: r.amount,
+                                });
+                              }}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              className="px-2 py-1 rounded border text-xs text-rose-600 border-rose-200 disabled:opacity-50"
+                              disabled={isDeleting}
+                              onClick={() => handleDelete(r.id!)}
+                            >
+                              {isDeleting ? "Deleting…" : "Delete"}
+                            </button>
+                          </div>
                         )
                       ) : null}
                     </td>

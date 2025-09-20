@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { requireAuth } from "./_lib/auth.js";
-import { readTable, appendRow, updateRowById } from "./_lib/sheets.js";
+import { readTable, appendRow, updateRowById, deleteRowById } from "./_lib/sheets.js";
 
 type Tx = {
   id?: string;
@@ -151,7 +151,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    res.setHeader("Allow", "GET, POST");
+    if (req.method === "DELETE") {
+      const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
+      const idFromQuery = (req.query?.id ?? req.query?.ID) as string | string[] | undefined;
+      const idCandidate = Array.isArray(idFromQuery) ? idFromQuery[0] : idFromQuery;
+      const idRaw = idCandidate ?? body?.id ?? body?.ID;
+      const id = String(idRaw ?? "").trim();
+      if (!id) return res.status(400).json({ error: "missing_id" });
+
+      try {
+        await deleteRowById(id);
+        return res.status(200).json({ ok: true, id });
+      } catch (e: any) {
+        if (e?.message === "not_found") return res.status(404).json({ error: "not_found" });
+        console.error(e);
+        return res.status(500).json({ error: "delete_failed" });
+      }
+    }
+
+    res.setHeader("Allow", "GET, POST, PUT, PATCH, DELETE");
     return res.status(405).send("Method Not Allowed");
   } catch (e: any) {
     console.error(e);
