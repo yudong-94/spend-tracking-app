@@ -13,6 +13,8 @@ export default function TransactionsPage() {
   const [q, setQ] = useState("");
   const [type, setType] = useState<"" | "income" | "expense">("");
   const [categories, setCategories] = useState<string[]>([]);
+  const [start, setStart] = useState("");
+  const [end, setEnd] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
   const [sortBy, setSortBy] = useState<"date" | "type" | "category" | "description" | "amount">(
@@ -43,20 +45,24 @@ export default function TransactionsPage() {
         sortBy?: typeof sortBy;
         sortDir?: typeof sortDir;
         pageSize?: number;
+        start?: string;
+        end?: string;
       };
       if (s.sortBy) setSortBy(s.sortBy);
       if (s.sortDir === "asc" || s.sortDir === "desc") setSortDir(s.sortDir);
       if (s.pageSize && [25, 50, 100, 200].includes(Number(s.pageSize))) {
         setPageSize(Number(s.pageSize));
       }
+      if (typeof s.start === "string") setStart(s.start);
+      if (typeof s.end === "string") setEnd(s.end);
     } catch {}
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   useEffect(() => {
     try {
-      localStorage.setItem(LS_KEY, JSON.stringify({ sortBy, sortDir, pageSize }));
+      localStorage.setItem(LS_KEY, JSON.stringify({ sortBy, sortDir, pageSize, start, end }));
     } catch {}
-  }, [sortBy, sortDir, pageSize]);
+  }, [sortBy, sortDir, pageSize, start, end]);
 
   async function onRefresh() {
     setIsRefreshing(true);
@@ -92,13 +98,15 @@ export default function TransactionsPage() {
 
   const filtered = useMemo<Tx[]>(() => {
     return (rows as Tx[]).filter((r: Tx) => {
+      if (start && r.date < start) return false;
+      if (end && r.date > end) return false;
       if (type && r.type !== type) return false;
       if (categories.length && !categories.includes(r.category)) return false;
       if (q && !(r.category + " " + (r.description || "")).toLowerCase().includes(q.toLowerCase()))
         return false;
       return true;
     });
-  }, [rows, q, type, categories]);
+  }, [rows, q, type, categories, start, end]);
 
   const sorted = useMemo<Tx[]>(() => {
     const arr = filtered.slice();
@@ -125,7 +133,7 @@ export default function TransactionsPage() {
   // Reset/adjust pagination when filters change
   useEffect(() => {
     setPage(1);
-  }, [q, type, categories, sortBy, sortDir, pageSize]);
+  }, [q, type, categories, sortBy, sortDir, pageSize, start, end]);
 
   const total = filtered.length;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
@@ -158,6 +166,18 @@ export default function TransactionsPage() {
           value={q}
           onChange={(e) => setQ(e.target.value)}
         />
+        <input
+          type="date"
+          className="border rounded px-3 py-2"
+          value={start}
+          onChange={(e) => setStart(e.target.value)}
+        />
+        <input
+          type="date"
+          className="border rounded px-3 py-2"
+          value={end}
+          onChange={(e) => setEnd(e.target.value)}
+        />
         <select
           className="border rounded px-3 py-2"
           value={type}
@@ -187,6 +207,10 @@ export default function TransactionsPage() {
         categories={categories}
         setCategories={setCategories}
         getCategories={getCategories}
+        start={start}
+        setStart={setStart}
+        end={end}
+        setEnd={setEnd}
       />
 
       {/* Totals */}
@@ -583,6 +607,10 @@ function MobileFilters({
   categories,
   setCategories,
   getCategories,
+  start,
+  setStart,
+  end,
+  setEnd,
 }: {
   q: string;
   setQ: (v: string) => void;
@@ -591,6 +619,10 @@ function MobileFilters({
   categories: string[];
   setCategories: (v: string[]) => void;
   getCategories: () => { id: string; name: string; type: "income" | "expense" }[];
+  start: string;
+  setStart: (v: string) => void;
+  end: string;
+  setEnd: (v: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -603,6 +635,18 @@ function MobileFilters({
       </button>
       {open && (
         <div className="mt-2 space-y-2">
+          <input
+            type="date"
+            className="border rounded px-3 py-2 w-full"
+            value={start}
+            onChange={(e) => setStart(e.target.value)}
+          />
+          <input
+            type="date"
+            className="border rounded px-3 py-2 w-full"
+            value={end}
+            onChange={(e) => setEnd(e.target.value)}
+          />
           <input
             className="border rounded px-3 py-2 w-full"
             placeholder="Search by category or description..."
