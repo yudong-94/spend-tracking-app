@@ -4,15 +4,23 @@ import { useDataCache, Tx } from "@/state/data-cache";
 import PageHeader from "@/components/PageHeader";
 import CategorySelect from "@/components/CategorySelect";
 import { fmtUSDSigned } from "@/lib/format";
-import { updateTransaction } from "@/lib/api";
+import {
+  QUICK_RANGE_OPTIONS,
+  computeQuickRange,
+  isQuickRangeKey,
+  type QuickRangeKey,
+} from "@/lib/date-range";
+import { updateTransaction, deleteTransaction } from "@/lib/api";
 
 export default function TransactionsPage() {
-  const { txns: rows, isLoading: loading, getCategories, refresh } = useDataCache();
+  const { txns: rows, isLoading: loading, getCategories, refresh, removeLocal } = useDataCache();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<number | null>(null);
   const [q, setQ] = useState("");
   const [type, setType] = useState<"" | "income" | "expense">("");
   const [categories, setCategories] = useState<string[]>([]);
+  const [start, setStart] = useState("");
+  const [end, setEnd] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
   const [sortBy, setSortBy] = useState<"date" | "type" | "category" | "description" | "amount">(
@@ -31,6 +39,8 @@ export default function TransactionsPage() {
       }
   >(null);
   const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [quickRange, setQuickRange] = useState<QuickRangeKey | "custom">("all");
 
   // Persist sort + page size
   const LS_KEY = "tx-table-state-v1";
@@ -42,20 +52,44 @@ export default function TransactionsPage() {
         sortBy?: typeof sortBy;
         sortDir?: typeof sortDir;
         pageSize?: number;
+        start?: string;
+        end?: string;
+        quickRange?: string;
       };
       if (s.sortBy) setSortBy(s.sortBy);
       if (s.sortDir === "asc" || s.sortDir === "desc") setSortDir(s.sortDir);
       if (s.pageSize && [25, 50, 100, 200].includes(Number(s.pageSize))) {
         setPageSize(Number(s.pageSize));
       }
+      if (isQuickRangeKey(s.quickRange)) {
+        const range = computeQuickRange(s.quickRange);
+        setQuickRange(s.quickRange);
+        setStart(range.start);
+        setEnd(range.end);
+      } else {
+        if (typeof s.start === "string") setStart(s.start);
+        if (typeof s.end === "string") setEnd(s.end);
+        setQuickRange("custom");
+      }
     } catch {}
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   useEffect(() => {
     try {
-      localStorage.setItem(LS_KEY, JSON.stringify({ sortBy, sortDir, pageSize }));
+      localStorage.setItem(
+        LS_KEY,
+        JSON.stringify({ sortBy, sortDir, pageSize, start, end, quickRange }),
+      );
     } catch {}
-  }, [sortBy, sortDir, pageSize]);
+  }, [sortBy, sortDir, pageSize, start, end, quickRange]);
+
+  const applyQuickRange = (key: QuickRangeKey) => {
+    const { start: nextStart, end: nextEnd } = computeQuickRange(key);
+    setQuickRange(key);
+    setStart(nextStart);
+    setEnd(nextEnd);
+    setPage(1);
+  };
 
   async function onRefresh() {
     setIsRefreshing(true);
@@ -67,17 +101,39 @@ export default function TransactionsPage() {
     }
   }
 
+  async function handleDelete(id: string) {
+    if (!id) return;
+    const confirmed = window.confirm("Delete this transaction? This cannot be undone.");
+    if (!confirmed) return;
+    setDeletingId(id);
+    try {
+      await deleteTransaction(id);
+      removeLocal(id);
+      if (editingId === id) {
+        setEditingId(null);
+        setDraft(null);
+      }
+    } catch (e) {
+      alert("Failed to delete transaction");
+      console.error(e);
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
   // no fetching here – data comes from cache
 
   const filtered = useMemo<Tx[]>(() => {
     return (rows as Tx[]).filter((r: Tx) => {
+      if (start && r.date < start) return false;
+      if (end && r.date > end) return false;
       if (type && r.type !== type) return false;
       if (categories.length && !categories.includes(r.category)) return false;
       if (q && !(r.category + " " + (r.description || "")).toLowerCase().includes(q.toLowerCase()))
         return false;
       return true;
     });
-  }, [rows, q, type, categories]);
+  }, [rows, q, type, categories, start, end]);
 
   const sorted = useMemo<Tx[]>(() => {
     const arr = filtered.slice();
@@ -104,7 +160,7 @@ export default function TransactionsPage() {
   // Reset/adjust pagination when filters change
   useEffect(() => {
     setPage(1);
-  }, [q, type, categories, sortBy, sortDir, pageSize]);
+  }, [q, type, categories, sortBy, sortDir, pageSize, start, end]);
 
   const total = filtered.length;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
@@ -130,31 +186,75 @@ export default function TransactionsPage() {
         <PageHeader lastUpdated={lastUpdated} onRefresh={onRefresh} isRefreshing={isRefreshing} />
       </div>
       {/* Filters – desktop */}
-      <div className="hidden md:flex gap-3 mb-3">
-        <input
-          className="border rounded px-3 py-2 flex-1"
-          placeholder="Search by category or description..."
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-        />
-        <select
-          className="border rounded px-3 py-2"
-          value={type}
-          onChange={(e) => setType(e.target.value as any)}
-        >
-          <option value="">All Types</option>
-          <option value="income">Income</option>
-          <option value="expense">Expense</option>
-        </select>
-        {/* Category select (multi) */}
-        <CategorySelect
-          multiple
-          value={categories}
-          onChange={setCategories}
-          options={getCategories()} // expense first, then income
-          className="w-56"
-          placeholder="All Categories"
-        />
+      <div className="hidden md:flex flex-wrap items-end gap-3 mb-3">
+        <div className="flex-1 min-w-[220px]">
+          <input
+            className="w-full border rounded px-3 py-2"
+            placeholder="Search by category or description..."
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+          />
+        </div>
+        <div className="w-44">
+          <input
+            type="date"
+            className="w-full border rounded px-3 py-2"
+            value={start}
+            onChange={(e) => {
+              setQuickRange("custom");
+              setStart(e.target.value);
+            }}
+          />
+        </div>
+        <div className="w-44">
+          <input
+            type="date"
+            className="w-full border rounded px-3 py-2"
+            value={end}
+            onChange={(e) => {
+              setQuickRange("custom");
+              setEnd(e.target.value);
+            }}
+          />
+        </div>
+        <div className="w-40">
+          <select
+            className="w-full border rounded px-3 py-2"
+            value={type}
+            onChange={(e) => setType(e.target.value as any)}
+          >
+            <option value="">All Types</option>
+            <option value="income">Income</option>
+            <option value="expense">Expense</option>
+          </select>
+        </div>
+        <div className="w-56">
+          <CategorySelect
+            multiple
+            value={categories}
+            onChange={setCategories}
+            options={getCategories()} // expense first, then income
+            className="w-full"
+            placeholder="All Categories"
+          />
+        </div>
+        <div className="flex flex-wrap gap-2 basis-full">
+          {QUICK_RANGE_OPTIONS.map((opt) => (
+            <button
+              key={opt.key}
+              type="button"
+              onClick={() => applyQuickRange(opt.key)}
+              className={`rounded-full border px-3 py-1 text-sm transition ${
+                quickRange === opt.key
+                  ? "bg-slate-900 text-white border-slate-900"
+                  : "bg-white text-slate-600 hover:bg-slate-50"
+              }`}
+              aria-pressed={quickRange === opt.key}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Filters – mobile toggle */}
@@ -166,101 +266,29 @@ export default function TransactionsPage() {
         categories={categories}
         setCategories={setCategories}
         getCategories={getCategories}
+        start={start}
+        setStart={setStart}
+        end={end}
+        setEnd={setEnd}
+        quickRange={quickRange}
+        setQuickRange={setQuickRange}
+        applyQuickRange={applyQuickRange}
       />
 
-      {/* Totals + pagination (desktop) */}
-      <div className="ml-auto text-sm hidden md:flex items-center gap-3">
+      {/* Totals */}
+      <div className="mt-2 hidden md:flex justify-end text-sm">
         <div>
           Total:{" "}
           <span className={`font-semibold ${totalClass}`}>
             {fmtUSDSigned(Math.abs(totalAmount), totalKind)}
           </span>
         </div>
-        <div className="text-slate-500">
-          Showing {total === 0 ? 0 : startIdx + 1}–{endIdx} of {total}
-        </div>
-        <div className="inline-flex items-center gap-1">
-          <button
-            className="px-2 py-1 border rounded disabled:opacity-50"
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-            disabled={page <= 1}
-          >
-            Prev
-          </button>
-          <span className="text-sm text-slate-600 px-1">
-            {page} / {totalPages}
-          </span>
-          <button
-            className="px-2 py-1 border rounded disabled:opacity-50"
-            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            disabled={page >= totalPages}
-          >
-            Next
-          </button>
-          <select
-            className="ml-2 border rounded px-2 py-1 text-sm"
-            value={pageSize}
-            onChange={(e) => {
-              setPageSize(Number(e.target.value));
-              setPage(1);
-            }}
-          >
-            {[25, 50, 100, 200].map((n) => (
-              <option key={n} value={n}>
-                {n}/page
-              </option>
-            ))}
-          </select>
-        </div>
       </div>
-
-      {/* Totals + pagination (mobile) */}
-      <div className="md:hidden mt-2 space-y-2">
-        <div className="text-sm">
-          Total:{" "}
-          <span className={`font-semibold ${totalClass}`}>
-            {fmtUSDSigned(Math.abs(totalAmount), totalKind)}
-          </span>
-        </div>
-        <div className="flex items-center justify-between">
-          <div className="text-xs text-slate-500">
-            Showing {total === 0 ? 0 : startIdx + 1}–{endIdx} of {total}
-          </div>
-          <div className="inline-flex items-center gap-1">
-            <button
-              className="px-2 py-1 border rounded disabled:opacity-50 text-xs"
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page <= 1}
-            >
-              Prev
-            </button>
-            <span className="text-xs text-slate-600 px-1">
-              {page}/{totalPages}
-            </span>
-            <button
-              className="px-2 py-1 border rounded disabled:opacity-50 text-xs"
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              disabled={page >= totalPages}
-            >
-              Next
-            </button>
-            <select
-              aria-label="Rows per page"
-              className="ml-2 border rounded px-1.5 py-1 text-xs"
-              value={pageSize}
-              onChange={(e) => {
-                setPageSize(Number(e.target.value));
-                setPage(1);
-              }}
-            >
-              {[25, 50, 100, 200].map((n) => (
-                <option key={n} value={n}>
-                  {n}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
+      <div className="md:hidden mt-2 text-sm">
+        Total:{" "}
+        <span className={`font-semibold ${totalClass}`}>
+          {fmtUSDSigned(Math.abs(totalAmount), totalKind)}
+        </span>
       </div>
 
       {loading ? (
@@ -273,6 +301,7 @@ export default function TransactionsPage() {
           <div className="md:hidden space-y-2">
             {pageRows.map((r: Tx, i: number) => {
               const isEdit = editingId === r.id;
+              const isDeleting = deletingId === r.id;
               return (
                 <div key={r.id || i} className="rounded border bg-white p-3">
                   {!isEdit ? (
@@ -341,21 +370,30 @@ export default function TransactionsPage() {
                   {r.id && (
                     <div className="mt-2 text-right">
                       {!isEdit ? (
-                        <button
-                          className="px-2 py-1 rounded border text-xs"
-                          onClick={() => {
-                            setEditingId(r.id!);
-                            setDraft({
-                              date: r.date,
-                              type: r.type,
-                              category: r.category,
-                              description: r.description,
-                              amount: r.amount,
-                            });
-                          }}
-                        >
-                          Edit
-                        </button>
+                        <div className="inline-flex gap-2">
+                          <button
+                            className="px-2 py-1 rounded border text-xs"
+                            onClick={() => {
+                              setEditingId(r.id!);
+                              setDraft({
+                                date: r.date,
+                                type: r.type,
+                                category: r.category,
+                                description: r.description,
+                                amount: r.amount,
+                              });
+                            }}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            className="px-2 py-1 rounded border text-xs text-rose-600 border-rose-200 disabled:opacity-50"
+                            disabled={isDeleting}
+                            onClick={() => handleDelete(r.id!)}
+                          >
+                            {isDeleting ? "Deleting…" : "Delete"}
+                          </button>
+                        </div>
                       ) : (
                         <div className="inline-flex gap-2">
                           <button
@@ -387,6 +425,13 @@ export default function TransactionsPage() {
                             }}
                           >
                             Cancel
+                          </button>
+                          <button
+                            className="px-2 py-1 rounded border text-xs text-rose-600 border-rose-200 disabled:opacity-50"
+                            disabled={isDeleting || saving}
+                            onClick={() => handleDelete(r.id!)}
+                          >
+                            {isDeleting ? "Deleting…" : "Delete"}
                           </button>
                         </div>
                       )}
@@ -439,6 +484,7 @@ export default function TransactionsPage() {
             <tbody>
               {pageRows.map((r: Tx, i: number) => {
                 const isEdit = editingId === r.id;
+                const isDeleting = deletingId === r.id;
                 return (
                   <tr key={r.id || i} className="border-b last:border-0">
                     <td className="py-2 pr-4">
@@ -555,23 +601,39 @@ export default function TransactionsPage() {
                             >
                               Cancel
                             </button>
+                            <button
+                              className="px-2 py-1 rounded border text-xs text-rose-600 border-rose-200 disabled:opacity-50"
+                              disabled={isDeleting || saving}
+                              onClick={() => handleDelete(r.id!)}
+                            >
+                              {isDeleting ? "Deleting…" : "Delete"}
+                            </button>
                           </div>
                         ) : (
-                          <button
-                            className="px-2 py-1 rounded border text-xs"
-                            onClick={() => {
-                              setEditingId(r.id!);
-                              setDraft({
-                                date: r.date,
-                                type: r.type,
-                                category: r.category,
-                                description: r.description,
-                                amount: r.amount,
-                              });
-                            }}
-                          >
-                            Edit
-                          </button>
+                          <div className="inline-flex gap-2 justify-end">
+                            <button
+                              className="px-2 py-1 rounded border text-xs"
+                              onClick={() => {
+                                setEditingId(r.id!);
+                                setDraft({
+                                  date: r.date,
+                                  type: r.type,
+                                  category: r.category,
+                                  description: r.description,
+                                  amount: r.amount,
+                                });
+                              }}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              className="px-2 py-1 rounded border text-xs text-rose-600 border-rose-200 disabled:opacity-50"
+                              disabled={isDeleting}
+                              onClick={() => handleDelete(r.id!)}
+                            >
+                              {isDeleting ? "Deleting…" : "Delete"}
+                            </button>
+                          </div>
                         )
                       ) : null}
                     </td>
@@ -581,6 +643,17 @@ export default function TransactionsPage() {
             </tbody>
           </table>
           </div>
+
+          <PaginationControls
+            total={total}
+            startIdx={startIdx}
+            endIdx={endIdx}
+            page={page}
+            totalPages={totalPages}
+            setPage={setPage}
+            pageSize={pageSize}
+            setPageSize={setPageSize}
+          />
         </>
       )}
     </div>
@@ -596,6 +669,13 @@ function MobileFilters({
   categories,
   setCategories,
   getCategories,
+  start,
+  setStart,
+  end,
+  setEnd,
+  quickRange,
+  setQuickRange,
+  applyQuickRange,
 }: {
   q: string;
   setQ: (v: string) => void;
@@ -604,6 +684,13 @@ function MobileFilters({
   categories: string[];
   setCategories: (v: string[]) => void;
   getCategories: () => { id: string; name: string; type: "income" | "expense" }[];
+  start: string;
+  setStart: (v: string) => void;
+  end: string;
+  setEnd: (v: string) => void;
+  quickRange: QuickRangeKey | "custom";
+  setQuickRange: (key: QuickRangeKey | "custom") => void;
+  applyQuickRange: (key: QuickRangeKey) => void;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -616,6 +703,41 @@ function MobileFilters({
       </button>
       {open && (
         <div className="mt-2 space-y-2">
+          <input
+            type="date"
+            className="border rounded px-3 py-2 w-full"
+            value={start}
+            onChange={(e) => {
+              setQuickRange("custom");
+              setStart(e.target.value);
+            }}
+          />
+          <input
+            type="date"
+            className="border rounded px-3 py-2 w-full"
+            value={end}
+            onChange={(e) => {
+              setQuickRange("custom");
+              setEnd(e.target.value);
+            }}
+          />
+          <div className="flex flex-wrap gap-2">
+            {QUICK_RANGE_OPTIONS.map((opt) => (
+              <button
+                key={opt.key}
+                type="button"
+                onClick={() => applyQuickRange(opt.key)}
+                className={`rounded-full border px-3 py-1 text-xs transition ${
+                  quickRange === opt.key
+                    ? "bg-slate-900 text-white border-slate-900"
+                    : "bg-white text-slate-600 hover:bg-slate-50"
+                }`}
+                aria-pressed={quickRange === opt.key}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
           <input
             className="border rounded px-3 py-2 w-full"
             placeholder="Search by category or description..."
@@ -641,6 +763,71 @@ function MobileFilters({
           />
         </div>
       )}
+    </div>
+  );
+}
+
+function PaginationControls({
+  total,
+  startIdx,
+  endIdx,
+  page,
+  totalPages,
+  setPage,
+  pageSize,
+  setPageSize,
+}: {
+  total: number;
+  startIdx: number;
+  endIdx: number;
+  page: number;
+  totalPages: number;
+  setPage: (value: number | ((prev: number) => number)) => void;
+  pageSize: number;
+  setPageSize: (value: number) => void;
+}) {
+  return (
+    <div className="mt-6 border-t pt-4">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div className="text-xs text-slate-500 md:text-sm">
+          Showing {total === 0 ? 0 : startIdx + 1}–{endIdx} of {total}
+        </div>
+        <div className="flex items-center justify-between gap-2 md:justify-end">
+          <button
+            className="px-2 py-1 border rounded disabled:opacity-50 text-xs md:text-sm"
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={page <= 1}
+          >
+            Prev
+          </button>
+          <span className="text-xs text-slate-600 px-1 md:text-sm">
+            {page} / {totalPages}
+          </span>
+          <button
+            className="px-2 py-1 border rounded disabled:opacity-50 text-xs md:text-sm"
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            disabled={page >= totalPages}
+          >
+            Next
+          </button>
+          <select
+            aria-label="Rows per page"
+            className="ml-2 border rounded px-1.5 py-1 text-xs md:text-sm md:px-2"
+            value={pageSize}
+            onChange={(e) => {
+              const size = Number(e.target.value);
+              setPageSize(size);
+              setPage(1);
+            }}
+          >
+            {[25, 50, 100, 200].map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
     </div>
   );
 }

@@ -38,6 +38,7 @@ type Ctx = {
   lastSyncAt?: number;
   refresh: () => Promise<void>;
   addLocal: (tx: Tx) => void;
+  removeLocal: (id: string) => void;
   categories: Category[];
   getCategories: (type?: "income" | "expense") => Category[];
   // Budget cache (current month)
@@ -70,6 +71,7 @@ const DataCacheContext = createContext<Ctx>({
   lastSyncAt: undefined,
   refresh: async () => {},
   addLocal: () => {},
+  removeLocal: () => {},
   categories: [],
   getCategories: () => [],
   budget: null,
@@ -243,6 +245,18 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
     [lastSyncAt, categories],
   );
 
+  const removeLocal = useCallback(
+    (id: string) => {
+      setTxns((prev) => {
+        const next = prev.filter((tx) => tx.id !== id);
+        if (next.length === prev.length) return prev;
+        saveToStorage(next, lastSyncAt ?? Date.now(), categories);
+        return next;
+      });
+    },
+    [lastSyncAt, categories],
+  );
+
   const filter = useCallback(
     (start?: string, end?: string) =>
       txns.filter((r) => (!start || r.date >= start) && (!end || r.date <= end)),
@@ -295,6 +309,7 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
       lastSyncAt,
       refresh,
       addLocal,
+      removeLocal,
       categories,
       getCategories,
       budget,
@@ -311,6 +326,7 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
       lastError,
       refresh,
       addLocal,
+      removeLocal,
       categories,
       getCategories,
       budget,

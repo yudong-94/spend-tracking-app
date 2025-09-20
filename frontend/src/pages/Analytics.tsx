@@ -18,6 +18,12 @@ import {
 } from "recharts";
 import { estimateYAxisWidthFromMax, percentFormatter } from "@/lib/chart";
 import CombinedMonthlyChart from "@/components/CombinedMonthlyChart";
+import {
+  QUICK_RANGE_OPTIONS,
+  computeQuickRange,
+  isQuickRangeKey,
+  type QuickRangeKey,
+} from "@/lib/date-range";
 
 // Tooltip for savings rate charts
 function RateTooltip({
@@ -60,6 +66,7 @@ export default function Analytics() {
   const [end, setEnd] = useState<string>("");
   const [categories, setCategories] = useState<string[]>([]);
   const [tab, setTab] = useState<Tab>("monthly");
+  const [quickRange, setQuickRange] = useState<QuickRangeKey | "custom">("all");
   // Persist filters + tab selection
   const LS_KEY = "analytics-state-v1";
   useEffect(() => {
@@ -71,9 +78,18 @@ export default function Analytics() {
         end?: string;
         categories?: string[];
         tab?: Tab;
+        quickRange?: string;
       };
-      if (s.start) setStart(s.start);
-      if (s.end) setEnd(s.end);
+      if (isQuickRangeKey(s.quickRange)) {
+        const range = computeQuickRange(s.quickRange);
+        setQuickRange(s.quickRange);
+        setStart(range.start);
+        setEnd(range.end);
+      } else {
+        if (s.start) setStart(s.start);
+        if (s.end) setEnd(s.end);
+        setQuickRange("custom");
+      }
       if (Array.isArray(s.categories)) setCategories(s.categories);
       if (s.tab) setTab(s.tab);
     } catch {}
@@ -81,9 +97,19 @@ export default function Analytics() {
   }, []);
   useEffect(() => {
     try {
-      localStorage.setItem(LS_KEY, JSON.stringify({ start, end, categories, tab }));
+      localStorage.setItem(
+        LS_KEY,
+        JSON.stringify({ start, end, categories, tab, quickRange }),
+      );
     } catch {}
-  }, [start, end, categories, tab]);
+  }, [start, end, categories, tab, quickRange]);
+
+  const applyQuickRange = (key: QuickRangeKey) => {
+    const { start: nextStart, end: nextEnd } = computeQuickRange(key);
+    setQuickRange(key);
+    setStart(nextStart);
+    setEnd(nextEnd);
+  };
 
   async function onRefresh() {
     setIsRefreshing(true);
@@ -281,34 +307,57 @@ export default function Analytics() {
       {/* Filters – desktop */}
       <div className="sticky top-0 z-10 bg-white/90 backdrop-blur supports-[backdrop-filter]:bg-white/70 border-b py-2 hidden md:block">
         <div className="flex flex-wrap gap-3 items-end">
-          <div className="grid">
+          <div className="grid w-44">
             <label className="text-sm">Start</label>
             <input
               type="date"
               className="border rounded px-3 py-2"
               value={start}
-              onChange={(e) => setStart(e.target.value)}
+              onChange={(e) => {
+                setQuickRange("custom");
+                setStart(e.target.value);
+              }}
             />
           </div>
-          <div className="grid">
+          <div className="grid w-44">
             <label className="text-sm">End</label>
             <input
               type="date"
               className="border rounded px-3 py-2"
               value={end}
-              onChange={(e) => setEnd(e.target.value)}
+              onChange={(e) => {
+                setQuickRange("custom");
+                setEnd(e.target.value);
+              }}
             />
           </div>
-          <div className="grid">
+          <div className="grid w-56">
             <label className="text-sm">Category</label>
             <CategorySelect
               multiple
               value={categories}
               onChange={setCategories}
               options={getCategories()}
-              className="w-56"
+              className="w-full"
               placeholder="All Categories"
             />
+          </div>
+          <div className="flex flex-wrap gap-2 basis-full">
+            {QUICK_RANGE_OPTIONS.map((opt) => (
+              <button
+                key={opt.key}
+                type="button"
+                onClick={() => applyQuickRange(opt.key)}
+                className={`rounded-full border px-3 py-1 text-sm transition ${
+                  quickRange === opt.key
+                    ? "bg-slate-900 text-white border-slate-900"
+                    : "bg-white text-slate-600 hover:bg-slate-50"
+                }`}
+                aria-pressed={quickRange === opt.key}
+              >
+                {opt.label}
+              </button>
+            ))}
           </div>
         </div>
 
@@ -349,6 +398,9 @@ export default function Analytics() {
         getCategories={getCategories}
         tab={tab}
         setTab={setTab}
+        quickRange={quickRange}
+        setQuickRange={setQuickRange}
+        applyQuickRange={applyQuickRange}
       />
 
       {/* KPI cards with comparisons (Monthly: vs last month, Annual: vs 12‑mo avg) */}
@@ -899,6 +951,9 @@ function MobileAnalyticsFilters({
   getCategories,
   tab,
   setTab,
+  quickRange,
+  setQuickRange,
+  applyQuickRange,
 }: {
   start: string;
   setStart: (v: string) => void;
@@ -909,6 +964,9 @@ function MobileAnalyticsFilters({
   getCategories: () => { id: string; name: string; type: "income" | "expense" }[];
   tab: Tab;
   setTab: (t: Tab) => void;
+  quickRange: QuickRangeKey | "custom";
+  setQuickRange: (key: QuickRangeKey | "custom") => void;
+  applyQuickRange: (key: QuickRangeKey) => void;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -926,14 +984,37 @@ function MobileAnalyticsFilters({
               type="date"
               className="border rounded px-3 py-2"
               value={start}
-              onChange={(e) => setStart(e.target.value)}
+              onChange={(e) => {
+                setQuickRange("custom");
+                setStart(e.target.value);
+              }}
             />
             <input
               type="date"
               className="border rounded px-3 py-2"
               value={end}
-              onChange={(e) => setEnd(e.target.value)}
+              onChange={(e) => {
+                setQuickRange("custom");
+                setEnd(e.target.value);
+              }}
             />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {QUICK_RANGE_OPTIONS.map((opt) => (
+              <button
+                key={opt.key}
+                type="button"
+                onClick={() => applyQuickRange(opt.key)}
+                className={`rounded-full border px-2.5 py-1 text-xs transition ${
+                  quickRange === opt.key
+                    ? "bg-slate-900 text-white border-slate-900"
+                    : "bg-white text-slate-600 hover:bg-slate-50"
+                }`}
+                aria-pressed={quickRange === opt.key}
+              >
+                {opt.label}
+              </button>
+            ))}
           </div>
           <CategorySelect
             multiple

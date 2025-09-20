@@ -87,6 +87,11 @@ export async function updateTransaction(input: Partial<NewTransaction> & { id: s
   return jsonOrThrow(res);
 }
 
+export async function deleteTransaction(id: string) {
+  const res = await fetch(buildUrl("/api/transactions", { id }), withAuth({ method: "DELETE" }));
+  return jsonOrThrow(res);
+}
+
 export async function getSummary(period?: Period) {
   const res = await fetch(buildUrl("/api/summary", period), withAuth());
   return jsonOrThrow(res);
