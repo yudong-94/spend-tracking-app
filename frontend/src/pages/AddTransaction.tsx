@@ -42,6 +42,7 @@ export default function AddTransaction() {
     Amount: 0,
     Description: "",
   });
+  const [errors, setErrors] = useState<{ category?: string; amount?: string }>({});
 
   // Quick presets: last 6 used categories; fallback to first 6 expense cats if no history
   const presets = useMemo(() => {
@@ -72,15 +73,32 @@ export default function AddTransaction() {
   }, [txns, sortedOptions]);
 
   const setType = (t: "income" | "expense") => setForm((f) => ({ ...f, Type: t }));
-  const setCategory = (name: string) => setForm((f) => ({ ...f, Category: name }));
+  const setCategory = (name: string) => {
+    setForm((f) => ({ ...f, Category: name }));
+    setErrors((prev) => ({ ...prev, category: undefined }));
+  };
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const nextErrors: { category?: string; amount?: string } = {};
+    const category = form.Category.trim();
+    if (!category) nextErrors.category = "Category is required";
+
     const Amount = Math.round((form.Amount || 0) * 100) / 100; // 2dp
+    if (!Number.isFinite(form.Amount) || Amount <= 0) {
+      nextErrors.amount = "Enter an amount greater than zero";
+    }
+
+    if (Object.keys(nextErrors).length > 0) {
+      setErrors(nextErrors);
+      return;
+    }
+
+    setErrors({});
     const res = await createTransaction({
       date: form.Date,
       type: form.Type,
-      category: form.Category,
+      category,
       amount: Amount,
       description: form.Description || undefined,
     });
@@ -91,7 +109,7 @@ export default function AddTransaction() {
         id,
         date: form.Date,
         type: form.Type,
-        category: form.Category,
+        category,
         amount: Amount,
         description: form.Description || undefined,
       });
@@ -147,6 +165,7 @@ export default function AddTransaction() {
             onChange={(name: string) => setCategory(name)}
             placeholder="Choose a category…"
           />
+          {errors.category ? <p className="text-xs text-rose-600">{errors.category}</p> : null}
         </div>
 
         {/* Quick add presets (moved below Category) */}
@@ -182,8 +201,12 @@ export default function AddTransaction() {
           <label className="text-sm">Amount</label>
           <CurrencyInput
             value={form.Amount || 0}
-            onChange={(v) => setForm((f) => ({ ...f, Amount: v }))}
+            onChange={(v) => {
+              setForm((f) => ({ ...f, Amount: v }));
+              setErrors((prev) => ({ ...prev, amount: undefined }));
+            }}
           />
+          {errors.amount ? <p className="text-xs text-rose-600">{errors.amount}</p> : null}
         </div>
 
         {/* Description (optional) */}
@@ -198,7 +221,12 @@ export default function AddTransaction() {
         </div>
 
         <div>
-          <button className="bg-slate-900 text-white rounded px-4 py-2">Add</button>
+          <button
+            className="bg-slate-900 text-white rounded px-4 py-2 disabled:opacity-50"
+            disabled={!form.Category.trim() || !Number.isFinite(form.Amount) || form.Amount <= 0}
+          >
+            Add
+          </button>
         </div>
       </form>
     </div>
