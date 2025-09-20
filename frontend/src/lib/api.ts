@@ -13,9 +13,8 @@ function withAuth(init: RequestInit = {}): RequestInit {
   // Optional: fail fast if there’s no key
   if (!token) {
     // Let callers decide what to do (we’ll handle it in the cache)
-    const err: any = new Error("missing_access_key");
-    err.code = "NO_KEY";
-    throw err;
+    const err = new Error("missing_access_key");
+    throw Object.assign(err, { code: "NO_KEY" as const });
   }
   return {
     ...init,
@@ -29,9 +28,8 @@ function withAuth(init: RequestInit = {}): RequestInit {
 
 async function jsonOrThrow(res: Response) {
   if (!res.ok) {
-    const err: any = new Error(`http_${res.status}`);
-    err.status = res.status;
-    throw err;
+    const err = new Error(`http_${res.status}`);
+    throw Object.assign(err, { status: res.status });
   }
   return res.json();
 }

@@ -5,8 +5,8 @@ const AUTH = process.env.APP_ACCESS_TOKEN || process.env.VITE_APP_ACCESS_TOKEN;
 const BUDGETS_SHEET = process.env.GOOGLE_SHEETS_BUDGETS_TAB || "Budgets";
 
 // -------------------- small helpers --------------------
-const norm = (s: any) => String(s ?? "").trim();
-const lower = (s: any) => norm(s).toLowerCase();
+const norm = (s: unknown) => String(s ?? "").trim();
+const lower = (s: unknown) => norm(s).toLowerCase();
 
 function toMonthKey(d: Date) {
   const y = d.getFullYear();
@@ -37,14 +37,14 @@ function average(nums: number[]) {
   const arr = nums.filter((n) => Number.isFinite(n));
   return arr.length ? arr.reduce((s, n) => s + n, 0) / arr.length : 0;
 }
-function num(n: any) {
+function num(n: unknown) {
   const v = typeof n === "number" ? n : Number(String(n ?? "").replace(/,/g, ""));
   return Number.isFinite(v) ? v : 0;
 }
-function normalizeType(s: any) {
+function normalizeType(s: unknown) {
   return lower(s);
 }
-function normalizeCat(s: any) {
+function normalizeCat(s: unknown) {
   return norm(s);
 }
 
@@ -93,13 +93,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     try {
       const now = new Date();
       const monthKey = toMonthKey(now);
-      const amount = num((req.body as any)?.amount);
-      const notes = norm((req.body as any)?.notes);
+      const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
+      const amount = num((body as Record<string, unknown>)?.amount);
+      const notes = norm((body as Record<string, unknown>)?.notes);
       await appendBudgetOverride(monthKey, amount, notes);
       return res.json({ ok: true, month: monthKey, amount, notes });
-    } catch (e: any) {
-      console.error("append override failed", e);
-      return res.status(500).json({ error: e?.message || "append failed" });
+    } catch (error) {
+      console.error("append override failed", error);
+      const message = error instanceof Error ? error.message : "append failed";
+      return res.status(500).json({ error: message });
     }
   }
 
@@ -124,7 +126,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
 
     // Target month (current by default)
-    const qsMonth = norm(req.query.month as any);
+    const qsMonth = norm(req.query.month as string | undefined);
     const targetMonthKey = qsMonth || toMonthKey(new Date());
     const targetMonthDate = parseMonthKey(targetMonthKey);
 
@@ -226,8 +228,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           .filter(Boolean)
           .join("; ");
       }
-    } catch (e) {
-      console.error("read Budgets tab failed", e);
+    } catch (error) {
+      console.error("read Budgets tab failed", error);
     }
 
     // Final TOTAL budget
@@ -320,8 +322,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       series,
       rows,
     });
-  } catch (e: any) {
-    console.error(e);
+  } catch (error) {
+    console.error(error);
     res.status(500).json({ error: "failed to compute budget" });
   }
 }
