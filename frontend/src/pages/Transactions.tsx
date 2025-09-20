@@ -189,99 +189,20 @@ export default function TransactionsPage() {
         getCategories={getCategories}
       />
 
-      {/* Totals + pagination (desktop) */}
-      <div className="ml-auto text-sm hidden md:flex items-center gap-3">
+      {/* Totals */}
+      <div className="mt-2 hidden md:flex justify-end text-sm">
         <div>
           Total:{" "}
           <span className={`font-semibold ${totalClass}`}>
             {fmtUSDSigned(Math.abs(totalAmount), totalKind)}
           </span>
         </div>
-        <div className="text-slate-500">
-          Showing {total === 0 ? 0 : startIdx + 1}–{endIdx} of {total}
-        </div>
-        <div className="inline-flex items-center gap-1">
-          <button
-            className="px-2 py-1 border rounded disabled:opacity-50"
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-            disabled={page <= 1}
-          >
-            Prev
-          </button>
-          <span className="text-sm text-slate-600 px-1">
-            {page} / {totalPages}
-          </span>
-          <button
-            className="px-2 py-1 border rounded disabled:opacity-50"
-            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            disabled={page >= totalPages}
-          >
-            Next
-          </button>
-          <select
-            className="ml-2 border rounded px-2 py-1 text-sm"
-            value={pageSize}
-            onChange={(e) => {
-              setPageSize(Number(e.target.value));
-              setPage(1);
-            }}
-          >
-            {[25, 50, 100, 200].map((n) => (
-              <option key={n} value={n}>
-                {n}/page
-              </option>
-            ))}
-          </select>
-        </div>
       </div>
-
-      {/* Totals + pagination (mobile) */}
-      <div className="md:hidden mt-2 space-y-2">
-        <div className="text-sm">
-          Total:{" "}
-          <span className={`font-semibold ${totalClass}`}>
-            {fmtUSDSigned(Math.abs(totalAmount), totalKind)}
-          </span>
-        </div>
-        <div className="flex items-center justify-between">
-          <div className="text-xs text-slate-500">
-            Showing {total === 0 ? 0 : startIdx + 1}–{endIdx} of {total}
-          </div>
-          <div className="inline-flex items-center gap-1">
-            <button
-              className="px-2 py-1 border rounded disabled:opacity-50 text-xs"
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page <= 1}
-            >
-              Prev
-            </button>
-            <span className="text-xs text-slate-600 px-1">
-              {page}/{totalPages}
-            </span>
-            <button
-              className="px-2 py-1 border rounded disabled:opacity-50 text-xs"
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              disabled={page >= totalPages}
-            >
-              Next
-            </button>
-            <select
-              aria-label="Rows per page"
-              className="ml-2 border rounded px-1.5 py-1 text-xs"
-              value={pageSize}
-              onChange={(e) => {
-                setPageSize(Number(e.target.value));
-                setPage(1);
-              }}
-            >
-              {[25, 50, 100, 200].map((n) => (
-                <option key={n} value={n}>
-                  {n}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
+      <div className="md:hidden mt-2 text-sm">
+        Total:{" "}
+        <span className={`font-semibold ${totalClass}`}>
+          {fmtUSDSigned(Math.abs(totalAmount), totalKind)}
+        </span>
       </div>
 
       {loading ? (
@@ -636,6 +557,17 @@ export default function TransactionsPage() {
             </tbody>
           </table>
           </div>
+
+          <PaginationControls
+            total={total}
+            startIdx={startIdx}
+            endIdx={endIdx}
+            page={page}
+            totalPages={totalPages}
+            setPage={setPage}
+            pageSize={pageSize}
+            setPageSize={setPageSize}
+          />
         </>
       )}
     </div>
@@ -696,6 +628,71 @@ function MobileFilters({
           />
         </div>
       )}
+    </div>
+  );
+}
+
+function PaginationControls({
+  total,
+  startIdx,
+  endIdx,
+  page,
+  totalPages,
+  setPage,
+  pageSize,
+  setPageSize,
+}: {
+  total: number;
+  startIdx: number;
+  endIdx: number;
+  page: number;
+  totalPages: number;
+  setPage: (value: number | ((prev: number) => number)) => void;
+  pageSize: number;
+  setPageSize: (value: number) => void;
+}) {
+  return (
+    <div className="mt-6 border-t pt-4">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div className="text-xs text-slate-500 md:text-sm">
+          Showing {total === 0 ? 0 : startIdx + 1}–{endIdx} of {total}
+        </div>
+        <div className="flex items-center justify-between gap-2 md:justify-end">
+          <button
+            className="px-2 py-1 border rounded disabled:opacity-50 text-xs md:text-sm"
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={page <= 1}
+          >
+            Prev
+          </button>
+          <span className="text-xs text-slate-600 px-1 md:text-sm">
+            {page} / {totalPages}
+          </span>
+          <button
+            className="px-2 py-1 border rounded disabled:opacity-50 text-xs md:text-sm"
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            disabled={page >= totalPages}
+          >
+            Next
+          </button>
+          <select
+            aria-label="Rows per page"
+            className="ml-2 border rounded px-1.5 py-1 text-xs md:text-sm md:px-2"
+            value={pageSize}
+            onChange={(e) => {
+              const size = Number(e.target.value);
+              setPageSize(size);
+              setPage(1);
+            }}
+          >
+            {[25, 50, 100, 200].map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
     </div>
   );
 }
