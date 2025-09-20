@@ -12,8 +12,16 @@ import {
   Bar,
   Line,
 } from "recharts";
-
 export type MonthlyPoint = { month: string; income: number; expense: number; net: number };
+type SimpleTooltipFormatter = (
+  value: number | string,
+  name: string,
+  payload: unknown,
+  index: number,
+) => string;
+
+const formatTooltip: SimpleTooltipFormatter = (value) =>
+  fmtUSD(typeof value === "number" ? value : Number(value));
 
 export default function CombinedMonthlyChart({ data }: { data: MonthlyPoint[] }) {
   const yWidth = Math.max(
@@ -36,7 +44,7 @@ export default function CombinedMonthlyChart({ data }: { data: MonthlyPoint[] })
           <CartesianGrid strokeDasharray="3 3" />
           <XAxis dataKey="month" />
           <YAxis width={yWidth} tickFormatter={(v: number) => fmtUSD(v)} />
-          <Tooltip formatter={(v: any) => fmtUSD(Number(v))} />
+          <Tooltip formatter={formatTooltip} />
           <Legend />
           <Bar dataKey="income" name="Income" fill={COL.income} radius={[4, 4, 0, 0]} />
           <Bar dataKey="expense" name="Expense" fill={COL.expense} radius={[4, 4, 0, 0]} />

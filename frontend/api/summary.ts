@@ -33,8 +33,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       totalExpense: expense,
       netCashFlow: income - expense,
     });
-  } catch (e: any) {
-    console.error(e);
-    return res.status(500).json({ error: e?.message || "Server error" });
+  } catch (error) {
+    console.error(error);
+    const message = error instanceof Error ? error.message : "Server error";
+    return res.status(500).json({ error: message });
   }
 }

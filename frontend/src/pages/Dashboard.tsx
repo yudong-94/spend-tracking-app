@@ -70,7 +70,7 @@ function CategoryChart({ title, data, color }: { title: string; data: CatAmt[]; 
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis type="number" tickFormatter={(v: number) => fmtUSD(Number(v))} />
               <YAxis type="category" dataKey="name" width={yCatWidth} tick={{ fontSize: 12 }} />
-              <Tooltip formatter={(v: any) => fmtUSD(Number(v))} />
+              <Tooltip formatter={(value: number | string) => fmtUSD(typeof value === "number" ? value : Number(value))} />
               <Bar dataKey="amount" fill={color} radius={[0, 4, 4, 0]} />
             </BarChart>
           </ResponsiveContainer>
