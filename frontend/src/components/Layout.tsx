@@ -135,7 +135,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       {location.pathname !== "/add" ? (
         <Link
           to="/add"
-          className="fixed bottom-6 right-6 z-50 inline-flex items-center gap-2 rounded-full bg-slate-900 px-4 py-3 text-white shadow-lg transition hover:bg-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-500"
+          className="fixed right-6 bottom-24 sm:bottom-16 md:bottom-10 lg:bottom-8 z-50 inline-flex items-center gap-2 rounded-full bg-slate-900 px-4 py-3 text-white shadow-lg transition hover:bg-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-500"
         >
           <Plus className="h-5 w-5" />
           <span className="hidden sm:inline">Add Transaction</span>

@@ -4,6 +4,12 @@ import { useDataCache, Tx } from "@/state/data-cache";
 import PageHeader from "@/components/PageHeader";
 import CategorySelect from "@/components/CategorySelect";
 import { fmtUSDSigned } from "@/lib/format";
+import {
+  QUICK_RANGE_OPTIONS,
+  computeQuickRange,
+  isQuickRangeKey,
+  type QuickRangeKey,
+} from "@/lib/date-range";
 import { updateTransaction, deleteTransaction } from "@/lib/api";
 
 export default function TransactionsPage() {
@@ -34,6 +40,7 @@ export default function TransactionsPage() {
   >(null);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [quickRange, setQuickRange] = useState<QuickRangeKey | "custom">("all");
 
   // Persist sort + page size
   const LS_KEY = "tx-table-state-v1";
@@ -47,22 +54,42 @@ export default function TransactionsPage() {
         pageSize?: number;
         start?: string;
         end?: string;
+        quickRange?: string;
       };
       if (s.sortBy) setSortBy(s.sortBy);
       if (s.sortDir === "asc" || s.sortDir === "desc") setSortDir(s.sortDir);
       if (s.pageSize && [25, 50, 100, 200].includes(Number(s.pageSize))) {
         setPageSize(Number(s.pageSize));
       }
-      if (typeof s.start === "string") setStart(s.start);
-      if (typeof s.end === "string") setEnd(s.end);
+      if (isQuickRangeKey(s.quickRange)) {
+        const range = computeQuickRange(s.quickRange);
+        setQuickRange(s.quickRange);
+        setStart(range.start);
+        setEnd(range.end);
+      } else {
+        if (typeof s.start === "string") setStart(s.start);
+        if (typeof s.end === "string") setEnd(s.end);
+        setQuickRange("custom");
+      }
     } catch {}
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   useEffect(() => {
     try {
-      localStorage.setItem(LS_KEY, JSON.stringify({ sortBy, sortDir, pageSize, start, end }));
+      localStorage.setItem(
+        LS_KEY,
+        JSON.stringify({ sortBy, sortDir, pageSize, start, end, quickRange }),
+      );
     } catch {}
-  }, [sortBy, sortDir, pageSize, start, end]);
+  }, [sortBy, sortDir, pageSize, start, end, quickRange]);
+
+  const applyQuickRange = (key: QuickRangeKey) => {
+    const { start: nextStart, end: nextEnd } = computeQuickRange(key);
+    setQuickRange(key);
+    setStart(nextStart);
+    setEnd(nextEnd);
+    setPage(1);
+  };
 
   async function onRefresh() {
     setIsRefreshing(true);
@@ -170,14 +197,37 @@ export default function TransactionsPage() {
           type="date"
           className="border rounded px-3 py-2"
           value={start}
-          onChange={(e) => setStart(e.target.value)}
+          onChange={(e) => {
+            setQuickRange("custom");
+            setStart(e.target.value);
+          }}
         />
         <input
           type="date"
           className="border rounded px-3 py-2"
           value={end}
-          onChange={(e) => setEnd(e.target.value)}
+          onChange={(e) => {
+            setQuickRange("custom");
+            setEnd(e.target.value);
+          }}
         />
+        <div className="flex flex-wrap gap-2 items-center">
+          {QUICK_RANGE_OPTIONS.map((opt) => (
+            <button
+              key={opt.key}
+              type="button"
+              onClick={() => applyQuickRange(opt.key)}
+              className={`rounded-full border px-3 py-1 text-sm transition ${
+                quickRange === opt.key
+                  ? "bg-slate-900 text-white border-slate-900"
+                  : "bg-white text-slate-600 hover:bg-slate-50"
+              }`}
+              aria-pressed={quickRange === opt.key}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
         <select
           className="border rounded px-3 py-2"
           value={type}
@@ -211,6 +261,9 @@ export default function TransactionsPage() {
         setStart={setStart}
         end={end}
         setEnd={setEnd}
+        quickRange={quickRange}
+        setQuickRange={setQuickRange}
+        applyQuickRange={applyQuickRange}
       />
 
       {/* Totals */}
@@ -611,6 +664,9 @@ function MobileFilters({
   setStart,
   end,
   setEnd,
+  quickRange,
+  setQuickRange,
+  applyQuickRange,
 }: {
   q: string;
   setQ: (v: string) => void;
@@ -623,6 +679,9 @@ function MobileFilters({
   setStart: (v: string) => void;
   end: string;
   setEnd: (v: string) => void;
+  quickRange: QuickRangeKey | "custom";
+  setQuickRange: (key: QuickRangeKey | "custom") => void;
+  applyQuickRange: (key: QuickRangeKey) => void;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -639,14 +698,37 @@ function MobileFilters({
             type="date"
             className="border rounded px-3 py-2 w-full"
             value={start}
-            onChange={(e) => setStart(e.target.value)}
+            onChange={(e) => {
+              setQuickRange("custom");
+              setStart(e.target.value);
+            }}
           />
           <input
             type="date"
             className="border rounded px-3 py-2 w-full"
             value={end}
-            onChange={(e) => setEnd(e.target.value)}
+            onChange={(e) => {
+              setQuickRange("custom");
+              setEnd(e.target.value);
+            }}
           />
+          <div className="flex flex-wrap gap-2">
+            {QUICK_RANGE_OPTIONS.map((opt) => (
+              <button
+                key={opt.key}
+                type="button"
+                onClick={() => applyQuickRange(opt.key)}
+                className={`rounded-full border px-3 py-1 text-xs transition ${
+                  quickRange === opt.key
+                    ? "bg-slate-900 text-white border-slate-900"
+                    : "bg-white text-slate-600 hover:bg-slate-50"
+                }`}
+                aria-pressed={quickRange === opt.key}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
           <input
             className="border rounded px-3 py-2 w-full"
             placeholder="Search by category or description..."
