@@ -131,6 +131,16 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">{children}</div>
         </main>
       </div>
+
+      {location.pathname !== "/add" ? (
+        <Link
+          to="/add"
+          className="fixed bottom-6 right-6 z-50 inline-flex items-center gap-2 rounded-full bg-slate-900 px-4 py-3 text-white shadow-lg transition hover:bg-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-500"
+        >
+          <Plus className="h-5 w-5" />
+          <span className="hidden sm:inline">Add Transaction</span>
+        </Link>
+      ) : null}
     </div>
   );
 };
