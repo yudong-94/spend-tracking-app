@@ -1,193 +1,209 @@
 # Spend Tracker (Google Sheets + Vercel)
 
-A fast, low-cost personal finance app that uses Google Sheets as the database and Vercel for hosting.
-Built with Vite + React + TypeScript + Tailwind; charts via Recharts; API via Vercel Serverless Functions.
+Spend Tracker is a fast, low-cost personal finance app that stores data in Google Sheets and serves the API through Vercel Serverless Functions. The frontend is built with Vite, React, TypeScript, and Tailwind CSS, and visualizations are rendered with Recharts.
+
+See `GOOGLE_SHEETS_SETUP.md` for a detailed walkthrough on preparing your spreadsheet and Google service account.
 
 ## ✨ Features
 
-- Dashboard: this month/year cards (Income, Expense, Net) and category breakdowns
-- Analytics: monthly/annual totals, savings rate, and YoY pacing
-- Transactions: search, filter by type and categories (multi-select)
-- Add Transaction: quick form with recent-category chips
-- Budget: automatic monthly budget from history + manual overrides
-- Data cache: app-wide cache with refresh and optimistic updates
+- Dashboard: month-to-date and year-to-date cards (income, expense, net) plus category breakdowns
+- Analytics: monthly/annual totals, savings rate, YoY pacing, and quick date-range presets
+- Transactions: instant search, multi-select category filters, quick ranges, inline edit/delete, and paginated tables
+- Add Transaction: keyboard-friendly form with recent-category chips and rich currency input
+- Budget: automatic target based on the last 12 complete months (with rent detection), manual overrides, and cumulative pacing chart
+- Access control & caching: simple bearer-token gate, optimistic updates, and a localStorage-backed cache with manual refresh
 
-See also GOOGLE_SHEETS_SETUP.md for detailed Sheets setup instructions.
+---
+
+## 🧰 Requirements
+
+- Node.js 18+ and npm 9+ (npm workspaces are enabled)
+- A Google Cloud project with the Sheets API enabled and a service account key
+- A Google Sheet prepared with the tabs and headers below
+- (Local dev) Vercel CLI (`npx vercel`) for running serverless functions locally
 
 ---
 
 ## 🗂️ Google Sheets Tabs
 
-- Transactions (header row): ID | Date | Amount | Type | Category | Description | Created At | Updated At
-  - Type must be income or expense (lowercase)
-  - Amount should be Number-formatted in Sheets
-- Categories: ID | Name | Type
-- Budgets (optional): Month (YYYY-MM) | Amount | Notes
-  - Any number of override rows allowed per month; amounts are summed
+- Transactions (header row): `ID | Date | Amount | Type | Category | Description | Created At | Updated At`
+  - `Type` must be `income` or `expense` (lowercase)
+  - `Amount` should use the Number format in Sheets
+  - `Created At`/`Updated At` are timestamps maintained by the API
+- Categories: `ID | Name | Type`
+- Budgets (optional but required for budget features): `Month (YYYY-MM) | Amount | Notes`
+  - You can add multiple override rows per month; amounts are summed
 
-Share the sheet with your service account email as Editor.
+Share the sheet with your service account email as an **Editor** so the API can read and write.
 
 ---
 
 ## 🔐 Environment Variables
 
-Set these in Vercel (Project → Settings → Environment Variables) and in local frontend/.env.local when developing with functions:
+Configure these variables in Vercel (Project → Settings → Environment Variables) and in `frontend/.env.local` when developing locally with `vercel dev`:
 
-- GOOGLE_SERVICE_ACCOUNT_JSON: Entire service account JSON as one line (escape newlines in private_key)
-- GOOGLE_SHEETS_ID: Spreadsheet ID
-- GOOGLE_SHEETS_TAB: Transactions tab name (default: Transactions)
-- GOOGLE_SHEETS_BUDGETS_TAB: Budgets tab name (default: Budgets)
-- APP_ACCESS_TOKEN: Simple shared secret used by API and UI
+| Name | Description | Required | Default |
+| --- | --- | --- | --- |
+| `GOOGLE_SERVICE_ACCOUNT_JSON` | Entire service account JSON, stringified on one line (escape `\n` in `private_key`) | Yes | — |
+| `GOOGLE_SHEETS_ID` | Spreadsheet ID from the Google Sheets URL | Yes | — |
+| `GOOGLE_SHEETS_TAB` | Transactions tab name | Optional | `Transactions` |
+| `GOOGLE_SHEETS_BUDGETS_TAB` | Budgets tab name | Optional | `Budgets` |
+| `APP_ACCESS_TOKEN` | Shared secret used by both the API and UI access gate | Yes (recommended) | — |
 
-Auth model: On first load, the UI prompts for an access key (stored in localStorage). Requests include Authorization: Bearer <key>. Serverless routes validate against APP_ACCESS_TOKEN.
+The UI prompts users for an access key on first load and keeps it in `localStorage`. Enter the same value you configure for `APP_ACCESS_TOKEN`.
+
+### Optional: legacy Express backend
+
+The `backend/` workspace exposes an Express API primarily for custom integrations and isn’t required for the default Vercel deployment. If you need it, provide these variables via `backend/.env`:
+
+- `GOOGLE_SHEETS_SPREADSHEET_ID`
+- `GOOGLE_SHEETS_CREDENTIALS_EMAIL`
+- `GOOGLE_SHEETS_PRIVATE_KEY` (use literal `\n` escapes)
+- `GOOGLE_SHEETS_TRANSACTIONS_RANGE` (default `Transactions!A:F`)
+- `GOOGLE_SHEETS_CATEGORIES_RANGE` (default `Categories!A:E`)
+- `CORS_ORIGIN`, `RATE_LIMIT_WINDOW_MS`, `RATE_LIMIT_MAX_REQUESTS`
 
 ---
 
-## ▶️ Running Locally
+## ▶️ Local Development
 
-Recommended: use Vercel’s local dev to run the serverless API.
+Running the UI and serverless API together (recommended):
 
-Option A — Vercel functions (single process):
+1. From the repo root, install dependencies (npm workspaces handle all packages):
+   ```bash
+   npm install
+   ```
+2. Create `frontend/.env.local` and populate it with the environment variables listed above.
+3. Start the Vercel dev server from the frontend workspace:
+   ```bash
+   cd frontend
+   npx vercel dev
+   ```
+   The first run will prompt you to log in or link a project; follow the CLI prompts.
+4. Visit `http://localhost:3000`. When prompted for an access key, use the value of `APP_ACCESS_TOKEN`.
 
-1) cd frontend
-2) npm install
-3) Create frontend/.env.local with the variables above
-4) npx vercel dev
+> Tip: `vercel dev` serves both the Vite SPA and the serverless routes under `/api/*`, matching the production deployment.
 
-This serves the SPA and /api/* at http://localhost:3000.
+### Other workflows
 
-Option B — Vite dev (SPA) + backend (optional/legacy):
-
-From repo root:
-
-1) npm install
-2) Populate backend/.env (see GOOGLE_SHEETS_SETUP.md)
-3) npm run dev
-
-Notes:
-- Vite proxies /api → http://localhost:3001 (see frontend/vite.config.ts)
-- The backend currently implements /api/transactions endpoints. Analytics and budget endpoints are provided by the serverless functions in frontend/api and will 404 if only the backend is running. For full functionality locally, prefer Option A.
+- **Frontend only (expects a remote API):** `npm run dev --workspace=frontend`
+- **Express backend (legacy/optional):** `npm run dev --workspace=backend`
+  - Note: the Express backend does not expose the analytics/budget routes that the UI expects. Use `vercel dev` for the complete experience.
 
 ---
 
 ## ☁️ Deploy (Vercel)
 
-- Project root: frontend
-- Build Command: npm run build
-- Output Dir: dist
-- Environment variables: configure the ones listed above
-- The serverless API lives under frontend/api/* and is auto-deployed
-
-vercel.json ensures SPA routing (fallback to index.html) and /api/* routing.
+- Project root: `frontend`
+- Build command: `npm run build`
+- Output directory: `dist`
+- Set the environment variables listed above in the Vercel project settings
+- The serverless API lives under `frontend/api/*` and is auto-deployed; `vercel.json` handles SPA fallbacks and `/api/*` rewrites
 
 ---
 
 ## 🧱 Project Structure
 
+```
 frontend/
   api/
     _lib/
-      sheets.ts            # Google Sheets helpers
-      auth.ts              # Bearer-token check using APP_ACCESS_TOKEN
-    transactions.ts        # GET/POST transactions
-    summary.ts             # GET monthly summary
-    breakdown.ts           # GET category breakdown
-    categories.ts          # GET categories (from "Categories" tab)
-    budget.ts              # GET computed budget + POST override
+      sheets.ts            # Google Sheets helpers (read/append/update/delete)
+      auth.ts              # Bearer-token validation against APP_ACCESS_TOKEN
+    transactions.ts        # CRUD for transactions
+    summary.ts             # Aggregate income/expense summaries
+    breakdown.ts           # Category breakdown
+    categories.ts          # Categories tab reader
+    budget.ts              # Budget computation + manual overrides
   src/
     components/
+      AccessGate.tsx
       CategorySelect.tsx
+      CombinedMonthlyChart.tsx
       CurrencyInput.tsx
+      Layout.tsx
       PageHeader.tsx
       RefreshButton.tsx
-      CombinedMonthlyChart.tsx
-      Layout.tsx
-      AccessGate.tsx
+    lib/
+      api.ts               # Client-side fetch helpers
+      chart.ts             # Recharts utilities
+      colors.ts            # Shared color palette
+      date-range.ts        # Quick-range presets & helpers
+      format.ts            # Currency/number formatting
     pages/
       Dashboard.tsx
       Analytics.tsx
       Transactions.tsx
       AddTransaction.tsx
       Budget.tsx
-    lib/
-      api.ts              # Client fetchers
-      format.ts           # Currency formatting
-      colors.ts           # Chart palette
-      chart.ts            # Chart helpers (axes/formatters)
     state/
-      data-cache.tsx      # App-wide cache and helpers
-      auth.tsx            # LocalStorage-based token gate
-
-backend/ (optional)
-  Express API for /api/transactions; used by Vite proxy in dev if you choose Option B.
-
-shared/
-  Shared types and utilities for backend/frontend.
+      auth.tsx             # Access token storage
+      data-cache.tsx       # Local cache, summaries, budget helpers
+backend/                  # Optional Express API for custom integrations
+shared/                   # Shared types/utilities consumed by backend/frontend
+```
 
 ---
 
 ## 🧮 API Overview (serverless)
 
-- GET /api/transactions?start=YYYY-MM-DD&end=YYYY-MM-DD&type=income|expense&category=Cat&q=search
-  - Returns normalized rows from Transactions
-- POST /api/transactions
-  - Body: { date, type: "income"|"expense", category, amount, description? }
-  - Generates an ID like spend-#### and appends to the sheet
-- GET /api/summary?start=YYYY-MM-DD&end=YYYY-MM-DD
-  - { totalIncome, totalExpense, netCashFlow }
-- GET /api/breakdown?type=income|expense&start=YYYY-MM-DD&end=YYYY-MM-DD
-  - [{ category, amount }]
-- GET /api/categories
-  - [{ id, name, type }]
-- GET /api/budget?month=YYYY-MM (optional)
-  - { month, totalBudget, totalActualMTD, totalRemaining, series, rows, manualTotal, overAllocated }
-- POST /api/budget
-  - Body: { amount: number, notes?: string, month?: YYYY-MM }
+All routes require `Authorization: Bearer <APP_ACCESS_TOKEN>` if the token is set.
 
-All routes require Authorization: Bearer APP_ACCESS_TOKEN if that env var is set.
+- `GET /api/transactions?start=YYYY-MM-DD&end=YYYY-MM-DD&type=income|expense&category=Cat&q=search`
+- `POST /api/transactions` → `{ date, type: "income"|"expense", category, amount, description? }`
+- `PUT /api/transactions` → `{ id, ...fields }` (partial updates)
+- `DELETE /api/transactions?id=spend-123`
+- `GET /api/summary?start=YYYY-MM-DD&end=YYYY-MM-DD`
+- `GET /api/breakdown?type=income|expense&start=YYYY-MM-DD&end=YYYY-MM-DD`
+- `GET /api/categories`
+- `GET /api/budget?month=YYYY-MM`
+- `POST /api/budget` → `{ amount: number, notes?: string, month?: YYYY-MM }`
+
+IDs are generated as `spend-####` when missing, and the API normalizes headers when reading from Sheets.
 
 ---
 
 ## 🧠 Caching & Refresh
 
-- Uses react-query plus a lightweight local cache for fast UX
-- Manual Refresh button; cache auto-refreshes after adding transactions
-- Optimistic updates where safe
+- Local data is cached in `localStorage` (transactions, categories, budget) for instant reloads
+- Manual Refresh button invalidates the cache and refetches data
+- Optimistic updates keep the UI responsive when creating, editing, or deleting transactions
 
 ---
 
 ## 🎨 UI Details
 
-- Money: signed USD (+ income, − expense)
-- Badges: 🟢 income / 🔴 expense
-- Charts: Recharts (green income, red expense, blue net) with smart axes
-- Category dropdowns: multi-select in Analytics/Transactions; single-select in Add Transaction
-- Dashboard charts show Top 14 categories and group the rest into Other
+- Currency is rendered as signed USD (`+` income / `−` expense)
+- Badges: 🟢 income / 🔴 expense / 📘 net on charts
+- Quick date ranges (This Month, Last 30 Days, YTD, etc.) persist per user
+- Category dropdowns provide multi-select in Analytics/Transactions and single-select in Add Transaction
+- Dashboard charts show the top categories and group the rest as “Other”
 
 ---
 
 ## 🛠️ Dev & Tooling
 
-- Format: npm run format and npm run format:check (root)
-- Lint (frontend): cd frontend && npm run lint
-- Build (frontend): cd frontend && npm run build
+- Format everything: `npm run format`
+- Check formatting only: `npm run format:check`
+- Frontend lint: `npm run lint --workspace=frontend`
+- Frontend build: `npm run build --workspace=frontend`
+- Preview production build: `npm run preview --workspace=frontend`
 
-Storybook (optional): sample stories exist; you can init Storybook with npx storybook@latest init.
+Storybook isn’t configured, but you can bootstrap it with `npx storybook@latest init` if desired.
 
 ---
 
 ## 🔒 Security Notes
 
-- Keep GOOGLE_SERVICE_ACCOUNT_JSON secret; never commit .env files
+- Keep `GOOGLE_SERVICE_ACCOUNT_JSON` secret; never commit `.env` files
 - Share the Sheet only with the service account email
-- APP_ACCESS_TOKEN is a shared secret; rotate periodically
+- Rotate `APP_ACCESS_TOKEN` periodically; all clients must re-enter the new key
 
 ---
 
 ## 🗺️ Roadmap
 
-- Inline edit/delete on Transactions
-- Budget targets & variance
-- Recurring transactions helper
+- Budget variance alerts and target tracking
+- Recurring transaction helper
 - CSV import/export
-- Optional OAuth-based auth
+- Optional OAuth-based authentication
