@@ -19,6 +19,7 @@ import {
 } from "recharts";
 import { estimateYAxisWidthFromMax, percentFormatter } from "@/lib/chart";
 import CombinedMonthlyChart from "@/components/CombinedMonthlyChart";
+import ComparisonTab from "@/components/ComparisonTab";
 import {
   QUICK_RANGE_OPTIONS,
   computeQuickRange,
@@ -69,7 +70,7 @@ const ym = (d: string) => d.slice(0, 7);
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const MIN_Y_AXIS = 56; // lower bound for Y-axis width
 
-type Tab = "monthly" | "annual" | "breakdown";
+type Tab = "monthly" | "annual" | "breakdown" | "compare";
 
 export default function Analytics() {
   const { txns: all, getCategories, refresh } = useDataCache();
@@ -328,68 +329,75 @@ export default function Analytics() {
       <PageHeader lastUpdated={lastUpdated} onRefresh={onRefresh} isRefreshing={isRefreshing} />
       {/* Filters – desktop */}
       <div className="sticky top-0 z-10 bg-white/90 backdrop-blur supports-[backdrop-filter]:bg-white/70 border-b py-2 hidden md:block">
-        <div className="flex flex-wrap gap-3 items-end">
-          <div className="grid w-44">
-            <label className="text-sm">Start</label>
-            <input
-              type="date"
-              className="border rounded px-3 py-2"
-              value={start}
-              onChange={(e) => {
-                setQuickRange("custom");
-                setStart(e.target.value);
-              }}
-            />
+        {tab !== "compare" && (
+          <div className="flex flex-wrap gap-3 items-end">
+            <div className="grid w-44">
+              <label className="text-sm">Start</label>
+              <input
+                type="date"
+                className="border rounded px-3 py-2"
+                value={start}
+                onChange={(e) => {
+                  setQuickRange("custom");
+                  setStart(e.target.value);
+                }}
+              />
+            </div>
+            <div className="grid w-44">
+              <label className="text-sm">End</label>
+              <input
+                type="date"
+                className="border rounded px-3 py-2"
+                value={end}
+                onChange={(e) => {
+                  setQuickRange("custom");
+                  setEnd(e.target.value);
+                }}
+              />
+            </div>
+            <div className="grid w-56">
+              <label className="text-sm">Category</label>
+              <CategorySelect
+                multiple
+                value={categories}
+                onChange={setCategories}
+                options={getCategories()}
+                className="w-full"
+                placeholder="All Categories"
+              />
+            </div>
+            <div className="flex flex-wrap gap-2 basis-full">
+              {QUICK_RANGE_OPTIONS.map((opt) => (
+                <button
+                  key={opt.key}
+                  type="button"
+                  onClick={() => applyQuickRange(opt.key)}
+                  className={`rounded-full border px-3 py-1 text-sm transition ${
+                    quickRange === opt.key
+                      ? "bg-slate-900 text-white border-slate-900"
+                      : "bg-white text-slate-600 hover:bg-slate-50"
+                  }`}
+                  aria-pressed={quickRange === opt.key}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
           </div>
-          <div className="grid w-44">
-            <label className="text-sm">End</label>
-            <input
-              type="date"
-              className="border rounded px-3 py-2"
-              value={end}
-              onChange={(e) => {
-                setQuickRange("custom");
-                setEnd(e.target.value);
-              }}
-            />
-          </div>
-          <div className="grid w-56">
-            <label className="text-sm">Category</label>
-            <CategorySelect
-              multiple
-              value={categories}
-              onChange={setCategories}
-              options={getCategories()}
-              className="w-full"
-              placeholder="All Categories"
-            />
-          </div>
-          <div className="flex flex-wrap gap-2 basis-full">
-            {QUICK_RANGE_OPTIONS.map((opt) => (
-              <button
-                key={opt.key}
-                type="button"
-                onClick={() => applyQuickRange(opt.key)}
-                className={`rounded-full border px-3 py-1 text-sm transition ${
-                  quickRange === opt.key
-                    ? "bg-slate-900 text-white border-slate-900"
-                    : "bg-white text-slate-600 hover:bg-slate-50"
-                }`}
-                aria-pressed={quickRange === opt.key}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
-        </div>
+        )}
 
         {/* Tabs */}
-        <nav className="mt-3 text-sm" role="tablist" aria-label="Analytics sections">
+        <nav
+          className={`text-sm ${tab !== "compare" ? "mt-3" : ""}`}
+          role="tablist"
+          aria-label="Analytics sections"
+        >
           <div className="flex gap-4">
             {([
               ["monthly", "Monthly"],
               ["annual", "Annual"],
               ["breakdown", "Breakdown"],
+              ["compare", "Comparison"],
             ] as Array<[Tab, string]>).map(([key, label]) => (
               <button
                 key={key}
@@ -941,6 +949,7 @@ export default function Analytics() {
         </div>
       </section>
       )}
+      {tab === "compare" && <ComparisonTab />}
     </div>
   );
 }
@@ -991,67 +1000,74 @@ function MobileAnalyticsFilters({
   applyQuickRange: (key: QuickRangeKey) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const showFilters = tab !== "compare";
+  const toggleLabel = showFilters ? "filters" : "tabs";
   return (
     <div className="md:hidden sticky top-0 z-10 bg-white/90 backdrop-blur supports-[backdrop-filter]:bg-white/70 border-b py-2">
       <button
         className="px-3 py-2 border rounded w-full text-left bg-white"
         onClick={() => setOpen((v) => !v)}
       >
-        {open ? "Hide filters" : "Show filters"}
+        {open ? `Hide ${toggleLabel}` : `Show ${toggleLabel}`}
       </button>
       {open && (
         <div className="mt-2 space-y-2">
-          <div className="grid grid-cols-2 gap-2">
-            <input
-              type="date"
-              className="border rounded px-3 py-2"
-              value={start}
-              onChange={(e) => {
-                setQuickRange("custom");
-                setStart(e.target.value);
-              }}
-            />
-            <input
-              type="date"
-              className="border rounded px-3 py-2"
-              value={end}
-              onChange={(e) => {
-                setQuickRange("custom");
-                setEnd(e.target.value);
-              }}
-            />
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {QUICK_RANGE_OPTIONS.map((opt) => (
-              <button
-                key={opt.key}
-                type="button"
-                onClick={() => applyQuickRange(opt.key)}
-                className={`rounded-full border px-2.5 py-1 text-xs transition ${
-                  quickRange === opt.key
-                    ? "bg-slate-900 text-white border-slate-900"
-                    : "bg-white text-slate-600 hover:bg-slate-50"
-                }`}
-                aria-pressed={quickRange === opt.key}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
-          <CategorySelect
-            multiple
-            value={categories}
-            onChange={setCategories}
-            options={getCategories()}
-            className="w-full"
-            placeholder="All Categories"
-          />
+          {showFilters && (
+            <>
+              <div className="grid grid-cols-2 gap-2">
+                <input
+                  type="date"
+                  className="border rounded px-3 py-2"
+                  value={start}
+                  onChange={(e) => {
+                    setQuickRange("custom");
+                    setStart(e.target.value);
+                  }}
+                />
+                <input
+                  type="date"
+                  className="border rounded px-3 py-2"
+                  value={end}
+                  onChange={(e) => {
+                    setQuickRange("custom");
+                    setEnd(e.target.value);
+                  }}
+                />
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {QUICK_RANGE_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    onClick={() => applyQuickRange(opt.key)}
+                    className={`rounded-full border px-2.5 py-1 text-xs transition ${
+                      quickRange === opt.key
+                        ? "bg-slate-900 text-white border-slate-900"
+                        : "bg-white text-slate-600 hover:bg-slate-50"
+                    }`}
+                    aria-pressed={quickRange === opt.key}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+              <CategorySelect
+                multiple
+                value={categories}
+                onChange={setCategories}
+                options={getCategories()}
+                className="w-full"
+                placeholder="All Categories"
+              />
+            </>
+          )}
           <div className="pt-1">
             <div className="flex gap-3 text-sm overflow-x-auto">
               {([
                 ["monthly", "Monthly"],
                 ["annual", "Annual"],
                 ["breakdown", "Breakdown"],
+                ["compare", "Comparison"],
               ] as Array<[Tab, string]>).map(([key, label]) => (
                 <button
                   key={key}
