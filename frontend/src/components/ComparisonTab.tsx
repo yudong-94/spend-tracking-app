@@ -279,6 +279,9 @@ function CategoryTable({ data }: { data: ComparisonResponse }) {
       expense: [],
     };
     for (const row of data.categories) byType[row.type].push(row);
+    (Object.keys(byType) as Array<"income" | "expense">).forEach((key) => {
+      byType[key].sort((a, b) => Math.abs(b.amountB) - Math.abs(a.amountB));
+    });
     return [
       { key: "income" as const, label: "Income categories", rows: byType.income },
       { key: "expense" as const, label: "Expense categories", rows: byType.expense },
@@ -312,8 +315,8 @@ function CategoryTable({ data }: { data: ComparisonResponse }) {
           <thead>
             <tr className="text-left text-xs uppercase tracking-wide text-slate-500">
               <th className="py-2 pr-4">Category</th>
-              <th className="py-2 pr-4 text-right">{RECENT_LABEL}</th>
               <th className="py-2 pr-4 text-right">{EARLIER_LABEL}</th>
+              <th className="py-2 pr-4 text-right">{RECENT_LABEL}</th>
               <th className="py-2 pr-4 text-right">Delta</th>
               <th className="py-2 text-right">% diff</th>
             </tr>
@@ -349,8 +352,8 @@ function CategoryTable({ data }: { data: ComparisonResponse }) {
                             </span>
                           </div>
                         </td>
-                        <td className="py-2 pr-4 text-right text-slate-700">{fmtUSD(row.amountB)}</td>
                         <td className="py-2 pr-4 text-right text-slate-700">{fmtUSD(row.amountA)}</td>
+                        <td className="py-2 pr-4 text-right text-slate-700">{fmtUSD(row.amountB)}</td>
                         <td className={`py-2 pr-4 text-right font-medium ${tone}`}>
                           {delta > 0 ? "+" : ""}
                           {fmtUSD(delta)}
@@ -363,8 +366,8 @@ function CategoryTable({ data }: { data: ComparisonResponse }) {
                   })}
                   <tr key={`${key}-total`} className="font-medium">
                     <td className="py-2 pr-4 text-slate-800">Total {key}</td>
-                    <td className="py-2 pr-4 text-right text-slate-800">{fmtUSD(total.recent)}</td>
                     <td className="py-2 pr-4 text-right text-slate-800">{fmtUSD(total.earlier)}</td>
+                    <td className="py-2 pr-4 text-right text-slate-800">{fmtUSD(total.recent)}</td>
                     <td className={`py-2 pr-4 text-right ${(() => {
                       if (totalDelta === 0) return 'text-slate-600';
                       const positiveGood = key !== 'expense';
