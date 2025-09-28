@@ -138,19 +138,10 @@ export type ComparisonCategory = {
   pct: number | null;
 };
 
-export type ComparisonWaterfallStep = {
-  label: string;
-  kind: "baseline" | "category" | "result";
-  type: "income" | "expense" | "net";
-  delta: number;
-  net: number;
-};
-
 export type ComparisonResponse = {
   periodA: { start?: string; end?: string; totals: { income: number; expense: number; net: number } };
   periodB: { start?: string; end?: string; totals: { income: number; expense: number; net: number } };
   categories: ComparisonCategory[];
-  waterfall: ComparisonWaterfallStep[];
 };
 
 export async function getComparison(params?: { aStart?: string; aEnd?: string; bStart?: string; bEnd?: string }) {

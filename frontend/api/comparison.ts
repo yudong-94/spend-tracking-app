@@ -18,21 +18,12 @@ type CategoryComparison = CategoryAggregate & {
   pct: number | null;
 };
 
-type WaterfallStep = {
-  label: string;
-  kind: "baseline" | "category" | "result";
-  type: "income" | "expense" | "net";
-  delta: number;
-  net: number;
-};
-
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 type ComparisonResponse = {
   periodA: Period & { totals: Totals };
   periodB: Period & { totals: Totals };
   categories: CategoryComparison[];
-  waterfall: WaterfallStep[];
 };
 
 function monthRange(offset: number): Period {
@@ -81,14 +72,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       bEnd?: string;
     };
 
-    const defaults = { current: monthRange(0), previous: monthRange(-1) };
+    const defaults = { newer: monthRange(0), previous: monthRange(-1) };
     const rawPeriodA: Period = {
-      start: normalizeDate(aStart) ?? defaults.current.start,
-      end: normalizeDate(aEnd) ?? defaults.current.end,
+      start: normalizeDate(aStart) ?? defaults.previous.start,
+      end: normalizeDate(aEnd) ?? defaults.previous.end,
     };
     const rawPeriodB: Period = {
-      start: normalizeDate(bStart) ?? defaults.previous.start,
-      end: normalizeDate(bEnd) ?? defaults.previous.end,
+      start: normalizeDate(bStart) ?? defaults.newer.start,
+      end: normalizeDate(bEnd) ?? defaults.newer.end,
     };
 
     const startATs = toTimestamp(rawPeriodA.start);
@@ -143,8 +134,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const categories: CategoryComparison[] = Array.from(map.values()).map((entry) => {
-      const delta = entry.amountA - entry.amountB;
-      const pct = entry.hasA && entry.hasB && entry.amountB !== 0 ? delta / entry.amountB : null;
+      const delta = entry.amountB - entry.amountA;
+      const pct = entry.hasA && entry.hasB && entry.amountA !== 0 ? delta / entry.amountA : null;
       return { ...entry, delta, pct };
     });
 
@@ -164,61 +155,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       net: totalsB.income - totalsB.expense,
     };
 
-    const baselineLabel = "Period B net";
-    const resultLabel = "Period A net";
-    const waterfall: WaterfallStep[] = [];
-    waterfall.push({
-      label: baselineLabel,
-      kind: "baseline",
-      type: "net",
-      delta: 0,
-      net: totalsPeriodB.net,
-    });
-
-    let running = totalsPeriodB.net;
-    const contributionSteps = categories
-      .map((entry) => {
-        const netEffect = entry.type === "income" ? entry.delta : -entry.delta;
-        return {
-          label: `${entry.type === "income" ? "Income" : "Expense"}: ${entry.category}`,
-          kind: "category" as const,
-          type: entry.type,
-          delta: netEffect,
-        };
-      })
-      .filter((step) => Math.abs(step.delta) > 0.0001)
-      .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
-
-    for (const step of contributionSteps) {
-      running += step.delta;
-      waterfall.push({ label: step.label, kind: step.kind, type: step.type, delta: step.delta, net: running });
-    }
-
-    const roundingGap = totalsPeriodA.net - running;
-    if (Math.abs(roundingGap) > 0.0001) {
-      running += roundingGap;
-      waterfall.push({
-        label: "Adjustment",
-        kind: "category",
-        type: roundingGap >= 0 ? "income" : "expense",
-        delta: roundingGap,
-        net: running,
-      });
-    }
-
-    waterfall.push({
-      label: resultLabel,
-      kind: "result",
-      type: "net",
-      delta: 0,
-      net: totalsPeriodA.net,
-    });
-
     const payload: ComparisonResponse = {
       periodA: { ...rawPeriodA, totals: totalsPeriodA },
       periodB: { ...rawPeriodB, totals: totalsPeriodB },
       categories,
-      waterfall,
     };
 
     res.status(200).json(payload);

@@ -329,8 +329,33 @@ export default function Analytics() {
       <PageHeader lastUpdated={lastUpdated} onRefresh={onRefresh} isRefreshing={isRefreshing} />
       {/* Filters – desktop */}
       <div className="sticky top-0 z-10 bg-white/90 backdrop-blur supports-[backdrop-filter]:bg-white/70 border-b py-2 hidden md:block">
+        <nav className="text-sm" role="tablist" aria-label="Analytics sections">
+          <div className="flex gap-4">
+            {([
+              ["monthly", "Monthly"],
+              ["annual", "Annual"],
+              ["breakdown", "Breakdown"],
+              ["compare", "Comparison"],
+            ] as Array<[Tab, string]>).map(([key, label]) => (
+              <button
+                key={key}
+                role="tab"
+                aria-selected={tab === key}
+                onClick={() => setTab(key)}
+                className={`-mb-px border-b-2 px-1.5 pb-2 transition-colors ${
+                  tab === key
+                    ? "border-slate-900 text-slate-900 font-medium"
+                    : "border-transparent text-slate-500 hover:text-slate-700"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </nav>
+
         {tab !== "compare" && (
-          <div className="flex flex-wrap gap-3 items-end">
+          <div className="mt-3 flex flex-wrap gap-3 items-end">
             <div className="grid w-44">
               <label className="text-sm">Start</label>
               <input
@@ -385,36 +410,6 @@ export default function Analytics() {
             </div>
           </div>
         )}
-
-        {/* Tabs */}
-        <nav
-          className={`text-sm ${tab !== "compare" ? "mt-3" : ""}`}
-          role="tablist"
-          aria-label="Analytics sections"
-        >
-          <div className="flex gap-4">
-            {([
-              ["monthly", "Monthly"],
-              ["annual", "Annual"],
-              ["breakdown", "Breakdown"],
-              ["compare", "Comparison"],
-            ] as Array<[Tab, string]>).map(([key, label]) => (
-              <button
-                key={key}
-                role="tab"
-                aria-selected={tab === key}
-                onClick={() => setTab(key)}
-                className={`-mb-px border-b-2 px-1.5 pb-2 transition-colors ${
-                  tab === key
-                    ? "border-slate-900 text-slate-900 font-medium"
-                    : "border-transparent text-slate-500 hover:text-slate-700"
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        </nav>
       </div>
 
       {/* Filters – mobile collapsible */}
@@ -1012,6 +1007,25 @@ function MobileAnalyticsFilters({
       </button>
       {open && (
         <div className="mt-2 space-y-2">
+          <div className="flex gap-3 text-sm overflow-x-auto">
+            {([
+              ["monthly", "Monthly"],
+              ["annual", "Annual"],
+              ["breakdown", "Breakdown"],
+              ["compare", "Comparison"],
+            ] as Array<[Tab, string]>).map(([key, label]) => (
+              <button
+                key={key}
+                onClick={() => setTab(key as Tab)}
+                className={`px-2 py-1.5 rounded ${
+                  tab === key ? "bg-slate-900 text-white" : "bg-white border"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
           {showFilters && (
             <>
               <div className="grid grid-cols-2 gap-2">
@@ -1061,26 +1075,6 @@ function MobileAnalyticsFilters({
               />
             </>
           )}
-          <div className="pt-1">
-            <div className="flex gap-3 text-sm overflow-x-auto">
-              {([
-                ["monthly", "Monthly"],
-                ["annual", "Annual"],
-                ["breakdown", "Breakdown"],
-                ["compare", "Comparison"],
-              ] as Array<[Tab, string]>).map(([key, label]) => (
-                <button
-                  key={key}
-                  onClick={() => setTab(key as Tab)}
-                  className={`px-2 py-1.5 rounded ${
-                    tab === key ? "bg-slate-900 text-white" : "bg-white border"
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
         </div>
       )}
     </div>

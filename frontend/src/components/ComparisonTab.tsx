@@ -3,19 +3,14 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
-  Cell,
+  Legend,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from "recharts";
 
-import {
-  getComparison,
-  type ComparisonCategory,
-  type ComparisonResponse,
-  type ComparisonWaterfallStep,
-} from "@/lib/api";
+import { getComparison, type ComparisonCategory, type ComparisonResponse } from "@/lib/api";
 import { fmtUSD } from "@/lib/format";
 import { percentFormatter } from "@/lib/chart";
 import { COL } from "@/lib/colors";
@@ -23,35 +18,26 @@ import { COL } from "@/lib/colors";
 type PresetKey = "month" | "year" | "custom";
 
 type PeriodDraft = {
-  aStart: string;
-  aEnd: string;
-  bStart: string;
-  bEnd: string;
-};
-
-type ChartRow = {
-  name: string;
-  start: number;
-  end: number;
-  barStart: number;
-  barValue: number;
-  delta: number;
-  net: number;
-  fill: string;
-  isTotal: boolean;
-  type: "income" | "expense" | "net";
-};
-
-type WaterfallTooltipProps = {
-  active?: boolean;
-  payload?: Array<{ payload?: ChartRow }>;
+  earlierStart: string;
+  earlierEnd: string;
+  recentStart: string;
+  recentEnd: string;
 };
 
 const dateFormatter = new Intl.DateTimeFormat("en-US", {
   month: "short",
   day: "numeric",
   year: "numeric",
+  timeZone: "UTC",
 });
+
+const MAX_ROWS = 15;
+const EARLIER_LABEL = "Earlier period";
+const RECENT_LABEL = "Recent period";
+const INCOME_RECENT = COL.income;
+const INCOME_EARLIER = "#bbf7d0"; // tailwind emerald-200
+const EXPENSE_RECENT = COL.expense;
+const EXPENSE_EARLIER = "#fecdd3"; // tailwind rose-200
 
 function isoDate(year: number, month: number, day: number) {
   return new Date(Date.UTC(year, month, day)).toISOString().slice(0, 10);
@@ -71,13 +57,13 @@ function daysInMonth(year: number, month: number) {
 }
 
 function monthPreset(): PeriodDraft {
-  const current = monthRange(0);
-  const previous = monthRange(-1);
+  const recent = monthRange(0);
+  const earlier = monthRange(-1);
   return {
-    aStart: current.start,
-    aEnd: current.end,
-    bStart: previous.start,
-    bEnd: previous.end,
+    earlierStart: earlier.start,
+    earlierEnd: earlier.end,
+    recentStart: recent.start,
+    recentEnd: recent.end,
   };
 }
 
@@ -86,13 +72,13 @@ function yearPreset(): PeriodDraft {
   const currentYear = now.getUTCFullYear();
   const currentMonth = now.getUTCMonth();
   const currentDay = now.getUTCDate();
-  const aStart = isoDate(currentYear, 0, 1);
-  const aEnd = isoDate(currentYear, currentMonth, currentDay);
+  const recentStart = isoDate(currentYear, 0, 1);
+  const recentEnd = isoDate(currentYear, currentMonth, currentDay);
   const lastYear = currentYear - 1;
   const cappedDay = Math.min(currentDay, daysInMonth(lastYear, currentMonth));
-  const bStart = isoDate(lastYear, 0, 1);
-  const bEnd = isoDate(lastYear, currentMonth, cappedDay);
-  return { aStart, aEnd, bStart, bEnd };
+  const earlierStart = isoDate(lastYear, 0, 1);
+  const earlierEnd = isoDate(lastYear, currentMonth, cappedDay);
+  return { earlierStart, earlierEnd, recentStart, recentEnd };
 }
 
 function toDisplayDate(iso?: string) {
@@ -117,73 +103,22 @@ const PRESETS: Array<{ key: PresetKey; label: string; compute: () => PeriodDraft
 
 function hasChanges(a: PeriodDraft, b: PeriodDraft) {
   return (
-    a.aStart !== b.aStart ||
-    a.aEnd !== b.aEnd ||
-    a.bStart !== b.bStart ||
-    a.bEnd !== b.bEnd
+    a.earlierStart !== b.earlierStart ||
+    a.earlierEnd !== b.earlierEnd ||
+    a.recentStart !== b.recentStart ||
+    a.recentEnd !== b.recentEnd
   );
 }
 
-function buildChartRows(steps: ComparisonWaterfallStep[]): ChartRow[] {
-  const rows: ChartRow[] = [];
-  let previousNet = 0;
-  for (const step of steps) {
-    const isBaseline = step.kind === "baseline";
-    const isResult = step.kind === "result";
-    const start = isBaseline ? 0 : previousNet;
-    const end = step.net;
-    const lower = Math.min(start, end);
-    const upper = Math.max(start, end);
-    rows.push({
-      name: step.label,
-      start,
-      end,
-      barStart: lower,
-      barValue: upper - lower,
-      delta: step.delta,
-      net: end,
-      fill: isBaseline || isResult ? COL.net : step.type === "income" ? COL.income : COL.expense,
-      isTotal: isBaseline || isResult,
-      type: step.type,
-    });
-    previousNet = end;
-  }
-  return rows;
-}
-
-function ComparisonWaterfallTooltip({ active, payload }: WaterfallTooltipProps) {
-  if (!active || !payload || payload.length === 0) return null;
-  const item = payload[0]?.payload as ChartRow | undefined;
-  if (!item) return null;
-  const deltaLabel = item.delta >= 0 ? `+${fmtUSD(item.delta)}` : fmtUSD(item.delta);
-  return (
-    <div className="rounded border bg-white p-2 text-xs text-slate-700 shadow">
-      <div className="font-medium text-slate-900">{item.name}</div>
-      {item.isTotal ? (
-        <div className="mt-1">Net: {fmtUSD(item.end)}</div>
-      ) : (
-        <>
-          <div className="mt-1">Δ {deltaLabel}</div>
-          <div className="mt-1">Net after: {fmtUSD(item.end)}</div>
-        </>
-      )}
-    </div>
-  );
-}
-
-function PeriodEditor({
-  label,
-  start,
-  end,
-  onChange,
-  invalid,
-}: {
+type PeriodEditorProps = {
   label: string;
   start: string;
   end: string;
   onChange: (next: { start: string; end: string }) => void;
   invalid: boolean;
-}) {
+};
+
+function PeriodEditor({ label, start, end, onChange, invalid }: PeriodEditorProps) {
   return (
     <div className="rounded border bg-slate-50 p-3">
       <div className="text-sm font-medium text-slate-700">{label}</div>
@@ -219,20 +154,20 @@ function ComparisonHighlights({ data }: { data: ComparisonResponse }) {
       {
         key: "income",
         label: "Income",
-        current: data.periodA.totals.income,
-        previous: data.periodB.totals.income,
+        recent: data.periodB.totals.income,
+        earlier: data.periodA.totals.income,
       },
       {
         key: "expense",
         label: "Expense",
-        current: data.periodA.totals.expense,
-        previous: data.periodB.totals.expense,
+        recent: data.periodB.totals.expense,
+        earlier: data.periodA.totals.expense,
       },
       {
         key: "net",
         label: "Net",
-        current: data.periodA.totals.net,
-        previous: data.periodB.totals.net,
+        recent: data.periodB.totals.net,
+        earlier: data.periodA.totals.net,
       },
     ],
     [data],
@@ -240,16 +175,16 @@ function ComparisonHighlights({ data }: { data: ComparisonResponse }) {
 
   return (
     <div className="grid gap-3 sm:grid-cols-3">
-      {metrics.map(({ key, label, current, previous }) => {
-        const delta = current - previous;
-        const pct = previous !== 0 ? delta / previous : null;
+      {metrics.map(({ key, label, recent, earlier }) => {
+        const delta = recent - earlier;
+        const pct = earlier !== 0 ? delta / earlier : null;
         const tone = delta === 0 ? "text-slate-600" : delta > 0 ? "text-emerald-600" : "text-rose-500";
         return (
           <div key={key} className="rounded border bg-white p-4">
             <div className="text-xs uppercase tracking-wide text-slate-500">{label}</div>
-            <div className="mt-2 text-lg font-semibold text-slate-900">{fmtUSD(current)}</div>
+            <div className="mt-2 text-lg font-semibold text-slate-900">{fmtUSD(recent)}</div>
             <div className="mt-1 text-xs text-slate-500">
-              vs {fmtUSD(previous)}{pct != null ? ` (${percentFormatter(pct)})` : ""}
+              {EARLIER_LABEL} {fmtUSD(earlier)}{pct != null ? ` (${percentFormatter(pct)})` : ""}
             </div>
             <div className={`mt-3 text-sm font-medium ${tone}`}>
               {delta > 0 ? "+" : ""}
@@ -262,38 +197,72 @@ function ComparisonHighlights({ data }: { data: ComparisonResponse }) {
   );
 }
 
-function WaterfallView({ data }: { data: ComparisonResponse }) {
-  const chartData = useMemo(() => buildChartRows(data.waterfall), [data.waterfall]);
-  if (chartData.length === 0) return null;
+type ChartSource = {
+  type: "income" | "expense";
+  rows: ComparisonCategory[];
+};
+
+function ComparisonCategoryCharts({ data }: { data: ComparisonResponse }) {
+  const sources: ChartSource[] = useMemo(
+    () => [
+      { type: "income", rows: data.categories.filter((row) => row.type === "income") },
+      { type: "expense", rows: data.categories.filter((row) => row.type === "expense") },
+    ],
+    [data.categories],
+  );
+
   return (
-    <section className="rounded border bg-white p-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="font-medium text-slate-800">Net change waterfall</h3>
-        <span className="text-xs text-slate-500">Shows how categories bridge Period B to Period A net.</span>
-      </div>
-      <div className="mt-4" style={{ height: 360 }}>
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={chartData} margin={{ top: 8, right: 16, left: 16, bottom: 40 }}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis
-              dataKey="name"
-              interval={0}
-              height={70}
-              angle={-20}
-              textAnchor="end"
-              tick={{ fontSize: 12 }}
-            />
-            <YAxis tickFormatter={(value: number) => fmtUSD(value)} />
-            <Tooltip content={<ComparisonWaterfallTooltip />} />
-            <Bar dataKey="barStart" stackId="a" fill="transparent" />
-            <Bar dataKey="barValue" stackId="a" isAnimationActive={false}>
-              {chartData.map((item) => (
-                <Cell key={item.name} fill={item.fill} />
-              ))}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
+    <section className="grid gap-4 lg:grid-cols-2">
+      {sources.map(({ type, rows }) => {
+        if (rows.length === 0) {
+          return (
+            <div key={type} className="rounded border bg-white p-4 text-sm text-slate-500">
+              {type === "income" ? "No income activity for either period yet." : "No expenses recorded for either period yet."}
+            </div>
+          );
+        }
+
+        const sorted = [...rows].sort(
+          (a, b) => Math.abs(b.amountB) - Math.abs(a.amountB),
+        );
+        const limited = sorted.slice(0, MAX_ROWS);
+        const chartData = limited.map((row) => ({
+          category: row.category,
+          recent: row.amountB,
+          earlier: row.amountA,
+        }));
+        const maxLabelLen = Math.max(0, ...chartData.map((x) => x.category.length));
+        const yAxisWidth = Math.max(90, Math.min(260, Math.round(maxLabelLen * 7.2 + 16)));
+        const height = Math.max(260, Math.min(560, 32 * chartData.length + 60));
+        const recentColor = type === "income" ? INCOME_RECENT : EXPENSE_RECENT;
+        const earlierColor = type === "income" ? INCOME_EARLIER : EXPENSE_EARLIER;
+
+        return (
+          <div key={type} className="rounded border bg-white p-4">
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="font-medium text-slate-800">{type === "income" ? "Income" : "Expense"} by category</h3>
+              <span className="text-xs text-slate-500">Sorted by {RECENT_LABEL.toLowerCase()} amount.</span>
+            </div>
+            <div className="mt-4" style={{ height }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  layout="vertical"
+                  data={chartData}
+                  margin={{ left: 16, right: 16, top: 8, bottom: 8 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis type="number" tickFormatter={(value: number) => fmtUSD(value)} />
+                  <YAxis type="category" dataKey="category" width={yAxisWidth} tick={{ fontSize: 12 }} />
+                  <Tooltip formatter={(value: number) => fmtUSD(Number(value))} />
+                  <Legend />
+                  <Bar dataKey="recent" name={RECENT_LABEL} fill={recentColor} radius={[0, 4, 4, 0]} />
+                  <Bar dataKey="earlier" name={EARLIER_LABEL} fill={earlierColor} radius={[0, 4, 4, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        );
+      })}
     </section>
   );
 }
@@ -321,12 +290,12 @@ function CategoryTable({ data }: { data: ComparisonResponse }) {
 
   const totalsByType = {
     income: {
-      current: data.periodA.totals.income,
-      previous: data.periodB.totals.income,
+      recent: data.periodB.totals.income,
+      earlier: data.periodA.totals.income,
     },
     expense: {
-      current: data.periodA.totals.expense,
-      previous: data.periodB.totals.expense,
+      recent: data.periodB.totals.expense,
+      earlier: data.periodA.totals.expense,
     },
   } as const;
 
@@ -338,8 +307,8 @@ function CategoryTable({ data }: { data: ComparisonResponse }) {
           <thead>
             <tr className="text-left text-xs uppercase tracking-wide text-slate-500">
               <th className="py-2 pr-4">Category</th>
-              <th className="py-2 pr-4 text-right">Period A</th>
-              <th className="py-2 pr-4 text-right">Period B</th>
+              <th className="py-2 pr-4 text-right">{RECENT_LABEL}</th>
+              <th className="py-2 pr-4 text-right">{EARLIER_LABEL}</th>
               <th className="py-2 pr-4 text-right">Delta</th>
               <th className="py-2 text-right">% diff</th>
             </tr>
@@ -347,17 +316,18 @@ function CategoryTable({ data }: { data: ComparisonResponse }) {
           <tbody>
             {groups.map(({ key, label, rows }) => {
               const total = totalsByType[key];
-              const totalDelta = total.current - total.previous;
-              const totalPct = total.previous !== 0 ? totalDelta / total.previous : null;
+              const totalDelta = total.recent - total.earlier;
+              const totalPct = total.earlier !== 0 ? totalDelta / total.earlier : null;
               return (
-                <Fragment key={key}>
-                  <tr>
+                <Fragment key={`${key}-group`}>
+                  <tr key={`${key}-heading`}>
                     <td colSpan={5} className="pt-5 pb-2 text-xs font-semibold uppercase text-slate-500">
                       {label}
                     </td>
                   </tr>
                   {rows.map((row) => {
-                    const delta = row.amountA - row.amountB;
+                    const delta = row.amountB - row.amountA;
+                    const pct = row.amountA !== 0 ? delta / row.amountA : null;
                     const tone = delta === 0 ? "text-slate-600" : delta > 0 ? "text-emerald-600" : "text-rose-500";
                     return (
                       <tr key={`${row.type}-${row.category}`} className="border-b last:border-b-0">
@@ -369,23 +339,25 @@ function CategoryTable({ data }: { data: ComparisonResponse }) {
                             </span>
                           </div>
                         </td>
-                        <td className="py-2 pr-4 text-right text-slate-700">{fmtUSD(row.amountA)}</td>
                         <td className="py-2 pr-4 text-right text-slate-700">{fmtUSD(row.amountB)}</td>
+                        <td className="py-2 pr-4 text-right text-slate-700">{fmtUSD(row.amountA)}</td>
                         <td className={`py-2 pr-4 text-right font-medium ${tone}`}>
                           {delta > 0 ? "+" : ""}
                           {fmtUSD(delta)}
                         </td>
                         <td className="py-2 text-right text-slate-600">
-                          {row.pct != null ? percentFormatter(row.pct) : "—"}
+                          {pct != null ? percentFormatter(pct) : "—"}
                         </td>
                       </tr>
                     );
                   })}
-                  <tr className="font-medium">
+                  <tr key={`${key}-total`} className="font-medium">
                     <td className="py-2 pr-4 text-slate-800">Total {key}</td>
-                    <td className="py-2 pr-4 text-right text-slate-800">{fmtUSD(total.current)}</td>
-                    <td className="py-2 pr-4 text-right text-slate-800">{fmtUSD(total.previous)}</td>
-                    <td className={`py-2 pr-4 text-right ${totalDelta === 0 ? "text-slate-600" : totalDelta > 0 ? "text-emerald-600" : "text-rose-500"}`}>
+                    <td className="py-2 pr-4 text-right text-slate-800">{fmtUSD(total.recent)}</td>
+                    <td className="py-2 pr-4 text-right text-slate-800">{fmtUSD(total.earlier)}</td>
+                    <td className={`py-2 pr-4 text-right ${
+                      totalDelta === 0 ? "text-slate-600" : totalDelta > 0 ? "text-emerald-600" : "text-rose-500"
+                    }`}>
                       {totalDelta > 0 ? "+" : ""}
                       {fmtUSD(totalDelta)}
                     </td>
@@ -403,7 +375,6 @@ function CategoryTable({ data }: { data: ComparisonResponse }) {
   );
 }
 
-
 function ComparisonTab() {
   const [preset, setPreset] = useState<PresetKey>("month");
   const [draft, setDraft] = useState<PeriodDraft>(() => monthPreset());
@@ -412,27 +383,27 @@ function ComparisonTab() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const invalidA = draft.aStart && draft.aEnd && draft.aStart > draft.aEnd;
-  const invalidB = draft.bStart && draft.bEnd && draft.bStart > draft.bEnd;
+  const invalidEarlier = draft.earlierStart && draft.earlierEnd && draft.earlierStart > draft.earlierEnd;
+  const invalidRecent = draft.recentStart && draft.recentEnd && draft.recentStart > draft.recentEnd;
   const canSubmit =
-    !!draft.aStart &&
-    !!draft.aEnd &&
-    !!draft.bStart &&
-    !!draft.bEnd &&
-    !invalidA &&
-    !invalidB;
+    !!draft.earlierStart &&
+    !!draft.earlierEnd &&
+    !!draft.recentStart &&
+    !!draft.recentEnd &&
+    !invalidEarlier &&
+    !invalidRecent;
   const pendingChanges = hasChanges(draft, applied);
 
   useEffect(() => {
     let cancelled = false;
-    if (!applied.aStart || !applied.aEnd || !applied.bStart || !applied.bEnd) return;
+    if (!applied.earlierStart || !applied.earlierEnd || !applied.recentStart || !applied.recentEnd) return;
     setIsLoading(true);
     setError(null);
     void getComparison({
-      aStart: applied.aStart,
-      aEnd: applied.aEnd,
-      bStart: applied.bStart,
-      bEnd: applied.bEnd,
+      aStart: applied.earlierStart,
+      aEnd: applied.earlierEnd,
+      bStart: applied.recentStart,
+      bEnd: applied.recentEnd,
     })
       .then((payload) => {
         if (!cancelled) setData(payload);
@@ -449,7 +420,7 @@ function ComparisonTab() {
     return () => {
       cancelled = true;
     };
-  }, [applied.aStart, applied.aEnd, applied.bStart, applied.bEnd]);
+  }, [applied.earlierStart, applied.earlierEnd, applied.recentStart, applied.recentEnd]);
 
   return (
     <div className="space-y-5">
@@ -479,23 +450,23 @@ function ComparisonTab() {
         </div>
         <div className="grid gap-4 md:grid-cols-2">
           <PeriodEditor
-            label="Period A"
-            start={draft.aStart}
-            end={draft.aEnd}
-            invalid={Boolean(invalidA)}
+            label={EARLIER_LABEL}
+            start={draft.earlierStart}
+            end={draft.earlierEnd}
+            invalid={Boolean(invalidEarlier)}
             onChange={(next) => {
               setPreset("custom");
-              setDraft((prev) => ({ ...prev, aStart: next.start, aEnd: next.end }));
+              setDraft((prev) => ({ ...prev, earlierStart: next.start, earlierEnd: next.end }));
             }}
           />
           <PeriodEditor
-            label="Period B"
-            start={draft.bStart}
-            end={draft.bEnd}
-            invalid={Boolean(invalidB)}
+            label={RECENT_LABEL}
+            start={draft.recentStart}
+            end={draft.recentEnd}
+            invalid={Boolean(invalidRecent)}
             onChange={(next) => {
               setPreset("custom");
-              setDraft((prev) => ({ ...prev, bStart: next.start, bEnd: next.end }));
+              setDraft((prev) => ({ ...prev, recentStart: next.start, recentEnd: next.end }));
             }}
           />
         </div>
@@ -523,15 +494,15 @@ function ComparisonTab() {
           <div className="rounded border bg-white p-4 text-sm text-slate-600">
             <div className="flex flex-wrap gap-4">
               <span>
-                <span className="font-medium text-slate-800">Period A:</span> {formatRange(data.periodA.start, data.periodA.end)}
+                <span className="font-medium text-slate-800">{EARLIER_LABEL}:</span> {formatRange(data.periodA.start, data.periodA.end)}
               </span>
               <span>
-                <span className="font-medium text-slate-800">Period B:</span> {formatRange(data.periodB.start, data.periodB.end)}
+                <span className="font-medium text-slate-800">{RECENT_LABEL}:</span> {formatRange(data.periodB.start, data.periodB.end)}
               </span>
             </div>
           </div>
           <ComparisonHighlights data={data} />
-          <WaterfallView data={data} />
+          <ComparisonCategoryCharts data={data} />
           <CategoryTable data={data} />
         </div>
       )}
