@@ -136,6 +136,8 @@ export type ComparisonCategory = {
   amountB: number;
   delta: number;
   pct: number | null;
+  hasA: boolean;
+  hasB: boolean;
 };
 
 export type ComparisonResponse = {

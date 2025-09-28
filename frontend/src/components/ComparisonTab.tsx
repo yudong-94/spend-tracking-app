@@ -88,6 +88,12 @@ function toDisplayDate(iso?: string) {
   return dateFormatter.format(new Date(Date.UTC(y, m - 1, d)));
 }
 
+function toTimestamp(iso: string | undefined) {
+  if (!iso) return null;
+  const t = Date.parse(iso);
+  return Number.isFinite(t) ? t : null;
+}
+
 function formatRange(start?: string, end?: string) {
   if (!start && !end) return "—";
   if (start && !end) return toDisplayDate(start);
@@ -206,6 +212,64 @@ type ChartSource = {
   type: "income" | "expense";
   rows: ComparisonCategory[];
 };
+
+function ComparisonChangeHighlights({ data }: { data: ComparisonResponse }) {
+  const TOP_N = 3;
+  const { incomeIncreases, expenseCuts, newInRecent } = useMemo(() => {
+    const incomeIncreases = data.categories
+      .filter((row) => row.type === 'income' && row.delta > 0.0001)
+      .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
+      .slice(0, TOP_N);
+    const expenseCuts = data.categories
+      .filter((row) => row.type === 'expense' && row.delta < -0.0001)
+      .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
+      .slice(0, TOP_N);
+    const newInRecent = data.categories
+      .filter((row) => row.hasB && !row.hasA && row.amountB !== 0)
+      .sort((a, b) => Math.abs(b.amountB) - Math.abs(a.amountB))
+      .slice(0, TOP_N);
+    return { incomeIncreases, expenseCuts, newInRecent };
+  }, [data.categories]);
+
+  if (incomeIncreases.length === 0 && expenseCuts.length === 0 && newInRecent.length === 0) {
+    return null;
+  }
+
+  const renderList = (title: string, rows: ComparisonCategory[], emptyText: string) => {
+    if (!rows.length) {
+      return (
+        <div className="flex-1 rounded border border-dashed border-slate-200 p-3 text-xs text-slate-500">
+          {emptyText}
+        </div>
+      );
+    }
+    return (
+      <div className="flex-1 rounded border bg-white p-3">
+        <h4 className="text-sm font-medium text-slate-700">{title}</h4>
+        <ul className="mt-2 space-y-1 text-sm text-slate-700">
+          {rows.map((row) => {
+            const deltaLabel = `${row.delta > 0 ? '+' : ''}${fmtUSD(row.delta)}`;
+            const pctLabel = row.pct != null ? ` (${percentFormatter(row.pct)})` : '';
+            return (
+              <li key={`${row.type}-${row.category}`} className="flex justify-between gap-3">
+                <span className="truncate">{row.category}</span>
+                <span className="whitespace-nowrap font-medium">{deltaLabel}{pctLabel}</span>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    );
+  };
+
+  return (
+    <section className="flex flex-col gap-3 rounded border bg-white p-4 lg:flex-row">
+      {renderList('Income up the most', incomeIncreases, 'No income gains this time.')}
+      {renderList('Expense cuts', expenseCuts, 'No expense decreases yet.')}
+      {renderList('New categories', newInRecent, 'No new categories in the recent period.')}
+    </section>
+  );
+}
 
 function ComparisonCategoryCharts({ data }: { data: ComparisonResponse }) {
   const sources: ChartSource[] = useMemo(
@@ -401,13 +465,31 @@ function ComparisonTab() {
 
   const invalidEarlier = draft.earlierStart && draft.earlierEnd && draft.earlierStart > draft.earlierEnd;
   const invalidRecent = draft.recentStart && draft.recentEnd && draft.recentStart > draft.recentEnd;
+
+  const earlierStartTs = toTimestamp(draft.earlierStart);
+  const earlierEndTs = toTimestamp(draft.earlierEnd);
+  const recentStartTs = toTimestamp(draft.recentStart);
+  const recentEndTs = toTimestamp(draft.recentEnd);
+
+  let periodError: string | null = null;
+  if (!invalidEarlier && !invalidRecent && earlierStartTs != null && earlierEndTs != null && recentStartTs != null && recentEndTs != null) {
+    if (earlierStartTs >= recentStartTs) {
+      periodError = 'Earlier period must start before the recent period.';
+    } else if (earlierEndTs >= recentStartTs) {
+      periodError = 'Earlier period must end before the recent period begins.';
+    } else if (earlierEndTs >= recentEndTs) {
+      periodError = 'Recent period must finish after the earlier period.';
+    }
+  }
+
   const canSubmit =
     !!draft.earlierStart &&
     !!draft.earlierEnd &&
     !!draft.recentStart &&
     !!draft.recentEnd &&
     !invalidEarlier &&
-    !invalidRecent;
+    !invalidRecent &&
+    !periodError;
   const pendingChanges = hasChanges(draft, applied);
 
   useEffect(() => {
@@ -502,6 +584,7 @@ function ComparisonTab() {
             Adjust the periods and click Compare to refresh the analysis.
           </span>
         </div>
+        {periodError && <div className="text-sm text-rose-600">{periodError}</div>}
         {error && <div className="text-sm text-rose-600">{error}</div>}
       </section>
 
@@ -518,6 +601,7 @@ function ComparisonTab() {
             </div>
           </div>
           <ComparisonHighlights data={data} />
+          <ComparisonChangeHighlights data={data} />
           <ComparisonCategoryCharts data={data} />
           <CategoryTable data={data} />
         </div>
