@@ -216,24 +216,34 @@ type ChartSource = {
 };
 
 function ComparisonChangeHighlights({ data }: { data: ComparisonResponse }) {
-  const TOP_N = 3;
-  const { incomeIncreases, expenseCuts, newInRecent } = useMemo(() => {
-    const incomeIncreases = data.categories
-      .filter((row) => row.type === 'income' && row.delta > 0.0001)
+  const { incomeUp, incomeDown, expenseUp, expenseDown } = useMemo(() => {
+    const incomeRows = data.categories.filter((row) => row.type === 'income');
+    const expenseRows = data.categories.filter((row) => row.type === 'expense');
+
+    const incomeUp = incomeRows
+      .filter((row) => row.delta > 0.0001)
       .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
-      .slice(0, TOP_N);
-    const expenseCuts = data.categories
-      .filter((row) => row.type === 'expense' && row.delta < -0.0001)
+      .slice(0, 3);
+
+    const incomeDown = incomeRows
+      .filter((row) => row.delta < -0.0001)
       .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
-      .slice(0, TOP_N);
-    const newInRecent = data.categories
-      .filter((row) => row.hasB && !row.hasA && row.amountB !== 0)
-      .sort((a, b) => Math.abs(b.amountB) - Math.abs(a.amountB))
-      .slice(0, TOP_N);
-    return { incomeIncreases, expenseCuts, newInRecent };
+      .slice(0, 1);
+
+    const expenseUp = expenseRows
+      .filter((row) => row.delta > 0.0001)
+      .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
+      .slice(0, 3);
+
+    const expenseDown = expenseRows
+      .filter((row) => row.delta < -0.0001)
+      .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
+      .slice(0, 3);
+
+    return { incomeUp, incomeDown, expenseUp, expenseDown };
   }, [data.categories]);
 
-  if (incomeIncreases.length === 0 && expenseCuts.length === 0 && newInRecent.length === 0) {
+  if (incomeUp.length === 0 && incomeDown.length === 0 && expenseUp.length === 0 && expenseDown.length === 0) {
     return null;
   }
 
@@ -266,9 +276,10 @@ function ComparisonChangeHighlights({ data }: { data: ComparisonResponse }) {
 
   return (
     <section className="flex flex-col gap-3 rounded border bg-white p-4 lg:flex-row">
-      {renderList('Income up the most', incomeIncreases, 'No income gains this time.')}
-      {renderList('Expense cuts', expenseCuts, 'No expense decreases yet.')}
-      {renderList('New categories', newInRecent, 'No new categories in the recent period.')}
+      {renderList('Income up the most', incomeUp, 'No income gains this time.')}
+      {renderList('Income down the most', incomeDown, 'No income decreases yet.')}
+      {renderList('Expense increases', expenseUp, 'No expense increases yet.')}
+      {renderList('Expense cuts', expenseDown, 'No expense decreases yet.')}
     </section>
   );
 }
@@ -396,6 +407,15 @@ function CategoryTable({
   const formatShare = (value: number | null) =>
     value != null && Number.isFinite(value) ? percentFormatter(value) : "—";
 
+  const valueClasses = "text-right tabular-nums whitespace-nowrap";
+
+  const toneFor = (type: "income" | "expense", delta: number | null) => {
+    if (delta == null || delta === 0) return "text-slate-600";
+    const positiveGood = type !== "expense";
+    const isPositive = delta > 0;
+    return positiveGood === isPositive ? "text-emerald-600" : "text-rose-500";
+  };
+
   return (
     <section className="rounded border bg-white p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -412,9 +432,7 @@ function CategoryTable({
               type="button"
               onClick={() => onModeChange(key)}
               className={`rounded-full px-3 py-1 transition ${
-                mode === key
-                  ? "bg-slate-900 text-white"
-                  : "text-slate-600 hover:text-slate-900"
+                mode === key ? "bg-slate-900 text-white" : "text-slate-600 hover:text-slate-900"
               }`}
             >
               {label}
@@ -422,7 +440,8 @@ function CategoryTable({
           ))}
         </div>
       </div>
-      <div className="mt-4 overflow-x-auto">
+
+      <div className="mt-4 hidden overflow-x-auto md:block">
         <table className="min-w-full text-sm">
           <thead>
             <tr className="text-left text-xs uppercase tracking-wide text-slate-500">
@@ -467,34 +486,27 @@ function CategoryTable({
                     const recentShare = total.recent !== 0 ? row.amountB / total.recent : null;
                     const shareDelta =
                       earlierShare != null && recentShare != null ? recentShare - earlierShare : null;
-                    const trendValue = showAmounts ? delta : shareDelta ?? 0;
-                    const tone = (() => {
-                      if (!showAmounts && shareDelta == null) return "text-slate-600";
-                      if (trendValue === 0) return "text-slate-600";
-                      const positiveGood = key !== "expense";
-                      const isPositive = trendValue > 0;
-                      return positiveGood === isPositive ? "text-emerald-600" : "text-rose-500";
-                    })();
+                    const tone = toneFor(key, showAmounts ? delta : shareDelta);
                     return (
                       <tr key={`${row.type}-${row.category}`} className="border-b last:border-b-0">
                         <td className="py-2 pr-4 text-slate-800">{row.category}</td>
                         {showAmounts ? (
                           <>
-                            <td className="py-2 pr-4 text-right text-slate-700">{fmtUSD(row.amountA)}</td>
-                            <td className="py-2 pr-4 text-right text-slate-700">{fmtUSD(row.amountB)}</td>
-                            <td className={`py-2 pr-4 text-right font-medium ${tone}`}>
+                            <td className={`py-2 pr-4 text-slate-700 ${valueClasses}`}>{fmtUSD(row.amountA)}</td>
+                            <td className={`py-2 pr-4 text-slate-700 ${valueClasses}`}>{fmtUSD(row.amountB)}</td>
+                            <td className={`py-2 pr-4 font-medium ${tone} ${valueClasses}`}>
                               {delta > 0 ? "+" : ""}
                               {fmtUSD(delta)}
                             </td>
-                            <td className="py-2 text-right text-slate-600">
+                            <td className={`py-2 text-slate-600 ${valueClasses}`}>
                               {row.pct != null ? percentFormatter(row.pct) : "—"}
                             </td>
                           </>
                         ) : (
                           <>
-                            <td className="py-2 pr-4 text-right text-slate-700">{formatShare(earlierShare)}</td>
-                            <td className="py-2 pr-4 text-right text-slate-700">{formatShare(recentShare)}</td>
-                            <td className={`py-2 text-right font-medium ${tone}`}>
+                            <td className={`py-2 pr-4 text-slate-700 ${valueClasses}`}>{formatShare(earlierShare)}</td>
+                            <td className={`py-2 pr-4 text-slate-700 ${valueClasses}`}>{formatShare(recentShare)}</td>
+                            <td className={`py-2 text-right font-medium ${tone} ${valueClasses}`}>
                               {shareDelta != null ? percentFormatter(shareDelta) : "—"}
                             </td>
                           </>
@@ -506,26 +518,21 @@ function CategoryTable({
                     <td className="py-2 pr-4 text-slate-800">Total {key}</td>
                     {showAmounts ? (
                       <>
-                        <td className="py-2 pr-4 text-right text-slate-800">{fmtUSD(total.earlier)}</td>
-                        <td className="py-2 pr-4 text-right text-slate-800">{fmtUSD(total.recent)}</td>
-                        <td className={`py-2 pr-4 text-right ${(() => {
-                          if (totalDelta === 0) return "text-slate-600";
-                          const positiveGood = key !== "expense";
-                          const isPositive = totalDelta > 0;
-                          return positiveGood === isPositive ? "text-emerald-600" : "text-rose-500";
-                        })()}`}>
+                        <td className={`py-2 pr-4 text-slate-800 ${valueClasses}`}>{fmtUSD(total.earlier)}</td>
+                        <td className={`py-2 pr-4 text-slate-800 ${valueClasses}`}>{fmtUSD(total.recent)}</td>
+                        <td className={`py-2 pr-4 ${toneFor(key, totalDelta)} ${valueClasses}`}>
                           {totalDelta > 0 ? "+" : ""}
                           {fmtUSD(totalDelta)}
                         </td>
-                        <td className="py-2 text-right text-slate-600">
+                        <td className={`py-2 text-slate-600 ${valueClasses}`}>
                           {totalPct != null ? percentFormatter(totalPct) : "—"}
                         </td>
                       </>
                     ) : (
                       <>
-                        <td className="py-2 pr-4 text-right text-slate-800">{formatShare(totalEarlierShare)}</td>
-                        <td className="py-2 pr-4 text-right text-slate-800">{formatShare(totalRecentShare)}</td>
-                        <td className="py-2 text-right text-slate-600">{formatShare(totalShareDelta)}</td>
+                        <td className={`py-2 pr-4 text-slate-800 ${valueClasses}`}>{formatShare(totalEarlierShare)}</td>
+                        <td className={`py-2 pr-4 text-slate-800 ${valueClasses}`}>{formatShare(totalRecentShare)}</td>
+                        <td className={`py-2 text-slate-600 ${valueClasses}`}>{formatShare(totalShareDelta)}</td>
                       </>
                     )}
                   </tr>
@@ -535,10 +542,90 @@ function CategoryTable({
           </tbody>
         </table>
       </div>
+
+      <div className="mt-4 space-y-4 md:hidden">
+        {groups.map(({ key, label, rows }) => {
+          const total = totalsByType[key];
+          const totalDelta = total.recent - total.earlier;
+          const totalEarlierShare = total.earlier !== 0 ? 1 : null;
+          const totalRecentShare = total.recent !== 0 ? 1 : null;
+          const totalShareDelta =
+            totalEarlierShare != null && totalRecentShare != null
+              ? totalRecentShare - totalEarlierShare
+              : null;
+          return (
+            <div key={`${key}-mobile`} className="space-y-3">
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</div>
+              {rows.map((row) => {
+                const delta = row.amountB - row.amountA;
+                const earlierShare = total.earlier !== 0 ? row.amountA / total.earlier : null;
+                const recentShare = total.recent !== 0 ? row.amountB / total.recent : null;
+                const shareDelta =
+                  earlierShare != null && recentShare != null ? recentShare - earlierShare : null;
+                const tone = toneFor(key, showAmounts ? delta : shareDelta);
+                const deltaLabel = showAmounts
+                  ? `${delta > 0 ? '+' : ''}${fmtUSD(delta)}`
+                  : shareDelta != null
+                  ? `${shareDelta > 0 ? '+' : ''}${percentFormatter(shareDelta)}`
+                  : '—';
+                return (
+                  <div key={`${row.type}-${row.category}-card`} className="rounded border bg-white p-3 shadow-sm">
+                    <div className="flex items-start justify-between gap-3">
+                      <span className="text-sm font-medium text-slate-800 truncate">{row.category}</span>
+                      <span className={`text-sm font-semibold ${tone}`}>{deltaLabel}</span>
+                    </div>
+                    {showAmounts ? (
+                      <dl className="mt-2 grid grid-cols-2 gap-y-1 text-xs text-slate-600">
+                        <dt>Earlier</dt>
+                        <dd className={valueClasses}>{fmtUSD(row.amountA)}</dd>
+                        <dt>Recent</dt>
+                        <dd className={valueClasses}>{fmtUSD(row.amountB)}</dd>
+                      </dl>
+                    ) : (
+                      <dl className="mt-2 grid grid-cols-2 gap-y-1 text-xs text-slate-600">
+                        <dt>Earlier share</dt>
+                        <dd className={valueClasses}>{formatShare(earlierShare)}</dd>
+                        <dt>Recent share</dt>
+                        <dd className={valueClasses}>{formatShare(recentShare)}</dd>
+                      </dl>
+                    )}
+                  </div>
+                );
+              })}
+              <div className="rounded border bg-white p-3 text-sm font-medium text-slate-800">
+                <div className="flex items-start justify-between gap-3">
+                  <span>Total {key}</span>
+                  <span className={`${toneFor(key, showAmounts ? totalDelta : totalShareDelta)} ${valueClasses}`}>
+                    {showAmounts
+                      ? `${totalDelta > 0 ? '+' : ''}${fmtUSD(totalDelta)}`
+                      : totalShareDelta != null
+                      ? `${totalShareDelta > 0 ? '+' : ''}${percentFormatter(totalShareDelta)}`
+                      : '—'}
+                  </span>
+                </div>
+                {showAmounts ? (
+                  <dl className="mt-2 grid grid-cols-2 gap-y-1 text-xs text-slate-600">
+                    <dt>Earlier</dt>
+                    <dd className={valueClasses}>{fmtUSD(total.earlier)}</dd>
+                    <dt>Recent</dt>
+                    <dd className={valueClasses}>{fmtUSD(total.recent)}</dd>
+                  </dl>
+                ) : (
+                  <dl className="mt-2 grid grid-cols-2 gap-y-1 text-xs text-slate-600">
+                    <dt>Earlier share</dt>
+                    <dd className={valueClasses}>{formatShare(totalEarlierShare)}</dd>
+                    <dt>Recent share</dt>
+                    <dd className={valueClasses}>{formatShare(totalRecentShare)}</dd>
+                  </dl>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </section>
   );
-}
-function ComparisonTab() {
+}function ComparisonTab() {
   const [preset, setPreset] = useState<PresetKey>("month");
   const [draft, setDraft] = useState<PeriodDraft>(() => monthPreset());
   const [applied, setApplied] = useState<PeriodDraft>(() => monthPreset());
