@@ -994,40 +994,40 @@ function MobileAnalyticsFilters({
   setQuickRange: (key: QuickRangeKey | "custom") => void;
   applyQuickRange: (key: QuickRangeKey) => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const [showFilterPanel, setShowFilterPanel] = useState(false);
   const showFilters = tab !== "compare";
-  const toggleLabel = showFilters ? "filters" : "tabs";
+
   return (
     <div className="md:hidden sticky top-0 z-10 bg-white/90 backdrop-blur supports-[backdrop-filter]:bg-white/70 border-b py-2">
-      <button
-        className="px-3 py-2 border rounded w-full text-left bg-white"
-        onClick={() => setOpen((v) => !v)}
-      >
-        {open ? `Hide ${toggleLabel}` : `Show ${toggleLabel}`}
-      </button>
-      {open && (
-        <div className="mt-2 space-y-2">
-          <div className="flex gap-3 text-sm overflow-x-auto">
-            {([
-              ["monthly", "Monthly"],
-              ["annual", "Annual"],
-              ["breakdown", "Breakdown"],
-              ["compare", "Comparison"],
-            ] as Array<[Tab, string]>).map(([key, label]) => (
-              <button
-                key={key}
-                onClick={() => setTab(key as Tab)}
-                className={`px-2 py-1.5 rounded ${
-                  tab === key ? "bg-slate-900 text-white" : "bg-white border"
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+      <div className="flex gap-2 overflow-x-auto pb-2">
+        {([
+          ["monthly", "Monthly"],
+          ["annual", "Annual"],
+          ["breakdown", "Breakdown"],
+          ["compare", "Comparison"],
+        ] as Array<[Tab, string]>).map(([key, label]) => (
+          <button
+            key={key}
+            onClick={() => setTab(key as Tab)}
+            className={`rounded-full border px-3 py-1 text-sm transition ${
+              tab === key ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-600 hover:bg-slate-50"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
 
-          {showFilters && (
-            <>
+      {showFilters && (
+        <>
+          <button
+            className="mt-2 w-full rounded border bg-white px-3 py-2 text-left"
+            onClick={() => setShowFilterPanel((v) => !v)}
+          >
+            {showFilterPanel ? "Hide filters" : "Show filters"}
+          </button>
+          {showFilterPanel && (
+            <div className="mt-2 space-y-2">
               <div className="grid grid-cols-2 gap-2">
                 <input
                   type="date"
@@ -1073,9 +1073,9 @@ function MobileAnalyticsFilters({
                 className="w-full"
                 placeholder="All Categories"
               />
-            </>
+            </div>
           )}
-        </div>
+        </>
       )}
     </div>
   );
