@@ -7,10 +7,10 @@ See `GOOGLE_SHEETS_SETUP.md` for a detailed walkthrough on preparing your spread
 ## ✨ Features
 
 - Dashboard: month-to-date and year-to-date cards (income, expense, net) plus category breakdowns
-- Analytics: monthly/annual totals, savings rate, YoY pacing, and quick date-range presets
+- Analytics: monthly/annual totals, savings rate, YoY pacing, and side-by-side period comparison
 - Transactions: instant search, multi-select category filters, quick ranges, inline edit/delete, and paginated tables
 - Add Transaction: keyboard-friendly form with recent-category chips and rich currency input
-- Budget: automatic target based on the last 12 complete months (with rent detection), manual overrides, and cumulative pacing chart
+- Budget: automatic target based on the last 12 complete months, manual overrides, and cumulative pacing chart
 - Access control & caching: simple bearer-token gate, optimistic updates, and a localStorage-backed cache with manual refresh
 
 ---
@@ -155,6 +155,7 @@ All routes require `Authorization: Bearer <APP_ACCESS_TOKEN>` if the token is se
 - `DELETE /api/transactions?id=spend-123`
 - `GET /api/summary?start=YYYY-MM-DD&end=YYYY-MM-DD`
 - `GET /api/breakdown?type=income|expense&start=YYYY-MM-DD&end=YYYY-MM-DD`
+- `GET /api/comparison?aStart=YYYY-MM-DD&aEnd=YYYY-MM-DD&bStart=YYYY-MM-DD&bEnd=YYYY-MM-DD`
 - `GET /api/categories`
 - `GET /api/budget?month=YYYY-MM`
 - `POST /api/budget` → `{ amount: number, notes?: string, month?: YYYY-MM }`
