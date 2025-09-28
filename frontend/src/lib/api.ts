@@ -129,6 +129,27 @@ export async function getBreakdown(type: "income" | "expense", period?: Period) 
 }
 
 export type Category = { id: string; name: string; type: "income" | "expense" };
+export type ComparisonCategory = {
+  category: string;
+  type: "income" | "expense";
+  amountA: number;
+  amountB: number;
+  delta: number;
+  pct: number | null;
+  hasA: boolean;
+  hasB: boolean;
+};
+
+export type ComparisonResponse = {
+  periodA: { start?: string; end?: string; totals: { income: number; expense: number; net: number } };
+  periodB: { start?: string; end?: string; totals: { income: number; expense: number; net: number } };
+  categories: ComparisonCategory[];
+};
+
+export async function getComparison(params?: { aStart?: string; aEnd?: string; bStart?: string; bEnd?: string }) {
+  const res = await fetch(buildUrl("/api/comparison", params), withAuth());
+  return jsonOrThrow<ComparisonResponse>(res);
+}
 
 export async function listCategories() {
   const res = await fetch("/api/categories", withAuth());
