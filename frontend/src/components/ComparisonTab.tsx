@@ -272,12 +272,18 @@ function ComparisonChangeHighlights({ data }: { data: ComparisonResponse }) {
 }
 
 function ComparisonCategoryCharts({ data }: { data: ComparisonResponse }) {
+  const filteredCategories = useMemo(
+    () =>
+      data.categories.filter((row) => Math.abs(row.amountA) > 0.0001 || Math.abs(row.amountB) > 0.0001),
+    [data.categories],
+  );
+
   const sources: ChartSource[] = useMemo(
     () => [
-      { type: "income", rows: data.categories.filter((row) => row.type === "income") },
-      { type: "expense", rows: data.categories.filter((row) => row.type === "expense") },
+      { type: "income", rows: filteredCategories.filter((row) => row.type === "income") },
+      { type: "expense", rows: filteredCategories.filter((row) => row.type === "expense") },
     ],
-    [data.categories],
+    [filteredCategories],
   );
 
   return (
@@ -342,7 +348,10 @@ function CategoryTable({ data }: { data: ComparisonResponse }) {
       income: [],
       expense: [],
     };
-    for (const row of data.categories) byType[row.type].push(row);
+    for (const row of data.categories) {
+      if (Math.abs(row.amountA) <= 0.0001 && Math.abs(row.amountB) <= 0.0001) continue;
+      byType[row.type].push(row);
+    }
     (Object.keys(byType) as Array<"income" | "expense">).forEach((key) => {
       byType[key].sort((a, b) => Math.abs(b.amountB) - Math.abs(a.amountB));
     });
@@ -408,14 +417,7 @@ function CategoryTable({ data }: { data: ComparisonResponse }) {
         })();
                     return (
                       <tr key={`${row.type}-${row.category}`} className="border-b last:border-b-0">
-                        <td className="py-2 pr-4 text-slate-800">
-                          <div className="flex items-center gap-2">
-                            <span>{row.category}</span>
-                            <span className={`text-[11px] uppercase tracking-wide ${row.type === "income" ? "text-emerald-600" : "text-rose-500"}`}>
-                              {row.type}
-                            </span>
-                          </div>
-                        </td>
+                        <td className="py-2 pr-4 text-slate-800">{row.category}</td>
                         <td className="py-2 pr-4 text-right text-slate-700">{fmtUSD(row.amountA)}</td>
                         <td className="py-2 pr-4 text-right text-slate-700">{fmtUSD(row.amountB)}</td>
                         <td className={`py-2 pr-4 text-right font-medium ${tone}`}>
