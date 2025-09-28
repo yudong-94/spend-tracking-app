@@ -178,7 +178,12 @@ function ComparisonHighlights({ data }: { data: ComparisonResponse }) {
       {metrics.map(({ key, label, recent, earlier }) => {
         const delta = recent - earlier;
         const pct = earlier !== 0 ? delta / earlier : null;
-        const tone = delta === 0 ? "text-slate-600" : delta > 0 ? "text-emerald-600" : "text-rose-500";
+        const tone = (() => {
+          if (delta === 0) return 'text-slate-600';
+          const positiveGood = key !== 'expense';
+          const isPositive = delta > 0;
+          return positiveGood === isPositive ? 'text-emerald-600' : 'text-rose-500';
+        })();
         return (
           <div key={key} className="rounded border bg-white p-4">
             <div className="text-xs uppercase tracking-wide text-slate-500">{label}</div>
@@ -328,7 +333,12 @@ function CategoryTable({ data }: { data: ComparisonResponse }) {
                   {rows.map((row) => {
                     const delta = row.amountB - row.amountA;
                     const pct = row.amountA !== 0 ? delta / row.amountA : null;
-                    const tone = delta === 0 ? "text-slate-600" : delta > 0 ? "text-emerald-600" : "text-rose-500";
+                    const tone = (() => {
+          if (delta === 0) return 'text-slate-600';
+          const positiveGood = key !== 'expense';
+          const isPositive = delta > 0;
+          return positiveGood === isPositive ? 'text-emerald-600' : 'text-rose-500';
+        })();
                     return (
                       <tr key={`${row.type}-${row.category}`} className="border-b last:border-b-0">
                         <td className="py-2 pr-4 text-slate-800">
@@ -355,9 +365,12 @@ function CategoryTable({ data }: { data: ComparisonResponse }) {
                     <td className="py-2 pr-4 text-slate-800">Total {key}</td>
                     <td className="py-2 pr-4 text-right text-slate-800">{fmtUSD(total.recent)}</td>
                     <td className="py-2 pr-4 text-right text-slate-800">{fmtUSD(total.earlier)}</td>
-                    <td className={`py-2 pr-4 text-right ${
-                      totalDelta === 0 ? "text-slate-600" : totalDelta > 0 ? "text-emerald-600" : "text-rose-500"
-                    }`}>
+                    <td className={`py-2 pr-4 text-right ${(() => {
+                      if (totalDelta === 0) return 'text-slate-600';
+                      const positiveGood = key !== 'expense';
+                      const isPositive = totalDelta > 0;
+                      return positiveGood === isPositive ? 'text-emerald-600' : 'text-rose-500';
+                    })()}`}>
                       {totalDelta > 0 ? "+" : ""}
                       {fmtUSD(totalDelta)}
                     </td>
