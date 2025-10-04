@@ -50,15 +50,18 @@ export default function Budget() {
   useEffect(() => {
     // If cache already has data, use it; otherwise prefetch
     if (budget) {
-      setData(budget);
-      setSelectedMonth(budget.month || CUR_MONTH);
+      if (selectedMonth === CUR_MONTH) setData(budget);
+      setSelectedMonth((prev) =>
+        prev === CUR_MONTH ? budget.month || CUR_MONTH : prev,
+      );
     } else void fetchIt(CUR_MONTH);
     // keep in sync with provider updates
-  }, [budget, CUR_MONTH, fetchIt]);
+  }, [budget, CUR_MONTH, fetchIt, selectedMonth]);
 
   useEffect(() => {
-    if (budget) setData(budget);
-  }, [budget]);
+    if (!budget) return;
+    if (selectedMonth === CUR_MONTH) setData(budget);
+  }, [budget, selectedMonth, CUR_MONTH]);
 
   // When switching months, load appropriate data
   useEffect(() => {

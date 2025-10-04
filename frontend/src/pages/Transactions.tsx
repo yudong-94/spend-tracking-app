@@ -3,6 +3,7 @@ import { ArrowUpDown, ChevronUp, ChevronDown } from "lucide-react";
 import { useDataCache, Tx } from "@/state/data-cache";
 import PageHeader from "@/components/PageHeader";
 import CategorySelect from "@/components/CategorySelect";
+import AmountCalculatorInput from "@/components/AmountCalculatorInput";
 import { fmtUSDSigned } from "@/lib/format";
 import {
   QUICK_RANGE_OPTIONS,
@@ -371,12 +372,11 @@ export default function TransactionsPage() {
                         onChange={(e) => updateDraft({ description: e.target.value })}
                         placeholder="Description"
                       />
-                      <input
-                        type="number"
-                        step="0.01"
-                        className="border rounded px-2 py-1 text-sm w-full text-right"
+                      <AmountCalculatorInput
                         value={draft?.amount ?? r.amount}
-                        onChange={(e) => updateDraft({ amount: Number(e.target.value) })}
+                        onChange={(val) => updateDraft({ amount: val })}
+                        wrapperClassName="w-full"
+                        inputClassName="border rounded px-2 py-1 text-sm w-full text-right"
                       />
                     </div>
                   )}
@@ -565,12 +565,11 @@ export default function TransactionsPage() {
                     </td>
                     <td className="py-2 px-3 text-right font-medium">
                       {isEdit ? (
-                        <input
-                          type="number"
-                          step="0.01"
-                          className="border rounded px-2 py-1 text-sm w-28 text-right"
+                        <AmountCalculatorInput
                           value={draft?.amount ?? r.amount}
-                          onChange={(e) => updateDraft({ amount: Number(e.target.value) })}
+                          onChange={(val) => updateDraft({ amount: val })}
+                          wrapperClassName="w-full"
+                          inputClassName="border rounded px-2 py-1 text-sm w-28 text-right"
                         />
                       ) : (
                         <span className={r.type === "income" ? "text-emerald-600" : "text-rose-600"}>
