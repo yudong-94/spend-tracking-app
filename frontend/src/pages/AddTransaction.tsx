@@ -46,30 +46,42 @@ export default function AddTransaction() {
   const [errors, setErrors] = useState<{ category?: string; amount?: string }>({});
 
   // Quick presets: last 6 used categories; fallback to first 6 expense cats if no history
-  const presets = useMemo(() => {
-    const recent: Array<{ name: string; type: Tx["type"] }> = [];
-    const seen = new Set<string>();
+  const frequentCategories = useMemo(() => {
+    const counts = new Map<string, { name: string; type: Tx["type"]; count: number }>();
 
-    // txns from our API are already normalized: { date, type, category, ... }
-    for (const r of txns) {
-      const name = r.category.trim();
-      const type = r.type;
+    for (const tx of txns) {
+      const type = tx.type;
+      const rawName = tx.category ?? "";
+      const name = typeof rawName === "string" ? rawName.trim() : "";
       if (!name || (type !== "income" && type !== "expense")) continue;
-      if (!seen.has(name)) {
-        seen.add(name);
-        recent.push({ name, type });
+      const key = `${type}__${name.toLowerCase()}`;
+      const existing = counts.get(key);
+      if (existing) {
+        existing.count += 1;
+        continue;
       }
-      if (recent.length >= 6) break;
+      counts.set(key, { name, type, count: 1 });
     }
 
-    if (recent.length) return recent;
+    const sorted = Array.from(counts.values()).sort((a, b) => {
+      if (b.count !== a.count) return b.count - a.count;
+      const nameCompare = a.name.localeCompare(b.name);
+      if (nameCompare !== 0) return nameCompare;
+      return a.type.localeCompare(b.type);
+    });
+
+    return sorted.slice(0, 6).map(({ name, type }) => ({ name, type }));
+  }, [txns]);
+
+  const presets = useMemo(() => {
+    if (frequentCategories.length) return frequentCategories;
 
     // fallback – top expense categories A→Z
     return sortedOptions
       .filter((c) => c.type === "expense")
       .slice(0, 6)
       .map((c) => ({ name: c.name, type: c.type }));
-  }, [txns, sortedOptions]);
+  }, [frequentCategories, sortedOptions]);
 
   const setType = (t: "income" | "expense") => setForm((f) => ({ ...f, Type: t }));
   const setCategory = (name: string) => {
