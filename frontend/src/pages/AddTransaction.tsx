@@ -2,7 +2,7 @@
 import { useMemo, useState } from "react";
 import { useDataCache } from "@/state/data-cache";
 import type { Tx } from "@/state/data-cache";
-import CurrencyInput from "@/components/CurrencyInput";
+import AmountCalculatorInput from "@/components/AmountCalculatorInput";
 import CategorySelect from "@/components/CategorySelect";
 import { createTransaction } from "@/lib/api";
 
@@ -195,12 +195,14 @@ export default function AddTransaction() {
         {/* Amount */}
         <div className="grid gap-1">
           <label className="text-sm">Amount</label>
-          <CurrencyInput
+          <AmountCalculatorInput
             value={form.Amount || 0}
             onChange={(v) => {
               setForm((f) => ({ ...f, Amount: v }));
               setErrors((prev) => ({ ...prev, amount: undefined }));
             }}
+            wrapperClassName="w-full"
+            inputClassName="w-full border p-2 rounded"
           />
           {errors.amount ? <p className="text-xs text-rose-600">{errors.amount}</p> : null}
         </div>
