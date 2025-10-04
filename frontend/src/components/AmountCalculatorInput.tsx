@@ -1,6 +1,18 @@
 import { useEffect, useRef, useState } from "react";
 import CurrencyInput from "./CurrencyInput";
 
+const PANEL_MIN_WIDTH = 200;
+const PANEL_MAX_WIDTH = 320;
+const PANEL_MARGIN = 32;
+
+function getResponsivePanelWidth() {
+  if (typeof window === "undefined") return PANEL_MAX_WIDTH;
+  const available = Math.max(window.innerWidth - PANEL_MARGIN, 160);
+  const minAllowed = Math.min(PANEL_MIN_WIDTH, available);
+  const clamped = Math.min(PANEL_MAX_WIDTH, available);
+  return Math.max(minAllowed, clamped);
+}
+
 type Operation = "+" | "-" | "*" | "/";
 
 type AmountCalculatorInputProps = {
@@ -21,8 +33,22 @@ export default function AmountCalculatorInput({
   const wrapperRef = useRef<HTMLDivElement>(null);
   const [isHovering, setIsHovering] = useState(false);
   const [isFocusWithin, setIsFocusWithin] = useState(false);
+  const [panelWidth, setPanelWidth] = useState<number>(() => getResponsivePanelWidth());
 
   const isOpen = isHovering || isFocusWithin;
+  const isCompact = panelWidth <= 240;
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handleResize = () => setPanelWidth(getResponsivePanelWidth());
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  useEffect(() => {
+    if (isOpen) setPanelWidth(getResponsivePanelWidth());
+  }, [isOpen]);
 
   return (
     <div
@@ -44,8 +70,11 @@ export default function AmountCalculatorInput({
         className={inputClassName}
       />
       {isOpen ? (
-        <div className="absolute left-0 mt-2 z-20 w-52 rounded border border-slate-200 bg-white p-3 shadow-lg">
-          <CalculatorPanel value={value} onValueChange={onChange} />
+        <div
+          className={`absolute left-0 mt-2 z-20 rounded border border-slate-200 bg-white shadow-lg ${isCompact ? "p-2" : "p-3"}`}
+          style={{ width: panelWidth, maxWidth: "calc(100vw - 16px)" }}
+        >
+          <CalculatorPanel value={value} onValueChange={onChange} isCompact={isCompact} />
         </div>
       ) : null}
     </div>
@@ -61,9 +90,11 @@ type ButtonConfig = {
 function CalculatorPanel({
   value,
   onValueChange,
+  isCompact,
 }: {
   value: number;
   onValueChange: (value: number) => void;
+  isCompact: boolean;
 }) {
   const [entry, setEntry] = useState<string>(() => formatValue(value));
   const [accumulator, setAccumulator] = useState<number | null>(null);
@@ -208,17 +239,21 @@ function CalculatorPanel({
 
   return (
     <div>
-      <div className="rounded border border-slate-200 bg-slate-50 px-2 py-1 text-right text-sm font-semibold tracking-wide">
+      <div
+        className={`rounded border border-slate-200 bg-slate-50 text-right font-semibold tracking-wide ${
+          isCompact ? "px-2 py-1 text-sm" : "px-3 py-2 text-base"
+        }`}
+      >
         {entry}
       </div>
-      <div className="mt-2 grid grid-cols-4 gap-2 text-sm">
+      <div className={`mt-2 grid grid-cols-4 ${isCompact ? "gap-1 text-xs" : "gap-2 text-sm"}`}>
         {buttons.map((btn) => (
           <button
             key={btn.label}
             type="button"
-            className={`rounded border border-slate-200 px-2 py-1 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400 ${
-              btn.className ?? ""
-            }`}
+            className={`rounded border border-slate-200 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400 ${
+              isCompact ? "px-2 py-1 text-xs" : "px-3 py-1.5 text-sm"
+            } ${btn.className ?? ""}`}
             onClick={btn.onPress}
           >
             {btn.label}
