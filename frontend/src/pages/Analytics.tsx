@@ -128,6 +128,20 @@ export default function Analytics() {
     setEnd(nextEnd);
   };
 
+  const categoryOptions = useMemo(() => getCategories(), [getCategories]);
+  const selectedCategoryDetails = useMemo(() => {
+    if (!categories.length) return [] as Array<{ name: string; type?: "income" | "expense" }>;
+    const byName = new Map(categoryOptions.map((c) => [c.name, c]));
+    return categories
+      .map((name) => {
+        const trimmed = name.trim();
+        const match = byName.get(trimmed);
+        return match ? { name: match.name, type: match.type } : { name: trimmed };
+      })
+      .filter((item) => item.name)
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [categories, categoryOptions]);
+
   async function onRefresh() {
     setIsRefreshing(true);
     try {
@@ -440,6 +454,29 @@ export default function Analytics() {
         setQuickRange={setQuickRange}
         applyQuickRange={applyQuickRange}
       />
+
+      {selectedCategoryDetails.length > 0 ? (
+        <div className="text-xs sm:text-sm text-slate-600 flex flex-wrap items-start gap-1 sm:gap-2">
+          <span className="text-slate-500">Categories:</span>
+          <div className="flex flex-wrap gap-1.5 sm:gap-2">
+            {selectedCategoryDetails.map((item) => (
+              <span
+                key={item.name}
+                className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] sm:text-xs text-slate-700"
+              >
+                {item.type ? (
+                  <span
+                    className={`inline-block h-1.5 w-1.5 rounded-full ${
+                      item.type === "income" ? "bg-emerald-500" : "bg-rose-500"
+                    }`}
+                  />
+                ) : null}
+                <span>{item.name}</span>
+              </span>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       {/* KPI cards with comparisons (Monthly: vs last month, Annual: vs 12‑mo avg) */}
       {(tab === "monthly" || tab === "annual") && (
