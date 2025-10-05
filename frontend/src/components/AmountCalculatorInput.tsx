@@ -68,6 +68,7 @@ export default function AmountCalculatorInput({
 
   const isOpen = isTouch ? manualOpen : isHovering || isFocusWithin;
   const isCompact = panelWidth <= 240;
+  const touchYOffset = isTouch ? 14 : 0;
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -115,8 +116,13 @@ export default function AmountCalculatorInput({
       />
       {isOpen ? (
         <div
-          className={`absolute left-0 mt-2 z-20 rounded border border-slate-200 bg-white shadow-lg ${isCompact ? "p-2" : "p-3"}`}
-          style={{ width: panelWidth, maxWidth: "calc(100vw - 16px)" }}
+          className={`absolute left-0 mt-2 z-20 rounded border border-slate-200 bg-white shadow-lg ${isCompact ? "p-2" : "p-3"} ${isTouch ? "pb-4" : ""}`}
+          style={{
+            width: panelWidth,
+            maxWidth: "calc(100vw - 16px)",
+            transform: touchYOffset ? `translateY(-${touchYOffset}px)` : undefined,
+            paddingBottom: isTouch ? `calc(0.75rem + env(safe-area-inset-bottom, 0px))` : undefined,
+          }}
         >
           {isTouch ? (
             <div className="mb-2 flex justify-end">
