@@ -53,6 +53,19 @@ export default function AmountCalculatorInput({
     if (!isTouch) setManualOpen(false);
   }, [isTouch]);
 
+  useEffect(() => {
+    if (!isTouch) return;
+    const handlePointerDown = (event: PointerEvent) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
+        setManualOpen(false);
+        setIsFocusWithin(false);
+        inputRef.current?.blur();
+      }
+    };
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [isTouch]);
+
   const isOpen = isTouch ? manualOpen : isHovering || isFocusWithin;
   const isCompact = panelWidth <= 240;
 
@@ -82,7 +95,7 @@ export default function AmountCalculatorInput({
         const next = event.relatedTarget as Node | null;
         if (next && wrapperRef.current?.contains(next)) return;
         setIsFocusWithin(false);
-        if (isTouch) setManualOpen(false);
+        if (!isTouch) setManualOpen(false);
       }}
     >
       <CurrencyInput
