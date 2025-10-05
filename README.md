@@ -9,7 +9,7 @@ See `GOOGLE_SHEETS_SETUP.md` for a detailed walkthrough on preparing your spread
 - Dashboard: month-to-date and year-to-date cards (income, expense, net) plus category breakdowns
 - Analytics: monthly/annual totals, savings rate, YoY pacing, and side-by-side period comparison
 - Transactions: instant search, multi-select category filters, quick ranges, inline edit/delete, and paginated tables
-- Add Transaction: keyboard-friendly form with recent-category chips and rich currency input
+- Add Transaction: keyboard-friendly form with most selected category chips and amount calculator
 - Budget: automatic target based on the last 12 complete months, manual overrides, and cumulative pacing chart
 - Access control & caching: simple bearer-token gate, optimistic updates, and a localStorage-backed cache with manual refresh
 

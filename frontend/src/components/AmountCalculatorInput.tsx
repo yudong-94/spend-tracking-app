@@ -5,6 +5,13 @@ const PANEL_MIN_WIDTH = 200;
 const PANEL_MAX_WIDTH = 320;
 const PANEL_MARGIN = 32;
 
+function isTouchDevice() {
+  if (typeof window === "undefined") return false;
+  if ("maxTouchPoints" in navigator && navigator.maxTouchPoints > 0) return true;
+  if (window.matchMedia && window.matchMedia("(pointer: coarse)").matches) return true;
+  return "ontouchstart" in window;
+}
+
 function getResponsivePanelWidth() {
   if (typeof window === "undefined") return PANEL_MAX_WIDTH;
   const available = Math.max(window.innerWidth - PANEL_MARGIN, 160);
@@ -31,11 +38,22 @@ export default function AmountCalculatorInput({
   inputClassName,
 }: AmountCalculatorInputProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const [isHovering, setIsHovering] = useState(false);
   const [isFocusWithin, setIsFocusWithin] = useState(false);
   const [panelWidth, setPanelWidth] = useState<number>(() => getResponsivePanelWidth());
+  const [isTouch, setIsTouch] = useState<boolean>(() => isTouchDevice());
+  const [manualOpen, setManualOpen] = useState(false);
 
-  const isOpen = isHovering || isFocusWithin;
+  useEffect(() => {
+    setIsTouch(isTouchDevice());
+  }, []);
+
+  useEffect(() => {
+    if (!isTouch) setManualOpen(false);
+  }, [isTouch]);
+
+  const isOpen = isTouch ? manualOpen : isHovering || isFocusWithin;
   const isCompact = panelWidth <= 240;
 
   useEffect(() => {
@@ -54,13 +72,17 @@ export default function AmountCalculatorInput({
     <div
       ref={wrapperRef}
       className={`relative ${wrapperClassName}`}
-      onMouseEnter={() => setIsHovering(true)}
-      onMouseLeave={() => setIsHovering(false)}
-      onFocus={() => setIsFocusWithin(true)}
+      onMouseEnter={() => !isTouch && setIsHovering(true)}
+      onMouseLeave={() => !isTouch && setIsHovering(false)}
+      onFocus={() => {
+        setIsFocusWithin(true);
+        if (isTouch) setManualOpen(true);
+      }}
       onBlur={(event) => {
         const next = event.relatedTarget as Node | null;
         if (next && wrapperRef.current?.contains(next)) return;
         setIsFocusWithin(false);
+        if (isTouch) setManualOpen(false);
       }}
     >
       <CurrencyInput
@@ -68,12 +90,36 @@ export default function AmountCalculatorInput({
         onChange={onChange}
         placeholder={placeholder}
         className={inputClassName}
+        inputMode={isTouch ? "none" : "decimal"}
+        readOnly={isTouch}
+        inputRef={inputRef}
+        onPointerDown={(event) => {
+          if (!isTouch) return;
+          event.preventDefault();
+          inputRef.current?.focus({ preventScroll: true });
+          setManualOpen(true);
+        }}
       />
       {isOpen ? (
         <div
           className={`absolute left-0 mt-2 z-20 rounded border border-slate-200 bg-white shadow-lg ${isCompact ? "p-2" : "p-3"}`}
           style={{ width: panelWidth, maxWidth: "calc(100vw - 16px)" }}
         >
+          {isTouch ? (
+            <div className="mb-2 flex justify-end">
+              <button
+                type="button"
+                className="text-xs text-slate-500 hover:text-slate-700"
+                onClick={() => {
+                  setManualOpen(false);
+                  setIsFocusWithin(false);
+                  inputRef.current?.blur();
+                }}
+              >
+                Close
+              </button>
+            </div>
+          ) : null}
           <CalculatorPanel value={value} onValueChange={onChange} isCompact={isCompact} />
         </div>
       ) : null}
