@@ -128,6 +128,20 @@ export default function Analytics() {
     setEnd(nextEnd);
   };
 
+  const categoryOptions = useMemo(() => getCategories(), [getCategories]);
+  const selectedCategoryDetails = useMemo(() => {
+    if (!categories.length) return [] as Array<{ name: string; type?: "income" | "expense" }>;
+    const byName = new Map(categoryOptions.map((c) => [c.name, c]));
+    return categories
+      .map((name) => {
+        const trimmed = name.trim();
+        const match = byName.get(trimmed);
+        return match ? { name: match.name, type: match.type } : { name: trimmed };
+      })
+      .filter((item) => item.name)
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [categories, categoryOptions]);
+
   async function onRefresh() {
     setIsRefreshing(true);
     try {
@@ -162,6 +176,10 @@ export default function Analytics() {
     }
     return [...by.values()].sort((a, b) => a.month.localeCompare(b.month));
   }, [filtered]);
+
+  const hasIncomeData = useMemo(() => series.some((p) => p.income > 0), [series]);
+  const hasExpenseData = useMemo(() => series.some((p) => p.expense > 0), [series]);
+  const hasNetData = useMemo(() => series.some((p) => p.net !== 0), [series]);
 
   // KPI comparisons: vs last month and vs 12‑mo avg
   const kpiCompare = useMemo(() => {
@@ -277,6 +295,11 @@ export default function Analytics() {
     }));
   }, [annualSeries]);
 
+  const hasAnnualIncomeData = useMemo(() => annualSeries.some((p) => p.income > 0), [annualSeries]);
+  const hasAnnualExpenseData = useMemo(() => annualSeries.some((p) => p.expense > 0), [annualSeries]);
+  const hasAnnualNetData = useMemo(() => annualSeries.some((p) => p.net !== 0), [annualSeries]);
+  const hasAnnualRateData = useMemo(() => annualRateData.some((p) => p.rate != null), [annualRateData]);
+
   // --- YoY cumulative net (Jan..Dec). Ignores start/end; applies category filter.
   const yoyData = useMemo(() => {
     const now = new Date();
@@ -323,6 +346,10 @@ export default function Analytics() {
       lastYear: cumLast[i],
     }));
   }, [all, categories]);
+
+  const hasYoyData = useMemo(() =>
+    yoyData.some((d) => ((d.thisYear ?? 0) !== 0) || ((d.lastYear ?? 0) !== 0)),
+  [yoyData]);
 
   return (
     <div className="space-y-6">
@@ -428,6 +455,29 @@ export default function Analytics() {
         applyQuickRange={applyQuickRange}
       />
 
+      {selectedCategoryDetails.length > 0 && tab !== "compare" ? (
+        <div className="text-xs sm:text-sm text-slate-600 flex flex-wrap items-start gap-1 sm:gap-2">
+          <span className="text-slate-500">Categories:</span>
+          <div className="flex flex-wrap gap-1.5 sm:gap-2">
+            {selectedCategoryDetails.map((item) => (
+              <span
+                key={item.name}
+                className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] sm:text-xs text-slate-700"
+              >
+                {item.type ? (
+                  <span
+                    className={`inline-block h-1.5 w-1.5 rounded-full ${
+                      item.type === "income" ? "bg-emerald-500" : "bg-rose-500"
+                    }`}
+                  />
+                ) : null}
+                <span>{item.name}</span>
+              </span>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
       {/* KPI cards with comparisons (Monthly: vs last month, Annual: vs 12‑mo avg) */}
       {(tab === "monthly" || tab === "annual") && (
         <section className="grid gap-3 sm:grid-cols-4">
@@ -470,68 +520,76 @@ export default function Analytics() {
             return (
               <>
                 {/* Income */}
-                <div className="rounded-lg border bg-white p-3">
-                  <div className="text-xs text-slate-500 flex items-center gap-1">
-                    <span>Income</span>
-                    <TooltipInfo text={tipIncome} />
+                {hasIncomeData ? (
+                  <div className="rounded-lg border bg-white p-3">
+                    <div className="text-xs text-slate-500 flex items-center gap-1">
+                      <span>Income</span>
+                      <TooltipInfo text={tipIncome} />
+                    </div>
+                    <div className="text-lg font-semibold text-emerald-600">{fmtUSD(totals.totalIncome)}</div>
+                    <div className="text-xs text-slate-600 mt-1">
+                      {label}: {fmtUSD(cur.income)} vs. {base ? fmtUSD(base.income) : "—"} (
+                      {renderPct(vs?.income.pct ?? null, true)})
+                    </div>
                   </div>
-                  <div className="text-lg font-semibold text-emerald-600">{fmtUSD(totals.totalIncome)}</div>
-                  <div className="text-xs text-slate-600 mt-1">
-                    {label}: {fmtUSD(cur.income)} vs. {base ? fmtUSD(base.income) : "—"} (
-                    {renderPct(vs?.income.pct ?? null, true)})
-                  </div>
-                </div>
+                ) : null}
 
                 {/* Expense */}
-                <div className="rounded-lg border bg-white p-3">
-                  <div className="text-xs text-slate-500 flex items-center gap-1">
-                    <span>Expense</span>
-                    <TooltipInfo text={tipExpense} />
+                {hasExpenseData ? (
+                  <div className="rounded-lg border bg-white p-3">
+                    <div className="text-xs text-slate-500 flex items-center gap-1">
+                      <span>Expense</span>
+                      <TooltipInfo text={tipExpense} />
+                    </div>
+                    <div className="text-lg font-semibold text-rose-600">{fmtUSD(totals.totalExpense)}</div>
+                    <div className="text-xs text-slate-600 mt-1">
+                      {label}: {fmtUSD(cur.expense)} vs. {base ? fmtUSD(base.expense) : "—"} (
+                      {renderPct(vs?.expense.pct ?? null, false)})
+                    </div>
                   </div>
-                  <div className="text-lg font-semibold text-rose-600">{fmtUSD(totals.totalExpense)}</div>
-                  <div className="text-xs text-slate-600 mt-1">
-                    {label}: {fmtUSD(cur.expense)} vs. {base ? fmtUSD(base.expense) : "—"} (
-                    {renderPct(vs?.expense.pct ?? null, false)})
-                  </div>
-                </div>
+                ) : null}
 
                 {/* Net */}
-                <div className="rounded-lg border bg-white p-3">
-                  <div className="text-xs text-slate-500 flex items-center gap-1">
-                    <span>Net</span>
-                    <TooltipInfo text={tipNet} />
+                {(hasIncomeData || hasExpenseData) ? (
+                  <div className="rounded-lg border bg-white p-3">
+                    <div className="text-xs text-slate-500 flex items-center gap-1">
+                      <span>Net</span>
+                      <TooltipInfo text={tipNet} />
+                    </div>
+                    <div className={`text-lg font-semibold ${totals.net >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                      {fmtUSD(totals.net)}
+                    </div>
+                    <div className="text-xs text-slate-600 mt-1">
+                      {label}: {fmtUSD(cur.net)} vs. {base ? fmtUSD(base.net) : "—"} (
+                      {renderPct(vs?.net.pct ?? null, true)})
+                    </div>
                   </div>
-                  <div className={`text-lg font-semibold ${totals.net >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
-                    {fmtUSD(totals.net)}
-                  </div>
-                  <div className="text-xs text-slate-600 mt-1">
-                    {label}: {fmtUSD(cur.net)} vs. {base ? fmtUSD(base.net) : "—"} (
-                    {renderPct(vs?.net.pct ?? null, true)})
-                  </div>
-                </div>
+                ) : null}
 
                 {/* Savings rate */}
-                <div className="rounded-lg border bg-white p-3">
-                  <div className="text-xs text-slate-500 flex items-center gap-1">
-                    <span>Savings rate</span>
-                    <TooltipInfo text={tipRate} />
+                {hasIncomeData ? (
+                  <div className="rounded-lg border bg-white p-3">
+                    <div className="text-xs text-slate-500 flex items-center gap-1">
+                      <span>Savings rate</span>
+                      <TooltipInfo text={tipRate} />
+                    </div>
+                    {(() => {
+                      const curR = rateVal(cur);
+                      const baseR = base ? rateVal(base) : null;
+                      return (
+                        <>
+                          <div className={`text-lg font-semibold ${periodRate != null && periodRate >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                            {periodRate == null ? "—" : percentFormatter(periodRate)}
+                          </div>
+                          <div className="text-xs text-slate-600 mt-1">
+                            {label}: {curR == null ? "—" : percentFormatter(curR)} vs. {baseR == null ? "—" : percentFormatter(baseR)} (
+                            {fmtPP(vs?.rate?.diff ?? null)})
+                          </div>
+                        </>
+                      );
+                    })()}
                   </div>
-                  {(() => {
-                    const curR = rateVal(cur);
-                    const baseR = base ? rateVal(base) : null;
-                    return (
-                      <>
-                        <div className={`text-lg font-semibold ${periodRate != null && periodRate >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
-                          {periodRate == null ? "—" : percentFormatter(periodRate)}
-                        </div>
-                        <div className="text-xs text-slate-600 mt-1">
-                          {label}: {curR == null ? "—" : percentFormatter(curR)} vs. {baseR == null ? "—" : percentFormatter(baseR)} (
-                          {fmtPP(vs?.rate?.diff ?? null)})
-                        </div>
-                      </>
-                    );
-                  })()}
-                </div>
+                ) : null}
               </>
             );
           })()}
@@ -609,7 +667,7 @@ export default function Analytics() {
       )}
 
       {/* Monthly Income */}
-      {tab === "monthly" && (
+      {tab === "monthly" && hasIncomeData && (
       <div className="p-4 rounded-lg border bg-white">
         <h3 className="font-medium mb-2">Monthly total income</h3>
         <div className="h-64">
@@ -636,7 +694,7 @@ export default function Analytics() {
       )}
 
       {/* Monthly Expenses */}
-      {tab === "monthly" && (
+      {tab === "monthly" && hasExpenseData && (
       <div className="p-4 rounded-lg border bg-white">
         <h3 className="font-medium mb-2">Monthly total expenses</h3>
         <div className="h-64">
@@ -663,7 +721,7 @@ export default function Analytics() {
       )}
 
       {/* Monthly Net */}
-      {tab === "monthly" && (
+      {tab === "monthly" && hasNetData && (
       <div className="p-4 rounded-lg border bg-white">
         <h3 className="font-medium mb-2">Monthly net</h3>
         <div className="h-64">
@@ -690,7 +748,7 @@ export default function Analytics() {
       )}
 
       {/* Monthly: Combined monthly */}
-      {tab === "monthly" && (
+      {tab === "monthly" && (hasIncomeData || hasExpenseData) && (
       <div className="p-4 rounded-lg border bg-white">
         <h3 className="font-medium mb-2">Monthly income vs expense (with net)</h3>
         <CombinedMonthlyChart data={series} />
@@ -698,7 +756,7 @@ export default function Analytics() {
       )}
 
       {/* Annual Income */}
-      {tab === "annual" && (
+      {tab === "annual" && hasAnnualIncomeData && (
       <div className="p-4 rounded-lg border bg-white">
         <h3 className="font-medium mb-2">Annual total income</h3>
         <div className="h-64">
@@ -725,7 +783,7 @@ export default function Analytics() {
       )}
 
       {/* Annual Expenses */}
-      {tab === "annual" && (
+      {tab === "annual" && hasAnnualExpenseData && (
       <div className="p-4 rounded-lg border bg-white">
         <h3 className="font-medium mb-2">Annual total expenses</h3>
         <div className="h-64">
@@ -752,7 +810,7 @@ export default function Analytics() {
       )}
 
       {/* Annual Net */}
-      {tab === "annual" && (
+      {tab === "annual" && hasAnnualNetData && (
       <div className="p-4 rounded-lg border bg-white">
         <h3 className="font-medium mb-2">Annual net</h3>
         <div className="h-64">
@@ -779,7 +837,7 @@ export default function Analytics() {
       )}
 
       {/* Annual Savings Rate */}
-      {tab === "annual" && (
+      {tab === "annual" && hasAnnualRateData && (
       <div className="p-4 rounded-lg border bg-white">
         <h3 className="font-medium mb-2">Annual savings rate</h3>
         <div className="h-64">
@@ -822,51 +880,55 @@ export default function Analytics() {
         <div className="text-xs text-neutral-500 mb-2">
           Category filter applies; date range is ignored for this comparison.
         </div>
-        <div className="h-64">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={yoyData} margin={{ left: 16, right: 8, top: 8, bottom: 8 }}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="label" />
-              <YAxis
-                width={Math.max(
-                  MIN_Y_AXIS,
-                  estimateYAxisWidthFromMax(
-                    Math.max(
-                      0,
-                      ...yoyData
-                        .map((d) => [d.thisYear, d.lastYear])
-                        .flat()
-                        .filter((x) => x != null)
-                        .map((x) => Math.abs(x as number)),
+        {hasYoyData ? (
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={yoyData} margin={{ left: 16, right: 8, top: 8, bottom: 8 }}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="label" />
+                <YAxis
+                  width={Math.max(
+                    MIN_Y_AXIS,
+                    estimateYAxisWidthFromMax(
+                      Math.max(
+                        0,
+                        ...yoyData
+                          .map((d) => [d.thisYear, d.lastYear])
+                          .flat()
+                          .filter((x) => x != null)
+                          .map((x) => Math.abs(x as number)),
+                      ),
+                      fmtUSD,
                     ),
-                    fmtUSD,
-                  ),
-                )}
-                tickFormatter={(v: number) => fmtUSD(v)}
-              />
-              <Tooltip formatter={formatTooltipValue} />
-              <Legend />
-              <Line
-                type="monotone"
-                dataKey="thisYear"
-                name={`${new Date().getFullYear()} YTD`}
-                stroke={COL.net}
-                strokeWidth={2}
-                dot={false}
-                connectNulls={false}
-              />
-              <Line
-                type="monotone"
-                dataKey="lastYear"
-                name={`${new Date().getFullYear() - 1} (full)`}
-                stroke="#9ca3af"
-                strokeWidth={2}
-                strokeDasharray="5 5"
-                dot={false}
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
+                  )}
+                  tickFormatter={(v: number) => fmtUSD(v)}
+                />
+                <Tooltip formatter={formatTooltipValue} />
+                <Legend />
+                <Line
+                  type="monotone"
+                  dataKey="thisYear"
+                  name={`${new Date().getFullYear()} YTD`}
+                  stroke={COL.net}
+                  strokeWidth={2}
+                  dot={false}
+                  connectNulls={false}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="lastYear"
+                  name={`${new Date().getFullYear() - 1} (full)`}
+                  stroke="#9ca3af"
+                  strokeWidth={2}
+                  strokeDasharray="5 5"
+                  dot={false}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        ) : (
+          <div className="text-sm text-neutral-500">No data for selected filters.</div>
+        )}
       </div>
       )}
 

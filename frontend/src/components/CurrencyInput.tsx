@@ -1,20 +1,37 @@
 import { useEffect, useRef, useState } from "react";
+import type { FocusEventHandler, InputHTMLAttributes, MouseEventHandler, PointerEventHandler, RefObject } from "react";
+
+type CurrencyInputProps = {
+  value: number;
+  onChange: (v: number) => void;
+  placeholder?: string;
+  className?: string;
+  inputMode?: InputHTMLAttributes<HTMLInputElement>["inputMode"];
+  readOnly?: boolean;
+  onFocus?: FocusEventHandler<HTMLInputElement>;
+  onBlur?: FocusEventHandler<HTMLInputElement>;
+  onClick?: MouseEventHandler<HTMLInputElement>;
+  onPointerDown?: PointerEventHandler<HTMLInputElement>;
+  inputRef?: RefObject<HTMLInputElement>;
+};
 
 export default function CurrencyInput({
   value,
   onChange,
   placeholder = "",
   className = "border p-2 rounded",
-}: {
-  value: number;
-  onChange: (v: number) => void;
-  placeholder?: string;
-  className?: string;
-}) {
-  const inputRef = useRef<HTMLInputElement>(null);
+  inputMode = "decimal",
+  readOnly = false,
+  onFocus,
+  onBlur,
+  onClick,
+  onPointerDown,
+  inputRef,
+}: CurrencyInputProps) {
+  const ownRef = useRef<HTMLInputElement>(null);
+  const mergedRef = inputRef ?? ownRef;
   const [raw, setRaw] = useState<string>("");
 
-  // render helper
   const formatNice = (n: number) =>
     Number.isFinite(n)
       ? n.toLocaleString(undefined, {
@@ -23,17 +40,14 @@ export default function CurrencyInput({
         })
       : "";
 
-  // keep internal string in sync when parent value changes (but don't fight the user while typing)
   useEffect(() => {
-    if (document.activeElement !== inputRef.current) {
+    if (document.activeElement !== mergedRef.current) {
       setRaw(value ? formatNice(value) : "");
     }
-  }, [value]);
+  }, [value, mergedRef]);
 
-  // parse "1,234.56" or "1.234,56" → 1234.56
   const parseToNumber = (s: string): number => {
     const cleaned = s.replace(/[^\d.,-]/g, "").replace(/,/g, ".");
-    // collapse extra dots (1.2.3 -> 1.23)
     const parts = cleaned.split(".");
     const normalized = parts.length > 2 ? parts[0] + "." + parts.slice(1).join("") : cleaned;
     const n = Number(normalized);
@@ -42,18 +56,27 @@ export default function CurrencyInput({
 
   return (
     <input
-      ref={inputRef}
-      inputMode="decimal"
+      ref={mergedRef}
+      inputMode={inputMode}
       placeholder={placeholder}
       className={className}
       value={raw}
+      readOnly={readOnly}
+      onClick={onClick}
+      onPointerDown={onPointerDown}
       onChange={(e) => {
         const s = e.target.value;
         setRaw(s);
         onChange(parseToNumber(s));
       }}
-      onFocus={() => setRaw(value ? String(value) : "")}
-      onBlur={() => setRaw(value ? formatNice(value) : "")}
+      onFocus={(event) => {
+        setRaw(value ? String(value) : "");
+        onFocus?.(event);
+      }}
+      onBlur={(event) => {
+        setRaw(value ? formatNice(value) : "");
+        onBlur?.(event);
+      }}
     />
   );
 }
