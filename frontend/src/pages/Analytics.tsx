@@ -455,7 +455,7 @@ export default function Analytics() {
         applyQuickRange={applyQuickRange}
       />
 
-      {selectedCategoryDetails.length > 0 ? (
+      {selectedCategoryDetails.length > 0 && tab !== "compare" ? (
         <div className="text-xs sm:text-sm text-slate-600 flex flex-wrap items-start gap-1 sm:gap-2">
           <span className="text-slate-500">Categories:</span>
           <div className="flex flex-wrap gap-1.5 sm:gap-2">
