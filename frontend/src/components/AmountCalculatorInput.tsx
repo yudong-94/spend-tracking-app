@@ -68,7 +68,6 @@ export default function AmountCalculatorInput({
 
   const isOpen = isTouch ? manualOpen : isHovering || isFocusWithin;
   const isCompact = panelWidth <= 240;
-  const touchYOffset = isTouch ? 14 : 0;
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -115,32 +114,50 @@ export default function AmountCalculatorInput({
         }}
       />
       {isOpen ? (
-        <div
-          className={`absolute left-0 mt-2 z-20 rounded border border-slate-200 bg-white shadow-lg ${isCompact ? "p-2" : "p-3"} ${isTouch ? "pb-4" : ""}`}
-          style={{
-            width: panelWidth,
-            maxWidth: "calc(100vw - 16px)",
-            transform: touchYOffset ? `translateY(-${touchYOffset}px)` : undefined,
-            paddingBottom: isTouch ? `calc(0.75rem + env(safe-area-inset-bottom, 0px))` : undefined,
-          }}
-        >
-          {isTouch ? (
-            <div className="mb-2 flex justify-end">
-              <button
-                type="button"
-                className="text-xs text-slate-500 hover:text-slate-700"
-                onClick={() => {
-                  setManualOpen(false);
-                  setIsFocusWithin(false);
-                  inputRef.current?.blur();
-                }}
+        isTouch ? (
+          <>
+            <div
+              className="fixed inset-0 z-[998] bg-slate-900/25"
+              onClick={() => {
+                setManualOpen(false);
+                setIsFocusWithin(false);
+                inputRef.current?.blur();
+              }}
+            />
+            <div className="fixed inset-x-0 bottom-0 z-[999] px-4 pb-[calc(env(safe-area-inset-bottom,0px)+16px)]">
+              <div
+                className={`mx-auto w-full max-w-sm rounded-2xl border border-slate-200 bg-white shadow-xl ${
+                  isCompact ? "p-3" : "p-4"
+                }`}
               >
-                Close
-              </button>
+                <div className="mb-2 flex justify-between items-center text-xs text-slate-500">
+                  <span>Calculator</span>
+                  <button
+                    type="button"
+                    className="text-xs text-slate-500 hover:text-slate-700"
+                    onClick={() => {
+                      setManualOpen(false);
+                      setIsFocusWithin(false);
+                      inputRef.current?.blur();
+                    }}
+                  >
+                    Close
+                  </button>
+                </div>
+                <CalculatorPanel value={value} onValueChange={onChange} isCompact={isCompact} />
+              </div>
             </div>
-          ) : null}
-          <CalculatorPanel value={value} onValueChange={onChange} isCompact={isCompact} />
-        </div>
+          </>
+        ) : (
+          <div
+            className={`absolute left-0 mt-2 z-20 rounded border border-slate-200 bg-white shadow-lg ${
+              isCompact ? "p-2" : "p-3"
+            }`}
+            style={{ width: panelWidth, maxWidth: "calc(100vw - 16px)" }}
+          >
+            <CalculatorPanel value={value} onValueChange={onChange} isCompact={isCompact} />
+          </div>
+        )
       ) : null}
     </div>
   );
