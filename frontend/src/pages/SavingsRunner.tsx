@@ -14,7 +14,7 @@ import {
 import { fmtUSD } from "@/lib/format";
 
 const GAME_WIDTH = 420;
-const GAME_HEIGHT = 720;
+const GAME_HEIGHT = 600;
 const SCORE_STORAGE_KEY = "savings-asteroids-best";
 
 type EngineState = {
@@ -145,8 +145,7 @@ const createShipGraphic = () => {
   ship.lineTo(0, 6);
   ship.closePath();
   ship.pivot.set(0, 0);
-  ship.x = GAME_WIDTH / 2;
-  ship.y = GAME_HEIGHT - 90;
+  ship.position.set(GAME_WIDTH / 2, GAME_HEIGHT - 80);
   ship.eventMode = "none";
   return ship;
 };
@@ -619,10 +618,12 @@ function SavingsRunner() {
       containerRef.current.appendChild(app.view as HTMLCanvasElement);
 
       app.stage.eventMode = "static";
+      app.stage.sortableChildren = true;
       app.stage.hitArea = new Rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT);
       app.stage.cursor = "pointer";
 
       const shipGraphic = createShipGraphic();
+      shipGraphic.zIndex = 10;
       app.stage.addChild(shipGraphic);
       const ship: ShipInstance = { sprite: shipGraphic, radius: 24 };
 
@@ -777,7 +778,7 @@ function SavingsRunner() {
             <div className="mt-3 flex justify-center">
               <div
                 ref={containerRef}
-                className="relative h-[520px] w-full max-w-[420px] overflow-hidden rounded-xl border border-slate-800 bg-slate-950 mx-auto"
+                className="relative h-[600px] w-full max-w-[420px] overflow-hidden rounded-xl border border-slate-800 bg-slate-950 mx-auto"
               />
             </div>
             <MobileControls running={running} onControlPress={onControlPress} />
