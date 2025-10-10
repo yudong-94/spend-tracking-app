@@ -13,8 +13,8 @@ import {
 } from "@/lib/savingsAsteroids";
 import { fmtUSD } from "@/lib/format";
 
-const GAME_WIDTH = 420;
-const GAME_HEIGHT = 600;
+const BASE_WIDTH = 420;
+const BASE_HEIGHT = 600;
 const SCORE_STORAGE_KEY = "savings-asteroids-best";
 
 type EngineState = {
@@ -28,6 +28,7 @@ type EngineState = {
   bombHighlightMs: number;
   rapidHighlightMs: number;
   rapidRemainingMs: number;
+  rapidPermanent: boolean;
   clearedAmount: number;
   bestScore: number | null;
   message?: string;
@@ -106,6 +107,7 @@ type EngineRuntime = {
   extraSpawnTimer: number;
   extraSpawnInterval: number;
   rampFactor: number;
+  rapidPermanent: boolean;
 };
 
 const defaultEngineState: EngineState = {
@@ -119,6 +121,7 @@ const defaultEngineState: EngineState = {
   bombHighlightMs: 0,
   rapidHighlightMs: 0,
   rapidRemainingMs: 0,
+  rapidPermanent: false,
   clearedAmount: 0,
   bestScore: null,
 };
@@ -144,7 +147,7 @@ const persistBestScore = (score: number) => {
 
 const hexToNumber = (hex: string) => Number.parseInt(hex.replace("#", ""), 16);
 
-const createShipGraphic = () => {
+const createShipGraphic = (width: number, height: number) => {
   const ship = new Graphics();
   ship.beginFill(0xfacc15);
   ship.moveTo(0, -26);
@@ -160,7 +163,8 @@ const createShipGraphic = () => {
   ship.lineTo(0, 6);
   ship.closePath();
   ship.pivot.set(0, 0);
-  ship.position.set(GAME_WIDTH / 2, GAME_HEIGHT - 80);
+  const bottomOffset = Math.min(80, Math.max(60, height * 0.14));
+  ship.position.set(width / 2, height - bottomOffset);
   ship.eventMode = "none";
   return ship;
 };
@@ -223,11 +227,41 @@ function SavingsRunner() {
   const runtimeRef = useRef<EngineRuntime | null>(null);
   const inputRef = useRef<InputState>({ left: false, right: false, fire: false, bomb: false });
   const toastTimerRef = useRef<number | null>(null);
+  const aspectRatio = BASE_HEIGHT / BASE_WIDTH;
+
+  const computeGameSize = useCallback(() => {
+    if (typeof window === "undefined") return { width: BASE_WIDTH, height: BASE_HEIGHT };
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const maxWidth = Math.min(BASE_WIDTH, Math.max(320, vw - 48));
+    const maxHeight = Math.min(BASE_HEIGHT, Math.max(420, Math.floor(vh * 0.68)));
+    let width = maxWidth;
+    let height = Math.round(width * aspectRatio);
+    if (height > maxHeight) {
+      height = maxHeight;
+      width = Math.round(height / aspectRatio);
+    }
+    return { width, height };
+  }, [aspectRatio]);
+
+  const [gameSize, setGameSize] = useState(() => computeGameSize());
+  const gameSizeRef = useRef(gameSize);
 
   const gameData = useMemo<SavingsAsteroidsData>(
     () => buildSavingsAsteroidsData(txns, lookbackDays),
     [txns, lookbackDays],
   );
+
+  useEffect(() => {
+    const onResize = () => {
+      const size = computeGameSize();
+      gameSizeRef.current = size;
+      setGameSize(size);
+    };
+    onResize();
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [computeGameSize]);
 
   const resetInputs = useCallback(() => {
     inputRef.current = { left: false, right: false, fire: false, bomb: false };
@@ -317,7 +351,8 @@ function SavingsRunner() {
       shieldHighlightMs: runtime.shieldHighlightMs,
       bombHighlightMs: runtime.bombHighlightMs,
       rapidHighlightMs: runtime.rapidHighlightMs,
-      rapidRemainingMs: Math.max(0, runtime.rapidUntil - runtime.elapsed),
+      rapidRemainingMs: runtime.rapidPermanent ? Number.POSITIVE_INFINITY : Math.max(0, runtime.rapidUntil - runtime.elapsed),
+      rapidPermanent: runtime.rapidPermanent,
       clearedAmount: runtime.clearedAmount,
       bestScore: runtime.bestScore,
     }));
@@ -346,7 +381,8 @@ function SavingsRunner() {
       shieldHighlightMs: runtime.shieldHighlightMs,
       bombHighlightMs: runtime.bombHighlightMs,
       rapidHighlightMs: runtime.rapidHighlightMs,
-      rapidRemainingMs: Math.max(0, runtime.rapidUntil - runtime.elapsed),
+      rapidRemainingMs: runtime.rapidPermanent ? Number.POSITIVE_INFINITY : Math.max(0, runtime.rapidUntil - runtime.elapsed),
+      rapidPermanent: runtime.rapidPermanent,
       clearedAmount: runtime.clearedAmount,
       bestScore: runtime.bestScore,
       message,
@@ -358,7 +394,8 @@ function SavingsRunner() {
       const color = hexToNumber(event.color);
       const { graphic, radius } = createAsteroidGraphic(event.size, color);
       const xSeed = event.id.length + event.amount * 1.7;
-      const startX = clamp(((xSeed % 1000) / 1000) * (GAME_WIDTH - radius * 2) + radius, radius + 12, GAME_WIDTH - radius - 12);
+      const width = gameSizeRef.current.width;
+      const startX = clamp(((xSeed % 1000) / 1000) * (width - radius * 2) + radius, radius + 12, width - radius - 12);
       graphic.x = startX;
       graphic.y = -radius - 20;
       const vy = event.velocity * 1000; // convert from px/ms to px/s
@@ -385,7 +422,8 @@ function SavingsRunner() {
   const spawnPowerUp = useCallback((runtime: EngineRuntime, event: PowerUpSpawn) => {
     const { graphic, radius } = createPowerUpGraphic(event.powerType);
     const seed = event.id.length + event.amount * 0.5;
-    const startX = clamp(((seed % 1000) / 1000) * (GAME_WIDTH - radius * 2) + radius, 28, GAME_WIDTH - 28);
+    const width = gameSizeRef.current.width;
+    const startX = clamp(((seed % 1000) / 1000) * (width - radius * 2) + radius, 28, width - 28);
     graphic.x = startX;
     graphic.y = -radius - 10;
     runtime.app.stage.addChild(graphic);
@@ -407,7 +445,8 @@ function SavingsRunner() {
       asteroid.fragments.forEach((size, idx) => {
         const ratio = idx / Math.max(asteroid.fragments.length - 1, 1) - 0.5;
         const { graphic, radius } = createAsteroidGraphic(size, asteroid.color);
-        graphic.x = clamp(asteroid.sprite.x + ratio * 36, radius + 12, GAME_WIDTH - radius - 12);
+        const width = gameSizeRef.current.width;
+        graphic.x = clamp(asteroid.sprite.x + ratio * 36, radius + 12, width - radius - 12);
         graphic.y = asteroid.sprite.y;
         runtime.app.stage.addChild(graphic);
         const vy = asteroid.vy * (size === "small" ? 1.2 : 1.05);
@@ -508,7 +547,7 @@ function SavingsRunner() {
         runtime.rapidHighlightMs = Math.max(0, runtime.rapidHighlightMs - deltaMs);
 
         const elapsedRatio = runtime.elapsed / RUN_DURATION_MS;
-        const ramp = 1 + Math.min(1.6, Math.max(0, elapsedRatio) * 1.4);
+        const ramp = 1 + Math.min(0.9, Math.max(0, elapsedRatio) * 0.8);
         runtime.rampFactor = ramp;
 
         while (runtime.eventIndex < runtime.events.length) {
@@ -520,11 +559,12 @@ function SavingsRunner() {
         }
 
         const moveSpeed = 0.35 * deltaMs * Math.min(ramp, 1.4);
+        const width = gameSizeRef.current.width;
         if (runtime.input.left) {
-          runtime.ship.sprite.x = clamp(runtime.ship.sprite.x - moveSpeed, 30, GAME_WIDTH - 30);
+          runtime.ship.sprite.x = clamp(runtime.ship.sprite.x - moveSpeed, 30, width - 30);
         }
         if (runtime.input.right) {
-          runtime.ship.sprite.x = clamp(runtime.ship.sprite.x + moveSpeed, 30, GAME_WIDTH - 30);
+          runtime.ship.sprite.x = clamp(runtime.ship.sprite.x + moveSpeed, 30, width - 30);
         }
 
         if (runtime.input.bomb) {
@@ -553,22 +593,23 @@ function SavingsRunner() {
         for (let i = runtime.asteroids.length - 1; i >= 0; i -= 1) {
           const asteroid = runtime.asteroids[i];
           asteroid.sprite.y += asteroid.vy * ramp * (deltaMs / 1000);
+          const width = gameSizeRef.current.width;
           asteroid.sprite.x = clamp(
-            asteroid.sprite.x + asteroid.vx * Math.min(ramp, 1.3) * (deltaMs / 1000),
+            asteroid.sprite.x + asteroid.vx * Math.min(ramp, 1.25) * (deltaMs / 1000),
             asteroid.radius + 8,
-            GAME_WIDTH - asteroid.radius - 8,
+            width - asteroid.radius - 8,
           );
         }
 
         runtime.extraSpawnTimer += deltaMs;
         const extraInterval = Math.max(360, runtime.extraSpawnInterval / ramp);
         if (
-          runtime.elapsed > 18000 &&
+          runtime.elapsed > 24000 &&
           runtime.extraSpawnTimer >= extraInterval &&
           runtime.asteroidPool.length
         ) {
           runtime.extraSpawnTimer = 0;
-          runtime.extraSpawnInterval = Math.max(340, runtime.extraSpawnInterval * 0.985);
+          runtime.extraSpawnInterval = Math.max(420, runtime.extraSpawnInterval * 0.99);
           const template = runtime.asteroidPool[Math.floor(Math.random() * runtime.asteroidPool.length)];
           const extraEvent: AsteroidSpawn = {
             ...template,
@@ -583,7 +624,7 @@ function SavingsRunner() {
         for (let i = runtime.powerUps.length - 1; i >= 0; i -= 1) {
           const power = runtime.powerUps[i];
           power.sprite.y += power.vy * (deltaMs / 1000);
-          if (power.sprite.y > GAME_HEIGHT + 20) {
+          if (power.sprite.y > gameSizeRef.current.height + 20) {
             power.sprite.destroy();
             runtime.powerUps.splice(i, 1);
           }
@@ -633,12 +674,10 @@ function SavingsRunner() {
               runtime.bombHighlightMs = 900;
               showPowerToast("Smart bomb ready");
             } else if (power.type === "rapidFire") {
-              runtime.rapidUntil = Math.max(
-                runtime.rapidUntil,
-                runtime.elapsed + runtime.data.difficulty.rapidFireMs,
-              );
+              runtime.rapidPermanent = true;
+              runtime.rapidUntil = RUN_DURATION_MS + 1000;
               runtime.rapidHighlightMs = 900;
-              showPowerToast("Rapid fire boosted");
+              showPowerToast("Rapid fire locked in!");
             }
             power.sprite.destroy();
             runtime.powerUps.splice(i, 1);
@@ -663,8 +702,7 @@ function SavingsRunner() {
             runtime.asteroids.splice(i, 1);
             continue;
           }
-          if (asteroid.sprite.y > GAME_HEIGHT + asteroid.radius) {
-            runtime.hull -= 1;
+          if (asteroid.sprite.y > gameSizeRef.current.height + asteroid.radius) {
             asteroid.sprite.destroy();
             runtime.asteroids.splice(i, 1);
           }
@@ -728,9 +766,10 @@ function SavingsRunner() {
     destroyApp();
     resetInputs();
     try {
+      const { width, height } = gameSizeRef.current;
       const app = new Application({
-        width: GAME_WIDTH,
-        height: GAME_HEIGHT,
+        width,
+        height,
         backgroundColor: 0x020617,
         antialias: true,
         resolution: window.devicePixelRatio || 1,
@@ -742,10 +781,10 @@ function SavingsRunner() {
 
       app.stage.eventMode = "static";
       app.stage.sortableChildren = true;
-      app.stage.hitArea = new Rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT);
+      app.stage.hitArea = new Rectangle(0, 0, width, height);
       app.stage.cursor = "pointer";
 
-      const shipGraphic = createShipGraphic();
+      const shipGraphic = createShipGraphic(width, height);
       shipGraphic.zIndex = 10;
       app.stage.addChild(shipGraphic);
       const ship: ShipInstance = { sprite: shipGraphic, radius: 24 };
@@ -781,21 +820,24 @@ function SavingsRunner() {
         bestScore: readBestScore(),
         asteroidPool,
         extraSpawnTimer: 0,
-        extraSpawnInterval: Math.max(900, gameData.difficulty.spawnIntervalMs * 1.15),
+        extraSpawnInterval: Math.max(1100, gameData.difficulty.spawnIntervalMs * 1.35),
         rampFactor: 1,
+        rapidPermanent: false,
       };
       runtimeRef.current = runtime;
 
       app.stage.on("pointermove", (event) => {
         if (runtime.status !== "running") return;
         if (!runtime.pointerActive) return;
-        const x = clamp(event.global.x, 32, GAME_WIDTH - 32);
+        const width = gameSizeRef.current.width;
+        const x = clamp(event.global.x, 32, width - 32);
         runtime.ship.sprite.x = x;
       });
       app.stage.on("pointerdown", (event) => {
         if (runtime.status !== "running") return;
         runtime.pointerActive = true;
-        const x = clamp(event.global.x, 32, GAME_WIDTH - 32);
+        const width = gameSizeRef.current.width;
+        const x = clamp(event.global.x, 32, width - 32);
         runtime.ship.sprite.x = x;
         inputRef.current.fire = true;
       });
@@ -819,6 +861,7 @@ function SavingsRunner() {
         bombHighlightMs: runtime.bombHighlightMs,
         rapidHighlightMs: runtime.rapidHighlightMs,
         rapidRemainingMs: 0,
+        rapidPermanent: false,
         clearedAmount: 0,
         bestScore: runtime.bestScore,
       });
@@ -948,27 +991,30 @@ function SavingsRunner() {
                 </span>
                 <span
                   className={
-                    engineState.rapidRemainingMs > 0 || engineState.rapidHighlightMs > 0
+                    engineState.rapidPermanent || engineState.rapidRemainingMs > 0 || engineState.rapidHighlightMs > 0
                       ? "text-violet-300"
                       : "text-slate-400"
                   }
                 >
                   Rapid fire:
-                  {engineState.rapidRemainingMs > 0
-                    ? ` ${Math.ceil(engineState.rapidRemainingMs / 1000)}s`
-                    : " —"}
+                  {engineState.rapidPermanent
+                    ? " ∞"
+                    : engineState.rapidRemainingMs > 0
+                      ? ` ${Math.ceil(engineState.rapidRemainingMs / 1000)}s`
+                      : " —"}
                 </span>
               </div>
             </div>
-            {powerToast ? (
-              <div className="mt-3 rounded-lg bg-violet-500/20 px-3 py-2 text-center text-xs text-violet-200 backdrop-blur">
-                {powerToast}
-              </div>
-            ) : null}
+            <div className="mt-3 h-9 overflow-hidden rounded-lg bg-violet-500/10 px-3 text-center text-xs text-violet-200 backdrop-blur flex items-center justify-center">
+              <span className="transition-opacity duration-150 ease-in" style={{ opacity: powerToast ? 1 : 0 }}>
+                {powerToast ?? ""}
+              </span>
+            </div>
             <div className="mt-3 flex justify-center">
               <div
                 ref={containerRef}
-                className="relative h-[600px] w-full max-w-[420px] overflow-hidden rounded-xl border border-slate-800 bg-slate-950 mx-auto"
+                className="relative mx-auto overflow-hidden rounded-xl border border-slate-800 bg-slate-950"
+                style={{ width: `${gameSize.width}px`, height: `${gameSize.height}px` }}
               />
             </div>
             <MobileControls running={running} onControlPress={onControlPress} />
@@ -1116,7 +1162,7 @@ function Legend({ smartBombs, rapidMs }: { smartBombs: number; rapidMs: number }
       <div className="flex items-center gap-2">
         <Zap className="h-4 w-4 text-violet-500" />
         <span>
-          Rapid income • boosts fire rate for {(rapidMs / 1000).toFixed(1)}s. Collecting another extends it.
+          Rapid income • boosts fire rate for {(rapidMs / 1000).toFixed(1)}s (first pickup now locks it in for the rest of the run).
         </span>
       </div>
     </div>
