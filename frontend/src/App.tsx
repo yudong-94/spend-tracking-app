@@ -6,6 +6,7 @@ import Transactions from "./pages/Transactions";
 import Analytics from "./pages/Analytics";
 import AddTransaction from "./pages/AddTransaction";
 import Budget from "@/pages/Budget";
+import SavingsRunner from "./pages/SavingsRunner";
 
 function App() {
   return (
@@ -16,6 +17,7 @@ function App() {
         <Route path="/analytics" element={<Analytics />} />
         <Route path="/add" element={<AddTransaction />} />
         <Route path="/budget" element={<Budget />} />
+        <Route path="/savings-runner" element={<SavingsRunner />} />
       </Routes>
     </Layout>
   );
