@@ -102,6 +102,10 @@ type EngineRuntime = {
   fireCooldown: number;
   uiSyncMs: number;
   bestScore: number | null;
+  asteroidPool: AsteroidSpawn[];
+  extraSpawnTimer: number;
+  extraSpawnInterval: number;
+  rampFactor: number;
 };
 
 const defaultEngineState: EngineState = {
@@ -212,6 +216,7 @@ function SavingsRunner() {
   const [engineState, setEngineState] = useState<EngineState>(defaultEngineState);
   const [lastCleared, setLastCleared] = useState<{ category: string; amount: number } | null>(null);
   const [isStarting, setIsStarting] = useState(false);
+  const [lookbackDays, setLookbackDays] = useState(30);
   const [powerToast, setPowerToast] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const appRef = useRef<Application | null>(null);
@@ -220,8 +225,8 @@ function SavingsRunner() {
   const toastTimerRef = useRef<number | null>(null);
 
   const gameData = useMemo<SavingsAsteroidsData>(
-    () => buildSavingsAsteroidsData(txns),
-    [txns],
+    () => buildSavingsAsteroidsData(txns, lookbackDays),
+    [txns, lookbackDays],
   );
 
   const resetInputs = useCallback(() => {
@@ -502,6 +507,10 @@ function SavingsRunner() {
         runtime.bombHighlightMs = Math.max(0, runtime.bombHighlightMs - deltaMs);
         runtime.rapidHighlightMs = Math.max(0, runtime.rapidHighlightMs - deltaMs);
 
+        const elapsedRatio = runtime.elapsed / RUN_DURATION_MS;
+        const ramp = 1 + Math.min(1.6, Math.max(0, elapsedRatio) * 1.4);
+        runtime.rampFactor = ramp;
+
         while (runtime.eventIndex < runtime.events.length) {
           const event = runtime.events[runtime.eventIndex];
           if (event.spawnAtMs > runtime.elapsed) break;
@@ -510,7 +519,7 @@ function SavingsRunner() {
           else spawnPowerUp(runtime, event);
         }
 
-        const moveSpeed = 0.35 * deltaMs;
+        const moveSpeed = 0.35 * deltaMs * Math.min(ramp, 1.4);
         if (runtime.input.left) {
           runtime.ship.sprite.x = clamp(runtime.ship.sprite.x - moveSpeed, 30, GAME_WIDTH - 30);
         }
@@ -525,7 +534,7 @@ function SavingsRunner() {
         }
 
         const isRapid = runtime.elapsed < runtime.rapidUntil;
-        runtime.fireCooldown = isRapid ? 220 : 420;
+        runtime.fireCooldown = isRapid ? 220 : Math.max(240, 420 / ramp);
         if (runtime.input.fire && runtime.elapsed - runtime.lastShotAt >= runtime.fireCooldown) {
           spawnProjectile(runtime);
           runtime.lastShotAt = runtime.elapsed;
@@ -533,7 +542,8 @@ function SavingsRunner() {
 
         for (let i = runtime.bullets.length - 1; i >= 0; i -= 1) {
           const bullet = runtime.bullets[i];
-          bullet.sprite.y -= bullet.vy * (deltaMs / 1000);
+          const bulletBoost = isRapid ? 1.4 : 1 + Math.min(elapsedRatio * 0.6, 0.7);
+          bullet.sprite.y -= bullet.vy * bulletBoost * (deltaMs / 1000);
           if (bullet.sprite.y < -20) {
             bullet.sprite.destroy();
             runtime.bullets.splice(i, 1);
@@ -542,12 +552,32 @@ function SavingsRunner() {
 
         for (let i = runtime.asteroids.length - 1; i >= 0; i -= 1) {
           const asteroid = runtime.asteroids[i];
-          asteroid.sprite.y += asteroid.vy * (deltaMs / 1000);
+          asteroid.sprite.y += asteroid.vy * ramp * (deltaMs / 1000);
           asteroid.sprite.x = clamp(
-            asteroid.sprite.x + asteroid.vx * (deltaMs / 1000),
+            asteroid.sprite.x + asteroid.vx * Math.min(ramp, 1.3) * (deltaMs / 1000),
             asteroid.radius + 8,
             GAME_WIDTH - asteroid.radius - 8,
           );
+        }
+
+        runtime.extraSpawnTimer += deltaMs;
+        const extraInterval = Math.max(360, runtime.extraSpawnInterval / ramp);
+        if (
+          runtime.elapsed > 18000 &&
+          runtime.extraSpawnTimer >= extraInterval &&
+          runtime.asteroidPool.length
+        ) {
+          runtime.extraSpawnTimer = 0;
+          runtime.extraSpawnInterval = Math.max(340, runtime.extraSpawnInterval * 0.985);
+          const template = runtime.asteroidPool[Math.floor(Math.random() * runtime.asteroidPool.length)];
+          const extraEvent: AsteroidSpawn = {
+            ...template,
+            id: `extra-${performance.now().toString(36)}-${Math.random().toString(16).slice(2, 6)}`,
+            spawnAtMs: runtime.elapsed,
+            velocity: template.velocity * (0.9 + Math.random() * 0.7) * ramp,
+            hitPoints: Math.min(template.hitPoints + (ramp > 1.35 ? 1 : 0), 4),
+          };
+          spawnAsteroid(runtime, extraEvent);
         }
 
         for (let i = runtime.powerUps.length - 1; i >= 0; i -= 1) {
@@ -720,6 +750,8 @@ function SavingsRunner() {
       app.stage.addChild(shipGraphic);
       const ship: ShipInstance = { sprite: shipGraphic, radius: 24 };
 
+      const asteroidPool = gameData.events.filter((event): event is AsteroidSpawn => event.kind === "asteroid");
+
       const runtime: EngineRuntime = {
         app,
         data: gameData,
@@ -747,6 +779,10 @@ function SavingsRunner() {
         fireCooldown: 420,
         uiSyncMs: 0,
         bestScore: readBestScore(),
+        asteroidPool,
+        extraSpawnTimer: 0,
+        extraSpawnInterval: Math.max(900, gameData.difficulty.spawnIntervalMs * 1.15),
+        rampFactor: 1,
       };
       runtimeRef.current = runtime;
 
@@ -813,38 +849,59 @@ function SavingsRunner() {
   const running = engineState.status === "running";
   const finished = engineState.status === "finished";
   const savingsPct = (gameData.difficulty.savingsRate * 100).toFixed(1);
+  const lookbackLabel = `${lookbackDays} day${lookbackDays === 1 ? "" : "s"}`;
 
   return (
     <div className="space-y-8">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
+        <div className="space-y-2">
           <h1 className="text-2xl font-semibold text-slate-900">Savings Asteroids</h1>
           <p className="text-sm text-slate-600">
-            Pilot your ship for 60 seconds, blast expense rocks, and collect income power-ups. Difficulty adapts to your last 30 days.
+            Pilot your ship, blast expense rocks, and collect income power-ups. Difficulty adapts to the time window you pick.
+          </p>
+          <p className="text-xs uppercase tracking-wide text-slate-400">
+            Period: {gameData.stats.periodStart} → {gameData.stats.periodEnd}
           </p>
         </div>
-        <div className="flex gap-3">
-          <button
-            type="button"
-            onClick={() => void refresh()}
-            className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
-          >
-            Refresh Data
-          </button>
-          <button
-            type="button"
-            disabled={running || gameData.empty || isStarting}
-            onClick={() => void handleStart()}
-            className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-500"
-          >
-            {gameData.empty ? "Need Recent Data" : running ? "Running…" : isStarting ? "Starting…" : "Start Run"}
-          </button>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <label className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Data window
+            <select
+              className="rounded-md border border-slate-300 bg-white px-2 py-1 text-sm text-slate-700 shadow-sm focus:border-slate-500 focus:outline-none disabled:opacity-60"
+              value={lookbackDays}
+              onChange={(event) => setLookbackDays(Number(event.target.value) || 30)}
+              disabled={running || isStarting}
+            >
+              {[7, 14, 30, 45, 60, 90, 120].map((days) => (
+                <option key={days} value={days}>
+                  Last {days} days
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={() => void refresh()}
+              className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+            >
+              Refresh Data
+            </button>
+            <button
+              type="button"
+              disabled={running || gameData.empty || isStarting}
+              onClick={() => void handleStart()}
+              className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-500"
+            >
+              {gameData.empty ? "Need Recent Data" : running ? "Running…" : isStarting ? "Starting…" : "Start Run"}
+            </button>
+          </div>
         </div>
       </header>
 
       <section className="grid gap-4 rounded-lg border border-slate-200 bg-white p-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat label="Income (30d)" value={fmtUSD(gameData.stats.totalIncome)} tone="positive" />
-        <Stat label="Expenses (30d)" value={fmtUSD(gameData.stats.totalExpense)} tone="negative" />
+        <Stat label={`Income (${lookbackLabel})`} value={fmtUSD(gameData.stats.totalIncome)} tone="positive" />
+        <Stat label={`Expenses (${lookbackLabel})`} value={fmtUSD(gameData.stats.totalExpense)} tone="negative" />
         <Stat
           label="Net Cash Flow"
           value={fmtUSD(gameData.stats.netCashFlow)}

@@ -106,9 +106,10 @@ const pickPowerType = (
   return "rapidFire";
 };
 
-export function buildSavingsAsteroidsData(txns: Tx[], now = new Date()): SavingsAsteroidsData {
+export function buildSavingsAsteroidsData(txns: Tx[], lookbackDays = 30, now = new Date()): SavingsAsteroidsData {
   const endDate = new Date(now);
-  const startDate = new Date(endDate.getTime() - 29 * MS_PER_DAY);
+  const days = clamp(Math.max(lookbackDays, 1), 1, 365);
+  const startDate = new Date(endDate.getTime() - (days - 1) * MS_PER_DAY);
   const periodStart = startDate.toISOString().slice(0, 10);
   const periodEnd = endDate.toISOString().slice(0, 10);
 
