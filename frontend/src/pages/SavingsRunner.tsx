@@ -24,6 +24,10 @@ type EngineState = {
   hull: number;
   shields: number;
   smartBombs: number;
+  shieldHighlightMs: number;
+  bombHighlightMs: number;
+  rapidHighlightMs: number;
+  rapidRemainingMs: number;
   clearedAmount: number;
   bestScore: number | null;
   message?: string;
@@ -88,6 +92,9 @@ type EngineRuntime = {
   hull: number;
   shields: number;
   smartBombs: number;
+  shieldHighlightMs: number;
+  bombHighlightMs: number;
+  rapidHighlightMs: number;
   score: number;
   clearedAmount: number;
   rapidUntil: number;
@@ -104,6 +111,10 @@ const defaultEngineState: EngineState = {
   hull: 3,
   shields: 0,
   smartBombs: 0,
+  shieldHighlightMs: 0,
+  bombHighlightMs: 0,
+  rapidHighlightMs: 0,
+  rapidRemainingMs: 0,
   clearedAmount: 0,
   bestScore: null,
 };
@@ -201,10 +212,12 @@ function SavingsRunner() {
   const [engineState, setEngineState] = useState<EngineState>(defaultEngineState);
   const [lastCleared, setLastCleared] = useState<{ category: string; amount: number } | null>(null);
   const [isStarting, setIsStarting] = useState(false);
+  const [powerToast, setPowerToast] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const appRef = useRef<Application | null>(null);
   const runtimeRef = useRef<EngineRuntime | null>(null);
   const inputRef = useRef<InputState>({ left: false, right: false, fire: false, bomb: false });
+  const toastTimerRef = useRef<number | null>(null);
 
   const gameData = useMemo<SavingsAsteroidsData>(
     () => buildSavingsAsteroidsData(txns),
@@ -215,11 +228,23 @@ function SavingsRunner() {
     inputRef.current = { left: false, right: false, fire: false, bomb: false };
   }, []);
 
+  const showPowerToast = useCallback((message: string) => {
+    setPowerToast(message);
+    if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = window.setTimeout(() => {
+      setPowerToast(null);
+      toastTimerRef.current = null;
+    }, 1400);
+  }, []);
+
   useEffect(() => {
     setEngineState((prev) => ({
       ...prev,
       shields: gameData.difficulty.shields,
       smartBombs: gameData.difficulty.smartBombs,
+      shieldHighlightMs: 0,
+      bombHighlightMs: 0,
+      rapidHighlightMs: 0,
       bestScore: readBestScore(),
     }));
   }, [gameData.difficulty.shields, gameData.difficulty.smartBombs]);
@@ -267,6 +292,10 @@ function SavingsRunner() {
         appRef.current = null;
       }
       runtimeRef.current = null;
+      if (toastTimerRef.current) {
+        window.clearTimeout(toastTimerRef.current);
+        toastTimerRef.current = null;
+      }
     },
     [],
   );
@@ -280,6 +309,10 @@ function SavingsRunner() {
       hull: runtime.hull,
       shields: runtime.shields,
       smartBombs: runtime.smartBombs,
+      shieldHighlightMs: runtime.shieldHighlightMs,
+      bombHighlightMs: runtime.bombHighlightMs,
+      rapidHighlightMs: runtime.rapidHighlightMs,
+      rapidRemainingMs: Math.max(0, runtime.rapidUntil - runtime.elapsed),
       clearedAmount: runtime.clearedAmount,
       bestScore: runtime.bestScore,
     }));
@@ -293,6 +326,11 @@ function SavingsRunner() {
       persistBestScore(finalScore);
       runtime.bestScore = finalScore;
     }
+    if (toastTimerRef.current) {
+      window.clearTimeout(toastTimerRef.current);
+      toastTimerRef.current = null;
+    }
+    setPowerToast(null);
     setEngineState({
       status: "finished",
       score: finalScore,
@@ -300,6 +338,10 @@ function SavingsRunner() {
       hull: runtime.hull,
       shields: runtime.shields,
       smartBombs: runtime.smartBombs,
+      shieldHighlightMs: runtime.shieldHighlightMs,
+      bombHighlightMs: runtime.bombHighlightMs,
+      rapidHighlightMs: runtime.rapidHighlightMs,
+      rapidRemainingMs: Math.max(0, runtime.rapidUntil - runtime.elapsed),
       clearedAmount: runtime.clearedAmount,
       bestScore: runtime.bestScore,
       message,
@@ -400,16 +442,40 @@ function SavingsRunner() {
     [spawnFragments],
   );
 
-  const detonateSmartBomb = useCallback((runtime: EngineRuntime) => {
-    if (!runtime.smartBombs || !runtime.asteroids.length) return;
-    runtime.smartBombs -= 1;
-    runtime.asteroids.forEach((asteroid) => {
-      runtime.clearedAmount += asteroid.amount;
-      setLastCleared({ category: asteroid.category, amount: asteroid.amount });
-      asteroid.sprite.destroy();
-    });
-    runtime.asteroids = [];
-  }, []);
+  const detonateSmartBomb = useCallback(
+    (runtime: EngineRuntime) => {
+      if (!runtime.smartBombs || !runtime.asteroids.length) return;
+      runtime.smartBombs -= 1;
+      runtime.bombHighlightMs = 900;
+      const flash = new Graphics();
+      flash.beginFill(0xf97316, 0.32);
+      flash.drawCircle(0, 0, 260);
+      flash.endFill();
+      flash.position.set(runtime.ship.sprite.x, runtime.ship.sprite.y - 40);
+      flash.zIndex = 60;
+      runtime.app.stage.addChild(flash);
+      let life = 0;
+      const animateFlash = (delta: number) => {
+        life += delta * (1000 / 60);
+        flash.alpha = Math.max(0, 0.35 - life / 420);
+        const scale = 1 + life / 520;
+        flash.scale.set(scale);
+        if (life >= 420) {
+          runtime.app.ticker.remove(animateFlash);
+          flash.destroy();
+        }
+      };
+      runtime.app.ticker.add(animateFlash);
+      runtime.asteroids.forEach((asteroid) => {
+        runtime.clearedAmount += asteroid.amount;
+        setLastCleared({ category: asteroid.category, amount: asteroid.amount });
+        asteroid.sprite.destroy();
+      });
+      runtime.asteroids = [];
+      showPowerToast("Smart bomb deployed!");
+    },
+    [showPowerToast],
+  );
 
   const spawnProjectile = useCallback((runtime: EngineRuntime) => {
     const bullet = new Graphics();
@@ -432,6 +498,9 @@ function SavingsRunner() {
       try {
         const deltaMs = delta * (1000 / 60);
         runtime.elapsed += deltaMs;
+        runtime.shieldHighlightMs = Math.max(0, runtime.shieldHighlightMs - deltaMs);
+        runtime.bombHighlightMs = Math.max(0, runtime.bombHighlightMs - deltaMs);
+        runtime.rapidHighlightMs = Math.max(0, runtime.rapidHighlightMs - deltaMs);
 
         while (runtime.eventIndex < runtime.events.length) {
           const event = runtime.events[runtime.eventIndex];
@@ -450,7 +519,8 @@ function SavingsRunner() {
         }
 
         if (runtime.input.bomb) {
-          detonateSmartBomb(runtime);
+          if (runtime.smartBombs > 0) detonateSmartBomb(runtime);
+          else showPowerToast("No smart bombs available");
           runtime.input.bomb = false;
         }
 
@@ -524,13 +594,21 @@ function SavingsRunner() {
               16,
             )
           ) {
-            if (power.type === "shield") runtime.shields += 1;
-            if (power.type === "smartBomb") {
+            if (power.type === "shield") {
+              runtime.shields += 1;
+              runtime.shieldHighlightMs = 900;
+              showPowerToast("Shield +1");
+            } else if (power.type === "smartBomb") {
               runtime.smartBombs += 1;
-              detonateSmartBomb(runtime);
-            }
-            if (power.type === "rapidFire") {
-              runtime.rapidUntil = Math.max(runtime.rapidUntil, runtime.elapsed + runtime.data.difficulty.rapidFireMs);
+              runtime.bombHighlightMs = 900;
+              showPowerToast("Smart bomb ready");
+            } else if (power.type === "rapidFire") {
+              runtime.rapidUntil = Math.max(
+                runtime.rapidUntil,
+                runtime.elapsed + runtime.data.difficulty.rapidFireMs,
+              );
+              runtime.rapidHighlightMs = 900;
+              showPowerToast("Rapid fire boosted");
             }
             power.sprite.destroy();
             runtime.powerUps.splice(i, 1);
@@ -584,7 +662,7 @@ function SavingsRunner() {
         if (runtime) finishRun(runtime, "Navigation error – run ended");
       }
     },
-    [detonateSmartBomb, finishRun, handleProjectileCollision, spawnAsteroid, spawnPowerUp, spawnProjectile, syncUiFromRuntime],
+    [detonateSmartBomb, finishRun, handleProjectileCollision, spawnAsteroid, spawnPowerUp, spawnProjectile, showPowerToast, syncUiFromRuntime],
   );
 
   const destroyApp = useCallback(() => {
@@ -599,11 +677,17 @@ function SavingsRunner() {
     runtimeRef.current = null;
     setLastCleared(null);
     resetInputs();
+    if (toastTimerRef.current) {
+      window.clearTimeout(toastTimerRef.current);
+      toastTimerRef.current = null;
+    }
+    setPowerToast(null);
     setEngineState((prev) => ({
       ...defaultEngineState,
       bestScore: prev.bestScore,
       shields: gameData.difficulty.shields,
       smartBombs: gameData.difficulty.smartBombs,
+      rapidRemainingMs: 0,
     }));
   }, [destroyApp, gameData.difficulty.shields, gameData.difficulty.smartBombs, resetInputs]);
 
@@ -653,6 +737,9 @@ function SavingsRunner() {
         hull: 3,
         shields: gameData.difficulty.shields,
         smartBombs: gameData.difficulty.smartBombs,
+        shieldHighlightMs: 0,
+        bombHighlightMs: 0,
+        rapidHighlightMs: 0,
         score: 0,
         clearedAmount: 0,
         rapidUntil: 0,
@@ -692,6 +779,10 @@ function SavingsRunner() {
         hull: runtime.hull,
         shields: runtime.shields,
         smartBombs: runtime.smartBombs,
+        shieldHighlightMs: runtime.shieldHighlightMs,
+        bombHighlightMs: runtime.bombHighlightMs,
+        rapidHighlightMs: runtime.rapidHighlightMs,
+        rapidRemainingMs: 0,
         clearedAmount: 0,
         bestScore: runtime.bestScore,
       });
@@ -708,6 +799,7 @@ function SavingsRunner() {
         bestScore: prev.bestScore,
         shields: gameData.difficulty.shields,
         smartBombs: gameData.difficulty.smartBombs,
+        rapidRemainingMs: 0,
       }));
     } finally {
       setIsStarting(false);
@@ -769,21 +861,53 @@ function SavingsRunner() {
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2">
           <div className="rounded-xl border border-slate-200 bg-slate-950/95 p-4 shadow-lg">
-            <div className="flex items-center justify-between text-xs text-slate-200">
-              <span>
-                Hull: <strong>{engineState.hull}</strong> • Shields: <strong>{engineState.shields}</strong>
-              </span>
-              <span>
-                Score: <strong className="text-sky-300">{engineState.score}</strong>
-              </span>
-              <span>
-                Time:{" "}
-                <strong>
-                  {Math.max(0, Math.ceil((RUN_DURATION_MS - engineState.elapsedMs) / 1000))}
-                  s
-                </strong>
-              </span>
+            <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-slate-200">
+              <div className="flex flex-wrap items-center gap-3">
+                <span>
+                  Hull: <strong>{engineState.hull}</strong>
+                </span>
+                <span>
+                  Shields:{" "}
+                  <strong className={engineState.shieldHighlightMs > 0 ? "text-emerald-300" : undefined}>
+                    {engineState.shields}
+                  </strong>
+                </span>
+                <span>
+                  Smart bombs:{" "}
+                  <strong className={engineState.bombHighlightMs > 0 ? "text-amber-300" : undefined}>
+                    {engineState.smartBombs}
+                  </strong>
+                </span>
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <span>
+                  Score: <strong className="text-sky-300">{engineState.score}</strong>
+                </span>
+                <span>
+                  Time:{" "}
+                  <strong>
+                    {Math.max(0, Math.ceil((RUN_DURATION_MS - engineState.elapsedMs) / 1000))}s
+                  </strong>
+                </span>
+                <span
+                  className={
+                    engineState.rapidRemainingMs > 0 || engineState.rapidHighlightMs > 0
+                      ? "text-violet-300"
+                      : "text-slate-400"
+                  }
+                >
+                  Rapid fire:
+                  {engineState.rapidRemainingMs > 0
+                    ? ` ${Math.ceil(engineState.rapidRemainingMs / 1000)}s`
+                    : " —"}
+                </span>
+              </div>
             </div>
+            {powerToast ? (
+              <div className="mt-3 rounded-lg bg-violet-500/20 px-3 py-2 text-center text-xs text-violet-200 backdrop-blur">
+                {powerToast}
+              </div>
+            ) : null}
             <div className="mt-3 flex justify-center">
               <div
                 ref={containerRef}
@@ -929,7 +1053,7 @@ function Legend({ smartBombs, rapidMs }: { smartBombs: number; rapidMs: number }
         <Sparkles className="h-4 w-4 text-amber-500" />
         <span>
           Smart bomb income • wipes all expenses instantly. You currently have{" "}
-          <strong>{smartBombs}</strong>.
+          <strong>{smartBombs}</strong>. Press Enter/Shift or tap the sparkle button to deploy.
         </span>
       </div>
       <div className="flex items-center gap-2">
