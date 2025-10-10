@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import { useDataCache } from "@/state/data-cache";
 import { buildSavingsRunnerData, type RunnerEvent, type RunnerData } from "@/lib/savingsRunner";
 import { fmtUSD } from "@/lib/format";
@@ -202,11 +203,25 @@ export default function SavingsRunner() {
   const { txns, isLoading, refresh } = useDataCache();
   const [engineState, setEngineState] = useState<EngineState>(defaultEngineState);
   const [lane, setLane] = useState(1);
+  const bumpLane = useCallback((delta: -1 | 1) => {
+    setLane((prev) => clamp(prev + delta, 0, 2));
+  }, []);
+  const handleMove = useCallback(
+    (direction: "up" | "down") => {
+      bumpLane(direction === "up" ? -1 : 1);
+    },
+    [bumpLane],
+  );
+  const laneRef = useRef(lane);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const runtimeRef = useRef<EngineRuntime | null>(null);
   const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
 
   const runnerData = useMemo<RunnerData>(() => buildSavingsRunnerData(txns), [txns]);
+
+  useEffect(() => {
+    laneRef.current = lane;
+  }, [lane]);
 
   useEffect(() => {
     setEngineState((prev) => ({
@@ -220,15 +235,15 @@ export default function SavingsRunner() {
     const handler = (event: KeyboardEvent) => {
       if (event.key === "ArrowUp" || event.key === "w" || event.key === "W") {
         event.preventDefault();
-        setLane((prev) => clamp(prev - 1, 0, 2));
+        handleMove("up");
       } else if (event.key === "ArrowDown" || event.key === "s" || event.key === "S") {
         event.preventDefault();
-        setLane((prev) => clamp(prev + 1, 0, 2));
+        handleMove("down");
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, []);
+  }, [handleMove]);
 
   const stopEngine = (nextState: Partial<EngineState>) => {
     const runtime = runtimeRef.current;
@@ -318,7 +333,9 @@ export default function SavingsRunner() {
       }))
       .filter((powerUp) => powerUp.x + powerUp.radius > 0);
 
-    const playerY = laneCenterY(runtime.lane);
+    const currentLane = laneRef.current;
+    runtime.lane = currentLane;
+    const playerY = laneCenterY(currentLane);
     const playerRect = { x: PLAYER_X, y: playerY, width: PLAYER_WIDTH, height: PLAYER_HEIGHT };
 
     // collisions
@@ -374,8 +391,6 @@ export default function SavingsRunner() {
     drawPlayer(ctx, runtime.lane, runtime.shields);
     runtime.obstacles.forEach((obstacle) => drawObstacle(ctx, obstacle));
     runtime.powerUps.forEach((powerUp) => drawPowerUp(ctx, powerUp));
-
-    runtime.lane = lane;
 
     if (runtime.elapsed >= RUN_DURATION_MS || runtime.lives <= 0) {
       runtime.running = false;
@@ -522,6 +537,7 @@ export default function SavingsRunner() {
                 Use <kbd className="rounded bg-slate-800 px-1 py-0.5 font-semibold">↑</kbd> / <kbd className="rounded bg-slate-800 px-1 py-0.5 font-semibold">↓</kbd> to change lanes. Avoid expense blocks, grab glowing income orbs.
               </p>
             ) : null}
+            <ControlPad onMove={handleMove} />
           </div>
         </div>
         <aside className="space-y-4">
@@ -652,6 +668,40 @@ function Legend() {
           <span className="font-semibold text-slate-800">💰 Coin burst</span> — awards bonus score and ramps coin multiplier.
         </li>
       </ul>
+    </div>
+  );
+}
+
+function ControlPad({ onMove }: { onMove: (dir: "up" | "down") => void }) {
+  return (
+    <div className="mt-4 sm:hidden">
+      <div className="flex justify-center gap-6">
+        <button
+          type="button"
+          aria-label="Move up"
+          className="flex h-14 w-14 items-center justify-center rounded-full bg-slate-800 text-white shadow-lg transition active:scale-95"
+          onClick={(event) => {
+            event.preventDefault();
+            onMove("up");
+          }}
+        >
+          <ChevronUp className="h-6 w-6" />
+        </button>
+        <button
+          type="button"
+          aria-label="Move down"
+          className="flex h-14 w-14 items-center justify-center rounded-full bg-slate-800 text-white shadow-lg transition active:scale-95"
+          onClick={(event) => {
+            event.preventDefault();
+            onMove("down");
+          }}
+        >
+          <ChevronDown className="h-6 w-6" />
+        </button>
+      </div>
+      <p className="mt-2 text-center text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+        Tap to switch lanes
+      </p>
     </div>
   );
 }

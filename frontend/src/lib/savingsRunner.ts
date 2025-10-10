@@ -162,11 +162,11 @@ export function buildSavingsRunnerData(txns: Tx[], now = new Date()): RunnerData
   const net = income - expense;
   const savingsRate = clamp((income ? net / Math.max(income, 1) : 0) || 0, -0.5, 0.9);
   const difficultyFactor = 1 - Math.max(savingsRate, 0);
-  const worldSpeed = lerp(2.8, 6.5, clamp(difficultyFactor, 0, 1));
-  const spawnIntervalMs = lerp(950, 450, clamp(difficultyFactor, 0, 1));
+  const worldSpeed = lerp(0.24, 0.62, clamp(difficultyFactor, 0, 1));
+  const spawnIntervalMs = lerp(1400, 650, clamp(difficultyFactor, 0, 1));
   const lives = 1 + (savingsRate > 0.25 ? 2 : savingsRate > 0 ? 1 : 0);
-  const incomeSpawnEvery = lerp(4, 9, clamp(difficultyFactor, 0, 1));
-  const sizeMultiplier = lerp(0.9, 1.25, clamp(difficultyFactor, 0, 1));
+  const incomeSpawnEvery = lerp(3.2, 7.5, clamp(difficultyFactor, 0, 1));
+  const sizeMultiplier = lerp(0.85, 1.15, clamp(difficultyFactor, 0, 1));
 
   const p95 = Math.max(percentile(expenseAmounts, 0.95), 1);
   const incomeThresholds =
@@ -179,6 +179,8 @@ export function buildSavingsRunnerData(txns: Tx[], now = new Date()): RunnerData
 
   const daysSpan = Math.max(1, Math.round((endDate.getTime() - startDate.getTime()) / MS_PER_DAY));
   const sameDayCounts = new Map<string, number>();
+  const laneLastSpawn = new Map<number, number>();
+  let lastObstacleSpawn = -Infinity;
 
   const events: RunnerEvent[] = [];
 
@@ -191,9 +193,23 @@ export function buildSavingsRunnerData(txns: Tx[], now = new Date()): RunnerData
     const key = `${tx.date}:${tx.category}:${tx.type}`;
     const seen = (sameDayCounts.get(key) ?? 0) + 1;
     sameDayCounts.set(key, seen);
-    const offset = (seen - 1) * (spawnIntervalMs * 0.25);
-    const spawnAtMs = clamp(baseSpawn + offset, 0, RUN_DURATION_MS - 100);
+    const offset = (seen - 1) * (spawnIntervalMs * 0.4);
     const lane = hashLane(tx.category);
+    let spawnAtMs = clamp(baseSpawn + offset, 0, RUN_DURATION_MS - 150);
+    if (tx.type === "expense") {
+      const laneGap = 650;
+      const globalGap = 420;
+      const lanePrev = laneLastSpawn.get(lane) ?? -Infinity;
+      spawnAtMs = Math.max(spawnAtMs, lanePrev + laneGap, lastObstacleSpawn + globalGap);
+      spawnAtMs = Math.min(spawnAtMs, RUN_DURATION_MS - 150);
+      laneLastSpawn.set(lane, spawnAtMs);
+      lastObstacleSpawn = spawnAtMs;
+    } else {
+      const lanePrev = laneLastSpawn.get(lane) ?? -Infinity;
+      if (lanePrev !== -Infinity && spawnAtMs - lanePrev < 320) {
+        spawnAtMs = Math.min(RUN_DURATION_MS - 150, lanePrev + 320);
+      }
+    }
     const amountCapped = tx.type === "expense" ? Math.min(tx.amount, p95) : tx.amount;
 
     if (tx.type === "expense") {
