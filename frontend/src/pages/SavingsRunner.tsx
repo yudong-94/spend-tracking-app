@@ -429,150 +429,159 @@ function SavingsRunner() {
     (delta: number) => {
       const runtime = runtimeRef.current;
       if (!runtime || runtime.status !== "running") return;
-      const deltaMs = delta * (1000 / 60);
-      runtime.elapsed += deltaMs;
+      try {
+        const deltaMs = delta * (1000 / 60);
+        runtime.elapsed += deltaMs;
 
-      // spawn scheduled events
-      while (runtime.eventIndex < runtime.events.length) {
-        const event = runtime.events[runtime.eventIndex];
-        if (event.spawnAtMs > runtime.elapsed) break;
-        runtime.eventIndex += 1;
-        if (event.kind === "asteroid") {
-          spawnAsteroid(runtime, event);
-        } else {
-          spawnPowerUp(runtime, event);
+        while (runtime.eventIndex < runtime.events.length) {
+          const event = runtime.events[runtime.eventIndex];
+          if (event.spawnAtMs > runtime.elapsed) break;
+          runtime.eventIndex += 1;
+          if (event.kind === "asteroid") spawnAsteroid(runtime, event);
+          else spawnPowerUp(runtime, event);
         }
-      }
 
-      const moveSpeed = 0.35 * deltaMs;
-      if (runtime.input.left) {
-        runtime.ship.sprite.x = clamp(runtime.ship.sprite.x - moveSpeed, 30, GAME_WIDTH - 30);
-      }
-      if (runtime.input.right) {
-        runtime.ship.sprite.x = clamp(runtime.ship.sprite.x + moveSpeed, 30, GAME_WIDTH - 30);
-      }
-
-      if (runtime.input.bomb) {
-        detonateSmartBomb(runtime);
-        runtime.input.bomb = false;
-      }
-
-      const isRapid = runtime.elapsed < runtime.rapidUntil;
-      runtime.fireCooldown = isRapid ? 220 : 420;
-
-      if (runtime.input.fire && runtime.elapsed - runtime.lastShotAt >= runtime.fireCooldown) {
-        spawnProjectile(runtime);
-        runtime.lastShotAt = runtime.elapsed;
-      }
-
-      runtime.bullets.forEach((bullet) => {
-        bullet.sprite.y -= bullet.vy * (deltaMs / 1000);
-      });
-      runtime.bullets = runtime.bullets.filter((bullet) => {
-        if (bullet.sprite.y < -20) {
-          bullet.sprite.destroy();
-          return false;
+        const moveSpeed = 0.35 * deltaMs;
+        if (runtime.input.left) {
+          runtime.ship.sprite.x = clamp(runtime.ship.sprite.x - moveSpeed, 30, GAME_WIDTH - 30);
         }
-        return true;
-      });
+        if (runtime.input.right) {
+          runtime.ship.sprite.x = clamp(runtime.ship.sprite.x + moveSpeed, 30, GAME_WIDTH - 30);
+        }
 
-      runtime.asteroids.forEach((asteroid) => {
-        asteroid.sprite.y += asteroid.vy * (deltaMs / 1000);
-        asteroid.sprite.x = clamp(asteroid.sprite.x + asteroid.vx * (deltaMs / 1000), asteroid.radius + 8, GAME_WIDTH - asteroid.radius - 8);
-      });
+        if (runtime.input.bomb) {
+          detonateSmartBomb(runtime);
+          runtime.input.bomb = false;
+        }
 
-      runtime.powerUps.forEach((power) => {
-        power.sprite.y += power.vy * (deltaMs / 1000);
-      });
+        const isRapid = runtime.elapsed < runtime.rapidUntil;
+        runtime.fireCooldown = isRapid ? 220 : 420;
+        if (runtime.input.fire && runtime.elapsed - runtime.lastShotAt >= runtime.fireCooldown) {
+          spawnProjectile(runtime);
+          runtime.lastShotAt = runtime.elapsed;
+        }
 
-      // collisions projectiles -> asteroids
-      runtime.bullets.slice().forEach((bullet) => {
-        runtime.asteroids.slice().forEach((asteroid) => {
+        for (let i = runtime.bullets.length - 1; i >= 0; i -= 1) {
+          const bullet = runtime.bullets[i];
+          bullet.sprite.y -= bullet.vy * (deltaMs / 1000);
+          if (bullet.sprite.y < -20) {
+            bullet.sprite.destroy();
+            runtime.bullets.splice(i, 1);
+          }
+        }
+
+        for (let i = runtime.asteroids.length - 1; i >= 0; i -= 1) {
+          const asteroid = runtime.asteroids[i];
+          asteroid.sprite.y += asteroid.vy * (deltaMs / 1000);
+          asteroid.sprite.x = clamp(
+            asteroid.sprite.x + asteroid.vx * (deltaMs / 1000),
+            asteroid.radius + 8,
+            GAME_WIDTH - asteroid.radius - 8,
+          );
+        }
+
+        for (let i = runtime.powerUps.length - 1; i >= 0; i -= 1) {
+          const power = runtime.powerUps[i];
+          power.sprite.y += power.vy * (deltaMs / 1000);
+          if (power.sprite.y > GAME_HEIGHT + 20) {
+            power.sprite.destroy();
+            runtime.powerUps.splice(i, 1);
+          }
+        }
+
+        for (let i = runtime.bullets.length - 1; i >= 0; i -= 1) {
+          const bullet = runtime.bullets[i];
+          let hit = false;
+          for (let j = runtime.asteroids.length - 1; j >= 0; j -= 1) {
+            const asteroid = runtime.asteroids[j];
+            if (
+              circleHit(
+                bullet.sprite.x,
+                bullet.sprite.y,
+                6,
+                asteroid.sprite.x,
+                asteroid.sprite.y,
+                asteroid.radius,
+              )
+            ) {
+              handleProjectileCollision(runtime, bullet, asteroid);
+              hit = true;
+              break;
+            }
+          }
+          if (hit) break;
+        }
+
+        for (let i = runtime.powerUps.length - 1; i >= 0; i -= 1) {
+          const power = runtime.powerUps[i];
           if (
             circleHit(
-              bullet.sprite.x,
-              bullet.sprite.y,
-              6,
+              runtime.ship.sprite.x,
+              runtime.ship.sprite.y - runtime.ship.radius / 3,
+              runtime.ship.radius,
+              power.sprite.x,
+              power.sprite.y,
+              16,
+            )
+          ) {
+            if (power.type === "shield") runtime.shields += 1;
+            if (power.type === "smartBomb") {
+              runtime.smartBombs += 1;
+              detonateSmartBomb(runtime);
+            }
+            if (power.type === "rapidFire") {
+              runtime.rapidUntil = Math.max(runtime.rapidUntil, runtime.elapsed + runtime.data.difficulty.rapidFireMs);
+            }
+            power.sprite.destroy();
+            runtime.powerUps.splice(i, 1);
+          }
+        }
+
+        for (let i = runtime.asteroids.length - 1; i >= 0; i -= 1) {
+          const asteroid = runtime.asteroids[i];
+          if (
+            circleHit(
+              runtime.ship.sprite.x,
+              runtime.ship.sprite.y,
+              runtime.ship.radius,
               asteroid.sprite.x,
               asteroid.sprite.y,
               asteroid.radius,
             )
           ) {
-            handleProjectileCollision(runtime, bullet, asteroid);
+            if (runtime.shields > 0) runtime.shields -= 1;
+            else runtime.hull -= 1;
+            asteroid.sprite.destroy();
+            runtime.asteroids.splice(i, 1);
+            continue;
           }
-        });
-      });
-
-      // power-up pickup
-      runtime.powerUps = runtime.powerUps.filter((pu) => {
-        if (
-          circleHit(
-            runtime.ship.sprite.x,
-            runtime.ship.sprite.y - runtime.ship.radius / 3,
-            runtime.ship.radius,
-            pu.sprite.x,
-            pu.sprite.y,
-            16,
-          )
-        ) {
-          if (pu.type === "shield") runtime.shields += 1;
-          if (pu.type === "smartBomb") {
-            runtime.smartBombs += 1;
-            detonateSmartBomb(runtime);
+          if (asteroid.sprite.y > GAME_HEIGHT + asteroid.radius) {
+            runtime.hull -= 1;
+            asteroid.sprite.destroy();
+            runtime.asteroids.splice(i, 1);
           }
-          if (pu.type === "rapidFire") {
-            runtime.rapidUntil = Math.max(runtime.rapidUntil, runtime.elapsed + runtime.data.difficulty.rapidFireMs);
-          }
-          pu.sprite.destroy();
-          return false;
         }
-        if (pu.sprite.y > GAME_HEIGHT + 20) {
-          pu.sprite.destroy();
-          return false;
+
+        runtime.score = runtime.elapsed / 1000 + runtime.clearedAmount;
+
+        if (runtime.hull <= 0) {
+          finishRun(runtime, "Hull integrity failed");
+          return;
         }
-        return true;
-      });
 
-      // asteroid -> ship/bottom
-      runtime.asteroids = runtime.asteroids.filter((asteroid) => {
-        if (
-          circleHit(
-            runtime.ship.sprite.x,
-            runtime.ship.sprite.y,
-            runtime.ship.radius,
-            asteroid.sprite.x,
-            asteroid.sprite.y,
-            asteroid.radius,
-          )
-        ) {
-          if (runtime.shields > 0) runtime.shields -= 1;
-          else runtime.hull -= 1;
-          asteroid.sprite.destroy();
-          return false;
+        if (runtime.elapsed >= RUN_DURATION_MS) {
+          finishRun(runtime, "Run complete");
+          return;
         }
-        if (asteroid.sprite.y > GAME_HEIGHT + asteroid.radius) {
-          runtime.hull -= 1;
-          asteroid.sprite.destroy();
-          return false;
+
+        if (runtime.elapsed - runtime.uiSyncMs > 140) {
+          runtime.uiSyncMs = runtime.elapsed;
+          syncUiFromRuntime(runtime);
         }
-        return true;
-      });
-
-      runtime.score = runtime.elapsed / 1000 + runtime.clearedAmount;
-
-      if (runtime.hull <= 0) {
-        finishRun(runtime, "Hull integrity failed");
-        return;
-      }
-
-      if (runtime.elapsed >= RUN_DURATION_MS) {
-        finishRun(runtime, "Run complete");
-        return;
-      }
-
-      if (runtime.elapsed - runtime.uiSyncMs > 140) {
-        runtime.uiSyncMs = runtime.elapsed;
-        syncUiFromRuntime(runtime);
+      } catch (error) {
+        console.error("Savings Asteroids tick error", error);
+        const runtime = runtimeRef.current;
+        if (runtime) finishRun(runtime, "Navigation error – run ended");
       }
     },
     [detonateSmartBomb, finishRun, handleProjectileCollision, spawnAsteroid, spawnPowerUp, spawnProjectile, syncUiFromRuntime],
