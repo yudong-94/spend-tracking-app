@@ -893,6 +893,12 @@ function SavingsRunner() {
   const finished = engineState.status === "finished";
   const savingsPct = (gameData.difficulty.savingsRate * 100).toFixed(1);
   const lookbackLabel = `${lookbackDays} day${lookbackDays === 1 ? "" : "s"}`;
+  const totalExpenseTarget = Math.max(0, gameData.stats.totalExpense);
+  const clearedPct = totalExpenseTarget
+    ? clamp(Math.round((engineState.clearedAmount / totalExpenseTarget) * 100), 0, 100)
+    : engineState.clearedAmount > 0
+      ? 100
+      : 0;
 
   return (
     <div className="space-y-8">
@@ -1016,6 +1022,21 @@ function SavingsRunner() {
                 className="relative mx-auto overflow-hidden rounded-xl border border-slate-800 bg-slate-950"
                 style={{ width: `${gameSize.width}px`, height: `${gameSize.height}px` }}
               />
+            </div>
+            <div className="mt-3 space-y-1 text-xs text-slate-300">
+              <div className="flex items-center justify-between">
+                <span>Cleared expenses</span>
+                <span>
+                  {fmtUSD(engineState.clearedAmount)}
+                  {totalExpenseTarget ? ` / ${fmtUSD(totalExpenseTarget)}` : ""}
+                </span>
+              </div>
+              <div className="h-2 w-full overflow-hidden rounded-full bg-slate-800">
+                <div
+                  className="h-full rounded-full bg-sky-400 transition-all duration-200 ease-out"
+                  style={{ width: `${clearedPct}%` }}
+                />
+              </div>
             </div>
             <MobileControls running={running} onControlPress={onControlPress} />
             {!running && !finished ? (
