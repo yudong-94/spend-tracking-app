@@ -1,7 +1,6 @@
 // frontend/src/pages/AddTransaction.tsx
 import { useMemo, useState } from "react";
 import { useDataCache } from "@/state/data-cache";
-import type { Tx } from "@/state/data-cache";
 import AmountCalculatorInput from "@/components/AmountCalculatorInput";
 import CategorySelect from "@/components/CategorySelect";
 import { createTransaction } from "@/lib/api";
