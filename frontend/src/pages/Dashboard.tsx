@@ -51,30 +51,66 @@ function CategoryChart({ title, data, color }: { title: string; data: CatAmt[]; 
       : sorted;
   const shownCount = chartData.length;
   // Category labels on the left; compute a reasonable width and height
-  const maxLabelLen = Math.max(0, ...chartData.map((x) => (x.category || "").length));
+  const normalizedData = chartData.map((item) => {
+    const raw = typeof item.category === "string" ? item.category.trim() : "";
+    const label = raw || (raw.toLowerCase() === "other" ? "Other" : "Uncategorized");
+    return { label, amount: item.amount || 0 };
+  });
+  const maxLabelLen = Math.max(0, ...normalizedData.map((x) => x.label.length));
   const yCatWidth = Math.max(90, Math.min(260, Math.round(maxLabelLen * 7.2 + 16)));
   const containerHeight = Math.max(260, Math.min(560, 28 * shownCount + 40));
+  const maxAmount = Math.max(0, ...normalizedData.map((x) => x.amount));
   return (
     <div className="p-4 rounded-lg border bg-white">
       <h3 className="font-medium mb-2">{title}</h3>
-      {chartData.length === 0 ? (
+      {normalizedData.length === 0 ? (
         <div className="text-sm text-neutral-500">No data yet.</div>
       ) : (
-        <div style={{ height: containerHeight }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart
-              layout="vertical"
-              data={chartData.map((x) => ({ name: x.category, amount: x.amount }))}
-              margin={{ left: 16, right: 16, top: 8, bottom: 8 }}
-            >
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis type="number" tickFormatter={(v: number) => fmtUSD(Number(v))} />
-              <YAxis type="category" dataKey="name" width={yCatWidth} tick={{ fontSize: 12 }} />
-              <Tooltip formatter={(value: number | string) => fmtUSD(typeof value === "number" ? value : Number(value))} />
-              <Bar dataKey="amount" fill={color} radius={[0, 4, 4, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
+        <>
+          <div className="hidden md:block" style={{ height: containerHeight }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                layout="vertical"
+                data={normalizedData.map((x) => ({ name: x.label, amount: x.amount }))}
+                margin={{ left: 16, right: 16, top: 8, bottom: 8 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis type="number" tickFormatter={(v: number) => fmtUSD(Number(v))} />
+                <YAxis type="category" dataKey="name" width={yCatWidth} tick={{ fontSize: 12 }} />
+                <Tooltip
+                  formatter={(value: number | string) =>
+                    fmtUSD(typeof value === "number" ? value : Number(value))
+                  }
+                />
+                <Bar dataKey="amount" fill={color} radius={[0, 4, 4, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="md:hidden">
+            <ul className="space-y-3">
+              {normalizedData.map((row, idx) => {
+                const pct = maxAmount > 0 ? Math.min(100, (row.amount / maxAmount) * 100) : 0;
+                return (
+                  <li key={`${row.label.toLowerCase().replace(/\s+/g, "-")}-${idx}`} className="space-y-1">
+                    <div className="flex items-baseline justify-between text-sm">
+                      <span className="text-slate-600">{row.label}</span>
+                      <span className="font-medium tabular-nums text-slate-700">
+                        {fmtUSD(row.amount)}
+                      </span>
+                    </div>
+                    <div className="h-2 w-full overflow-hidden rounded bg-slate-200">
+                      <div
+                        aria-hidden="true"
+                        className="h-full rounded"
+                        style={{ width: `${pct}%`, backgroundColor: color }}
+                      />
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        </>
       )}
     </div>
   );
