@@ -1,23 +1,57 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowUpDown, ChevronUp, ChevronDown } from "lucide-react";
+import { ArrowUpDown, ChevronUp, ChevronDown, X } from "lucide-react";
+import { Link } from "react-router-dom";
 import { useDataCache, Tx } from "@/state/data-cache";
 import PageHeader from "@/components/PageHeader";
 import CategorySelect from "@/components/CategorySelect";
 import AmountCalculatorInput from "@/components/AmountCalculatorInput";
-import { fmtUSDSigned } from "@/lib/format";
+import { fmtUSD, fmtUSDSigned } from "@/lib/format";
 import {
   QUICK_RANGE_OPTIONS,
   computeQuickRange,
   isQuickRangeKey,
   type QuickRangeKey,
 } from "@/lib/date-range";
-import { updateTransaction, deleteTransaction } from "@/lib/api";
+import {
+  updateTransaction,
+  deleteTransaction,
+  updateSubscription,
+  logSubscriptionTransaction,
+  type CadenceType,
+  type Subscription,
+} from "@/lib/api";
+import { getNextDueDate, todayLocalISO } from "@/lib/subscriptions";
+
+const describeCadence = (sub: Subscription) => {
+  switch (sub.cadenceType) {
+    case "weekly":
+      return "Weekly";
+    case "monthly":
+      return "Monthly";
+    case "yearly":
+      return "Yearly";
+    case "custom":
+      return sub.cadenceIntervalDays ? `Every ${sub.cadenceIntervalDays} days` : "Custom cadence";
+    default:
+      return "";
+  }
+};
 
 const parseTypeValue = (value: string): "" | "income" | "expense" =>
   value === "income" || value === "expense" ? value : "";
 
 export default function TransactionsPage() {
-  const { txns: rows, isLoading: loading, getCategories, refresh, removeLocal } = useDataCache();
+  const {
+    txns: rows,
+    isLoading: loading,
+    getCategories,
+    refresh,
+    removeLocal,
+    getSubscriptionById,
+    getSubscriptionMisses,
+    upsertSubscription,
+    subscriptions,
+  } = useDataCache();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<number | null>(null);
   const [q, setQ] = useState("");
@@ -27,7 +61,9 @@ export default function TransactionsPage() {
   const [end, setEnd] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
-  const [sortBy, setSortBy] = useState<"date" | "type" | "category" | "description" | "amount">(
+  const [sortBy, setSortBy] = useState<
+    "date" | "type" | "category" | "description" | "subscription" | "amount"
+  >(
     "date",
   );
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
@@ -38,14 +74,178 @@ export default function TransactionsPage() {
     category: string;
     description?: string;
     amount: number;
+    subscriptionId?: string | null;
   };
   const [draft, setDraft] = useState<DraftTx | null>(null);
+  type SubscriptionEditState = {
+    id: string;
+    name: string;
+    amount: string;
+    cadenceType: CadenceType;
+    cadenceIntervalDays: string;
+    categoryId: string;
+    categoryName: string;
+    endDate: string;
+    notes: string;
+  };
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [quickRange, setQuickRange] = useState<QuickRangeKey | "custom">("all");
+  const [showRecurringOnly, setShowRecurringOnly] = useState(false);
+  const [activeSubscriptionId, setActiveSubscriptionId] = useState<string | null>(null);
+  const [subEdit, setSubEdit] = useState<SubscriptionEditState | null>(null);
+  const [subEditErrors, setSubEditErrors] = useState<{
+    name?: string;
+    amount?: string;
+    category?: string;
+    cadenceInterval?: string;
+  } | null>(null);
+  const [subSaving, setSubSaving] = useState(false);
+  const [subLogging, setSubLogging] = useState(false);
+  const categoryOptions = useMemo(() => getCategories(), [getCategories]);
+  const activeSubscription = useMemo(
+    () => (activeSubscriptionId ? getSubscriptionById(activeSubscriptionId) : null),
+    [activeSubscriptionId, getSubscriptionById],
+  );
+  const subscriptionMisses = useMemo(
+    () => (activeSubscription ? getSubscriptionMisses(activeSubscription) : []),
+    [activeSubscription, getSubscriptionMisses],
+  );
+  const todayValue = useMemo(() => todayLocalISO(), []);
+  const subscriptionOptions = useMemo(
+    () =>
+      subscriptions
+        .slice()
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map((sub) => ({ id: sub.id, name: sub.name })),
+    [subscriptions],
+  );
+  const subscriptionNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    subscriptionOptions.forEach((opt) => map.set(opt.id, opt.name));
+    return map;
+  }, [subscriptionOptions]);
 
   const updateDraft = (patch: Partial<DraftTx>) => {
     setDraft((prev) => (prev ? { ...prev, ...patch } : prev));
+  };
+
+  useEffect(() => {
+    if (!activeSubscription) return;
+    const category = categoryOptions.find((c) => c.id === activeSubscription.categoryId);
+    setSubEdit({
+      id: activeSubscription.id,
+      name: activeSubscription.name,
+      amount: activeSubscription.amount.toFixed(2),
+      cadenceType: activeSubscription.cadenceType,
+      cadenceIntervalDays:
+        activeSubscription.cadenceType === "custom" && activeSubscription.cadenceIntervalDays
+          ? String(activeSubscription.cadenceIntervalDays)
+          : "",
+      categoryId: activeSubscription.categoryId,
+      categoryName: category?.name ?? "",
+      endDate: activeSubscription.endDate ?? "",
+      notes: activeSubscription.notes ?? "",
+    });
+    setSubEditErrors(null);
+  }, [activeSubscription, categoryOptions]);
+
+  useEffect(() => {
+    if (!activeSubscriptionId) {
+      setSubEdit(null);
+      setSubEditErrors(null);
+      setSubSaving(false);
+      setSubLogging(false);
+    }
+  }, [activeSubscriptionId]);
+
+  const updateSubEdit = (patch: Partial<SubscriptionEditState>) => {
+    setSubEdit((prev) => (prev ? { ...prev, ...patch } : prev));
+  };
+
+  const closeSubscriptionPanel = () => {
+    setActiveSubscriptionId(null);
+  };
+
+  const saveSubscriptionEdit = async () => {
+    if (!subEdit) return;
+    const errors: {
+      name?: string;
+      amount?: string;
+      category?: string;
+      cadenceInterval?: string;
+    } = {};
+
+    const name = subEdit.name.trim();
+    if (!name) errors.name = "Name is required";
+
+    const amountValue = Number(subEdit.amount);
+    if (!Number.isFinite(amountValue) || amountValue <= 0) {
+      errors.amount = "Enter a positive amount";
+    }
+
+    if (!subEdit.categoryId) {
+      errors.category = "Pick a category";
+    }
+
+    let cadenceIntervalNumber: number | undefined;
+    if (subEdit.cadenceType === "custom") {
+      const parsed = Number(subEdit.cadenceIntervalDays);
+      if (!Number.isInteger(parsed) || parsed <= 0) {
+        errors.cadenceInterval = "Custom cadence requires a positive day interval";
+      } else {
+        cadenceIntervalNumber = parsed;
+      }
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setSubEditErrors(errors);
+      return;
+    }
+
+    setSubSaving(true);
+    try {
+      const updated = await updateSubscription({
+        id: subEdit.id,
+        name,
+        amount: amountValue,
+        cadenceType: subEdit.cadenceType,
+        cadenceIntervalDays: cadenceIntervalNumber,
+        categoryId: subEdit.categoryId,
+        endDate: subEdit.endDate || undefined,
+        notes: subEdit.notes.trim() ? subEdit.notes.trim() : undefined,
+      });
+      upsertSubscription(updated);
+      setActiveSubscriptionId(null);
+      await refresh();
+      alert("Subscription updated.");
+    } catch (error) {
+      console.error(error);
+      alert("Failed to update subscription.");
+    } finally {
+      setSubSaving(false);
+    }
+  };
+
+  const handleSubscriptionLog = async () => {
+    if (!activeSubscription) return;
+    if (subscriptionMisses.length === 0) return;
+    const occurrenceDate = subscriptionMisses[0];
+    setSubLogging(true);
+    try {
+      const result = await logSubscriptionTransaction({
+        subscriptionId: activeSubscription.id,
+        occurrenceDate,
+      });
+      upsertSubscription(result.subscription);
+      await refresh();
+      alert("Recurring transaction logged.");
+    } catch (error) {
+      console.error(error);
+      alert("Failed to log subscription transaction.");
+    } finally {
+      setSubLogging(false);
+    }
   };
 
   // Persist sort + page size
@@ -61,6 +261,7 @@ export default function TransactionsPage() {
         start?: string;
         end?: string;
         quickRange?: string;
+        recurringOnly?: boolean;
       };
       if (s.sortBy) setSortBy(s.sortBy);
       if (s.sortDir === "asc" || s.sortDir === "desc") setSortDir(s.sortDir);
@@ -77,6 +278,7 @@ export default function TransactionsPage() {
         if (typeof s.end === "string") setEnd(s.end);
         setQuickRange("custom");
       }
+      if (typeof s.recurringOnly === "boolean") setShowRecurringOnly(s.recurringOnly);
     } catch (error) {
       console.debug("Unable to load transactions table state", error);
     }
@@ -85,12 +287,20 @@ export default function TransactionsPage() {
     try {
       localStorage.setItem(
         LS_KEY,
-        JSON.stringify({ sortBy, sortDir, pageSize, start, end, quickRange }),
+        JSON.stringify({
+          sortBy,
+          sortDir,
+          pageSize,
+          start,
+          end,
+          quickRange,
+          recurringOnly: showRecurringOnly,
+        }),
       );
     } catch (error) {
       console.debug("Unable to persist transactions table state", error);
     }
-  }, [sortBy, sortDir, pageSize, start, end, quickRange]);
+  }, [sortBy, sortDir, pageSize, start, end, quickRange, showRecurringOnly]);
 
   const applyQuickRange = (key: QuickRangeKey) => {
     const { start: nextStart, end: nextEnd } = computeQuickRange(key);
@@ -138,11 +348,12 @@ export default function TransactionsPage() {
       if (end && r.date > end) return false;
       if (type && r.type !== type) return false;
       if (categories.length && !categories.includes(r.category)) return false;
+      if (showRecurringOnly && !r.subscriptionId) return false;
       if (q && !(r.category + " " + (r.description || "")).toLowerCase().includes(q.toLowerCase()))
         return false;
       return true;
     });
-  }, [rows, q, type, categories, start, end]);
+  }, [rows, q, type, categories, start, end, showRecurringOnly]);
 
   const sorted = useMemo<Tx[]>(() => {
     const arr = filtered.slice();
@@ -157,6 +368,11 @@ export default function TransactionsPage() {
           return a.category.localeCompare(b.category) * dir;
         case "description":
           return (a.description || "").localeCompare(b.description || "") * dir;
+        case "subscription": {
+          const nameA = a.subscriptionId ? subscriptionNameById.get(a.subscriptionId) ?? "" : "";
+          const nameB = b.subscriptionId ? subscriptionNameById.get(b.subscriptionId) ?? "" : "";
+          return nameA.localeCompare(nameB) * dir;
+        }
         case "amount":
           return (a.amount - b.amount) * dir;
         default:
@@ -164,12 +380,12 @@ export default function TransactionsPage() {
       }
     });
     return arr;
-  }, [filtered, sortBy, sortDir]);
+  }, [filtered, sortBy, sortDir, subscriptionNameById]);
 
   // Reset/adjust pagination when filters change
   useEffect(() => {
     setPage(1);
-  }, [q, type, categories, sortBy, sortDir, pageSize, start, end]);
+  }, [q, type, categories, sortBy, sortDir, pageSize, start, end, showRecurringOnly]);
 
   const total = filtered.length;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
@@ -247,6 +463,16 @@ export default function TransactionsPage() {
             placeholder="All Categories"
           />
         </div>
+        <div className="flex items-center gap-2 text-sm text-slate-600">
+          <input
+            id="recurring-only"
+            type="checkbox"
+            checked={showRecurringOnly}
+            onChange={(e) => setShowRecurringOnly(e.target.checked)}
+            className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-500"
+          />
+          <label htmlFor="recurring-only">Recurring only</label>
+        </div>
         <div className="flex flex-wrap gap-2 basis-full">
           {QUICK_RANGE_OPTIONS.map((opt) => (
             <button
@@ -282,6 +508,8 @@ export default function TransactionsPage() {
         quickRange={quickRange}
         setQuickRange={setQuickRange}
         applyQuickRange={applyQuickRange}
+        recurringOnly={showRecurringOnly}
+        setRecurringOnly={setShowRecurringOnly}
       />
 
       {/* Totals */}
@@ -317,16 +545,34 @@ export default function TransactionsPage() {
                     <div className="flex items-start gap-2">
                       <div className="flex-1">
                         <div className="text-xs text-slate-500">{r.date}</div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                           <span
                             className={`h-2.5 w-2.5 rounded-full ${
                               r.type === "income" ? "bg-emerald-500" : "bg-rose-500"
                             }`}
                           />
                           <span className="font-medium">{r.category}</span>
+                          {r.subscriptionId ? (
+                            <button
+                              type="button"
+                              onClick={() => setActiveSubscriptionId(r.subscriptionId!)}
+                              className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] uppercase tracking-wide text-slate-600"
+                            >
+                              Recurring
+                            </button>
+                          ) : null}
                         </div>
                         {r.description ? (
                           <div className="text-sm text-slate-600 mt-1">{r.description}</div>
+                        ) : null}
+                        {r.subscriptionId ? (
+                          <button
+                            type="button"
+                            onClick={() => setActiveSubscriptionId(r.subscriptionId!)}
+                            className="mt-1 text-xs text-slate-600 underline decoration-dotted underline-offset-4 hover:text-slate-800"
+                          >
+                            {subscriptionNameById.get(r.subscriptionId) ?? "View subscription"}
+                          </button>
                         ) : null}
                       </div>
                       <div className={`text-right font-semibold ${
@@ -366,6 +612,18 @@ export default function TransactionsPage() {
                         className="w-full"
                         placeholder="Category"
                       />
+                      <select
+                        className="border rounded px-2 py-1 text-sm w-full"
+                        value={draft?.subscriptionId ?? r.subscriptionId ?? ""}
+                        onChange={(e) => updateDraft({ subscriptionId: e.target.value })}
+                      >
+                        <option value="">No subscription</option>
+                        {subscriptionOptions.map((opt) => (
+                          <option key={opt.id} value={opt.id}>
+                            {opt.name}
+                          </option>
+                        ))}
+                      </select>
                       <input
                         className="border rounded px-2 py-1 text-sm w-full"
                         value={draft?.description ?? r.description ?? ""}
@@ -394,6 +652,7 @@ export default function TransactionsPage() {
                                 category: r.category,
                                 description: r.description,
                                 amount: r.amount,
+                                subscriptionId: r.subscriptionId ?? "",
                               });
                             }}
                           >
@@ -416,7 +675,11 @@ export default function TransactionsPage() {
                               if (!draft) return;
                               setSaving(true);
                               try {
-                                await updateTransaction({ id: r.id!, ...draft });
+                                await updateTransaction({
+                                  id: r.id!,
+                                  ...draft,
+                                  subscriptionId: draft.subscriptionId ?? "",
+                                });
                                 await refresh();
                                 setEditingId(null);
                                 setDraft(null);
@@ -465,6 +728,7 @@ export default function TransactionsPage() {
                   ["type", "Type"],
                   ["category", "Category"],
                   ["description", "Description"],
+                  ["subscription", "Subscription"],
                   ["amount", "Amount"],
                 ] as Array<[typeof sortBy, string]>).map(([key, label]) => (
                   <th key={key} className={`py-2 ${key === "amount" ? "px-3 text-right" : "pr-4"}`}>
@@ -549,7 +813,18 @@ export default function TransactionsPage() {
                           placeholder="Category"
                         />
                       ) : (
-                        r.category
+                        <span className="inline-flex items-center gap-2">
+                          <span>{r.category}</span>
+                          {r.subscriptionId ? (
+                            <button
+                              type="button"
+                              onClick={() => setActiveSubscriptionId(r.subscriptionId!)}
+                              className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] uppercase tracking-wide text-slate-600"
+                            >
+                              Recurring
+                            </button>
+                          ) : null}
+                        </span>
                       )}
                     </td>
                     <td className="py-2 pr-4">
@@ -561,6 +836,32 @@ export default function TransactionsPage() {
                         />
                       ) : (
                         r.description
+                      )}
+                    </td>
+                    <td className="py-2 pr-4">
+                      {isEdit ? (
+                        <select
+                          className="border rounded px-2 py-1 text-sm w-48"
+                          value={draft?.subscriptionId ?? r.subscriptionId ?? ""}
+                          onChange={(e) => updateDraft({ subscriptionId: e.target.value })}
+                        >
+                          <option value="">No subscription</option>
+                          {subscriptionOptions.map((opt) => (
+                            <option key={opt.id} value={opt.id}>
+                              {opt.name}
+                            </option>
+                          ))}
+                        </select>
+                      ) : r.subscriptionId ? (
+                        <button
+                          type="button"
+                          onClick={() => setActiveSubscriptionId(r.subscriptionId!)}
+                          className="text-xs text-slate-600 underline decoration-dotted underline-offset-4 hover:text-slate-800"
+                        >
+                          {subscriptionNameById.get(r.subscriptionId) ?? "View subscription"}
+                        </button>
+                      ) : (
+                        <span className="text-slate-400">—</span>
                       )}
                     </td>
                     <td className="py-2 px-3 text-right font-medium">
@@ -586,15 +887,19 @@ export default function TransactionsPage() {
                               className="px-2 py-1 rounded bg-slate-900 text-white text-xs disabled:opacity-50"
                               disabled={saving}
                               onClick={async () => {
-                                if (!draft) return;
-                                setSaving(true);
-                                try {
-                                  await updateTransaction({ id: r.id!, ...draft });
-                                  await refresh();
-                                  setEditingId(null);
-                                  setDraft(null);
-                                } catch (e) {
-                                  alert("Failed to save changes");
+                              if (!draft) return;
+                              setSaving(true);
+                              try {
+                                await updateTransaction({
+                                  id: r.id!,
+                                  ...draft,
+                                  subscriptionId: draft.subscriptionId ?? "",
+                                });
+                                await refresh();
+                                setEditingId(null);
+                                setDraft(null);
+                              } catch (e) {
+                                alert("Failed to save changes");
                                   console.error(e);
                                 } finally {
                                   setSaving(false);
@@ -632,6 +937,7 @@ export default function TransactionsPage() {
                                   category: r.category,
                                   description: r.description,
                                   amount: r.amount,
+                                  subscriptionId: r.subscriptionId ?? "",
                                 });
                               }}
                             >
@@ -667,6 +973,225 @@ export default function TransactionsPage() {
           />
         </>
       )}
+      {activeSubscriptionId ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) closeSubscriptionPanel();
+          }}
+        >
+          <div className="relative w-full max-w-xl rounded-lg bg-white p-6 shadow-xl">
+            <button
+              type="button"
+              onClick={closeSubscriptionPanel}
+              className="absolute right-3 top-3 rounded-md p-1 text-slate-500 hover:text-slate-700"
+              aria-label="Close subscription panel"
+            >
+              <X className="h-4 w-4" />
+            </button>
+            {activeSubscription && subEdit ? (
+              <div className="space-y-5">
+                {(() => {
+                  const nextDue =
+                    subscriptionMisses.length > 0
+                      ? subscriptionMisses[0]
+                      : getNextDueDate(activeSubscription) ?? activeSubscription.lastLoggedDate ?? null;
+                  const isCanceled = Boolean(
+                    activeSubscription.endDate && activeSubscription.endDate < todayValue,
+                  );
+                  return (
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <h2 className="text-lg font-semibold text-slate-900">{subEdit.name}</h2>
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                            isCanceled
+                              ? "bg-slate-200 text-slate-600"
+                              : subscriptionMisses.length
+                              ? "bg-amber-100 text-amber-800"
+                              : "bg-emerald-100 text-emerald-700"
+                          }`}
+                        >
+                          {isCanceled ? "Canceled" : subscriptionMisses.length ? "Needs log" : "Active"}
+                        </span>
+                      </div>
+                      <div className="text-sm text-slate-600">
+                        {fmtUSD(activeSubscription.amount, 2)} · {describeCadence(activeSubscription)}
+                      </div>
+                      <div className="text-xs text-slate-500">
+                        Last logged: {activeSubscription.lastLoggedDate ?? "—"} · Next due: {nextDue ?? "—"}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                <div className="grid gap-3">
+                  <div className="grid gap-1">
+                    <label className="text-sm">Name</label>
+                    <input
+                      type="text"
+                      value={subEdit.name}
+                      onChange={(e) => {
+                        updateSubEdit({ name: e.target.value });
+                        setSubEditErrors((prev) => (prev ? { ...prev, name: undefined } : prev));
+                      }}
+                      className="border rounded p-2"
+                    />
+                    {subEditErrors?.name ? (
+                      <p className="text-xs text-rose-600">{subEditErrors.name}</p>
+                    ) : null}
+                  </div>
+
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div className="grid gap-1">
+                      <label className="text-sm">Amount</label>
+                      <input
+                        type="number"
+                        min={0}
+                        step={0.01}
+                        value={subEdit.amount}
+                        onChange={(e) => {
+                          updateSubEdit({ amount: e.target.value });
+                          setSubEditErrors((prev) => (prev ? { ...prev, amount: undefined } : prev));
+                        }}
+                        className="border rounded p-2"
+                      />
+                      {subEditErrors?.amount ? (
+                        <p className="text-xs text-rose-600">{subEditErrors.amount}</p>
+                      ) : null}
+                    </div>
+                    <div className="grid gap-1">
+                      <label className="text-sm">Category</label>
+                      <CategorySelect
+                        multiple={false}
+                        value={subEdit.categoryName}
+                        onChange={(name: string) => {
+                          const match = categoryOptions.find((opt) => opt.name === name);
+                          updateSubEdit({ categoryName: name, categoryId: match?.id ?? "" });
+                          setSubEditErrors((prev) => (prev ? { ...prev, category: undefined } : prev));
+                        }}
+                        options={categoryOptions}
+                        className="w-full"
+                        placeholder="Select category"
+                      />
+                      {subEditErrors?.category ? (
+                        <p className="text-xs text-rose-600">{subEditErrors.category}</p>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <div className="grid gap-1">
+                    <label className="text-sm">Cadence</label>
+                    <div className="flex flex-col gap-2 md:flex-row">
+                      <select
+                        value={subEdit.cadenceType}
+                        onChange={(e) => {
+                          const nextCadence = e.target.value as CadenceType;
+                          updateSubEdit({
+                            cadenceType: nextCadence,
+                            cadenceIntervalDays:
+                              nextCadence === "custom" ? subEdit.cadenceIntervalDays || "30" : "",
+                          });
+                          setSubEditErrors((prev) =>
+                            prev ? { ...prev, cadenceInterval: undefined } : prev,
+                          );
+                        }}
+                        className="border rounded p-2 md:w-60"
+                      >
+                        <option value="weekly">Weekly</option>
+                        <option value="monthly">Monthly</option>
+                        <option value="yearly">Yearly</option>
+                        <option value="custom">Custom days interval</option>
+                      </select>
+                      {subEdit.cadenceType === "custom" ? (
+                        <input
+                          type="number"
+                          min={1}
+                          step={1}
+                          value={subEdit.cadenceIntervalDays}
+                          onChange={(e) => {
+                            updateSubEdit({ cadenceIntervalDays: e.target.value });
+                            setSubEditErrors((prev) =>
+                              prev ? { ...prev, cadenceInterval: undefined } : prev,
+                            );
+                          }}
+                          className="border rounded p-2 md:w-40"
+                          placeholder="Days"
+                        />
+                      ) : null}
+                    </div>
+                    {subEditErrors?.cadenceInterval ? (
+                      <p className="text-xs text-rose-600">{subEditErrors.cadenceInterval}</p>
+                    ) : null}
+                  </div>
+
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div className="grid gap-1">
+                      <label className="text-sm">End date (optional)</label>
+                      <input
+                        type="date"
+                        value={subEdit.endDate}
+                        onChange={(e) => updateSubEdit({ endDate: e.target.value })}
+                        className="border rounded p-2"
+                      />
+                    </div>
+                    <div className="grid gap-1">
+                      <label className="text-sm">Notes (optional)</label>
+                      <textarea
+                        value={subEdit.notes}
+                        onChange={(e) => updateSubEdit({ notes: e.target.value })}
+                        className="border rounded p-2"
+                        rows={2}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                  {subscriptionMisses.length > 0 ? (
+                    <button
+                      type="button"
+                      onClick={handleSubscriptionLog}
+                      disabled={subLogging}
+                      className="inline-flex items-center justify-center rounded border border-slate-300 px-3 py-1.5 text-sm text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
+                    >
+                      {subLogging ? "Logging…" : `Log ${subscriptionMisses[0]}`}
+                    </button>
+                  ) : (
+                    <span className="text-xs text-slate-500">No pending occurrences.</span>
+                  )}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Link
+                      to="/subscriptions"
+                      className="text-xs text-slate-500 hover:text-slate-700 underline"
+                      onClick={() => setActiveSubscriptionId(null)}
+                    >
+                      Open subscriptions page
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={closeSubscriptionPanel}
+                      className="rounded border border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={saveSubscriptionEdit}
+                      disabled={subSaving}
+                      className="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white shadow-sm transition hover:bg-slate-800 disabled:opacity-50"
+                    >
+                      {subSaving ? "Saving…" : "Save"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-slate-600">Subscription details not available.</p>
+            )}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -687,6 +1212,8 @@ function MobileFilters({
   quickRange,
   setQuickRange,
   applyQuickRange,
+  recurringOnly,
+  setRecurringOnly,
 }: {
   q: string;
   setQ: (v: string) => void;
@@ -702,6 +1229,8 @@ function MobileFilters({
   quickRange: QuickRangeKey | "custom";
   setQuickRange: (key: QuickRangeKey | "custom") => void;
   applyQuickRange: (key: QuickRangeKey) => void;
+  recurringOnly: boolean;
+  setRecurringOnly: (v: boolean) => void;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -716,12 +1245,12 @@ function MobileFilters({
         <div className="mt-2 space-y-2">
           <input
             type="date"
-              className="border rounded px-3 py-2 w-full"
-              value={start}
-              onChange={(e) => {
-                setQuickRange("custom");
-                setStart(e.target.value);
-              }}
+            className="border rounded px-3 py-2 w-full"
+            value={start}
+            onChange={(e) => {
+              setQuickRange("custom");
+              setStart(e.target.value);
+            }}
           />
           <input
             type="date"
@@ -772,6 +1301,15 @@ function MobileFilters({
             className="w-full"
             placeholder="All Categories"
           />
+          <label className="flex items-center gap-2 text-sm text-slate-600">
+            <input
+              type="checkbox"
+              checked={recurringOnly}
+              onChange={(e) => setRecurringOnly(e.target.checked)}
+              className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-500"
+            />
+            Recurring only
+          </label>
         </div>
       )}
     </div>

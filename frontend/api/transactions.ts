@@ -6,7 +6,10 @@ import {
   updateRowById,
   deleteRowById,
   type SheetRowObject,
+  readTableByName,
+  updateRowByIdInSheet,
 } from "./_lib/sheets.js";
+import { SUBSCRIPTIONS_SHEET, normalizeSubscription } from "./subscriptions/_shared.js";
 
 type Tx = {
   id?: string;
@@ -15,6 +18,7 @@ type Tx = {
   category: string;
   description?: string;
   amount: number;
+  subscriptionId?: string;
 };
 
 // helper: parse amount safely
@@ -51,6 +55,7 @@ const normalize = (r: Record<string, unknown>): Tx => {
     category: String(get("Category") ?? "Uncategorized"),
     description: String(get("Description") ?? ""),
     amount: parseAmount(get("Amount")),
+    subscriptionId: String(get("Subscription ID") ?? "").trim() || undefined,
   };
 };
 
@@ -103,6 +108,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const type = typeRaw === "income" ? "income" : "expense";
       const category = pick("category");
       const description = pick("description") || "";
+      const subscriptionIdRaw = pick("subscriptionId");
+      const subscriptionId = typeof subscriptionIdRaw === "string" ? subscriptionIdRaw.trim() : "";
 
       // --- Generate ID if not provided
       let id: string | undefined = pick("id");
@@ -130,6 +137,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         Description: description,
         "Created At": now.toLocaleString(),
         "Updated At": now.toLocaleString(),
+        "Subscription ID": subscriptionId,
       };
 
       await appendRow(toSheetRow);
@@ -151,13 +159,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const pickedDescription = pick("description");
       if (pickedDescription !== undefined) patch["Description"] = String(pickedDescription ?? "");
       if (pick("amount") !== undefined) patch["Amount"] = parseAmount(pick("amount"));
+      const pickedSubscriptionId = pick("subscriptionId");
+      if (pickedSubscriptionId !== undefined) {
+        patch["Subscription ID"] = typeof pickedSubscriptionId === "string" ? pickedSubscriptionId : "";
+      }
       if (pick("type")) {
         const t = String(pick("type")).toLowerCase();
         patch["Type"] = t === "income" ? "income" : "expense";
       }
 
       try {
-        await updateRowById(id, patch);
+        const updatedRow = await updateRowById(id, patch);
+        const subId = String(updatedRow["Subscription ID"] ?? "").trim();
+        const updatedDate = typeof updatedRow["Date"] === "string" ? updatedRow["Date"] : "";
+        if (subId && updatedDate) {
+          await maybeBumpSubscriptionLastLogged(subId, updatedDate);
+        }
         return res.status(200).json({ ok: true, id });
       } catch (error) {
         if (error instanceof Error && error.message === "not_found") {
@@ -196,4 +213,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const message = error instanceof Error ? error.message : "Server error";
     return res.status(500).json({ error: message });
   }
+}
+async function maybeBumpSubscriptionLastLogged(subscriptionId: string, date: string) {
+  if (!subscriptionId || !date) return;
+  const allSubs = await readTableByName(SUBSCRIPTIONS_SHEET);
+  const match = allSubs.find((row) => String(row.ID ?? row.id ?? "").trim() === subscriptionId);
+  if (!match) return;
+  const normalized = normalizeSubscription(match);
+  const prev = normalized.lastLoggedDate ? Date.parse(normalized.lastLoggedDate) : NaN;
+  const next = Date.parse(date);
+  if (!Number.isFinite(next)) return;
+  if (Number.isFinite(prev) && next <= prev) return;
+  await updateRowByIdInSheet(SUBSCRIPTIONS_SHEET, subscriptionId, {
+    "Last Logged Date": date,
+  });
 }

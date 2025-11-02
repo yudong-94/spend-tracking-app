@@ -1,7 +1,8 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { listTransactions, listCategories, getBudget } from "@/lib/api";
-import type { Category, TransactionResponse, BudgetResponse } from "@/lib/api";
+import { listTransactions, listCategories, listSubscriptions, getBudget } from "@/lib/api";
+import type { Category, TransactionResponse, BudgetResponse, Subscription } from "@/lib/api";
 import { useAuth } from "@/state/auth";
+import { computeMissedOccurrences, todayLocalISO } from "@/lib/subscriptions";
 
 export type Tx = TransactionResponse;
 
@@ -17,6 +18,10 @@ type Ctx = {
   removeLocal: (id: string) => void;
   categories: Category[];
   getCategories: (type?: "income" | "expense") => Category[];
+  subscriptions: Subscription[];
+  upsertSubscription: (sub: Subscription) => void;
+  getSubscriptionById: (id: string) => Subscription | undefined;
+  getSubscriptionMisses: (sub: Subscription, untilDate?: string) => string[];
   // Budget cache (current month)
   budget: BudgetResp | null;
   isBudgetLoading: boolean;
@@ -50,6 +55,10 @@ const DataCacheContext = createContext<Ctx>({
   removeLocal: () => {},
   categories: [],
   getCategories: () => [],
+  subscriptions: [],
+  upsertSubscription: () => {},
+  getSubscriptionById: () => undefined,
+  getSubscriptionMisses: () => [],
   budget: null,
   isBudgetLoading: false,
   refreshBudget: async () => {},
@@ -63,7 +72,7 @@ const LS_BUDGET_KEY = "st-budget-v1"; // separate key to avoid migrations
 const STALE_MS = 5 * 60 * 1000; // 5 minutes
 const BUDGET_STALE_MS = 5 * 60 * 1000; // 5 minutes (tweak as needed)
 
-type PersistShape = { txns: Tx[]; lastSyncAt: number; categories: Category[] };
+type PersistShape = { txns: Tx[]; lastSyncAt: number; categories: Category[]; subscriptions?: Subscription[] };
 
 function loadFromStorage(): PersistShape | null {
   try {
@@ -75,9 +84,14 @@ function loadFromStorage(): PersistShape | null {
     return null;
   }
 }
-function saveToStorage(txns: Tx[], lastSyncAt: number, categories: Category[]) {
+function saveToStorage(
+  txns: Tx[],
+  lastSyncAt: number,
+  categories: Category[],
+  subscriptions: Subscription[],
+) {
   try {
-    localStorage.setItem(LS_KEY, JSON.stringify({ txns, lastSyncAt, categories }));
+    localStorage.setItem(LS_KEY, JSON.stringify({ txns, lastSyncAt, categories, subscriptions }));
   } catch (error) {
     console.debug("Unable to persist cached transactions", error);
   }
@@ -89,6 +103,7 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setLoading] = useState(true);
   const [lastSyncAt, setLastSyncAt] = useState<number | undefined>();
   const [categories, setCategories] = useState<Category[]>([]);
+  const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   // Budget state (current month)
   const [budget, setBudget] = useState<BudgetResp | null>(null);
   const [isBudgetLoading, setBudgetLoading] = useState(false);
@@ -113,7 +128,11 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
     }
     setLoading(true);
     try {
-      const [rows, cats] = await Promise.all([listTransactions({}), listCategories()]);
+      const [rows, cats, subs] = await Promise.all([
+        listTransactions({}),
+        listCategories(),
+        listSubscriptions(),
+      ]);
       setTxns(rows);
 
       // If Categories sheet is empty for some reason, derive fallback from txns
@@ -125,9 +144,10 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
       const usableCats = cats.length ? cats : Array.from(fallback.values());
 
       setCategories(usableCats);
+      setSubscriptions(subs);
       const ts = Date.now();
       setLastSyncAt(ts);
-      saveToStorage(rows, ts, usableCats);
+      saveToStorage(rows, ts, usableCats, subs);
     } catch (error) {
       // Missing key: just stop; AccessGate will show if token isn’t set
       if (
@@ -147,7 +167,7 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
     }
   }, [token, clear]);
 
-    const sortCats = (a: Category, b: Category) => {
+  const sortCats = (a: Category, b: Category) => {
     if (a.type !== b.type) return a.type === "expense" ? -1 : 1; // expenses first
     return a.name.localeCompare(b.name);
   };
@@ -159,6 +179,30 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
         .slice()
         .sort(sortCats),
     [categories],
+  );
+
+  const upsertSubscription = useCallback(
+    (sub: Subscription) => {
+      setSubscriptions((prev) => {
+        const idx = prev.findIndex((s) => s.id === sub.id);
+        const next =
+          idx === -1 ? [sub, ...prev] : [...prev.slice(0, idx), sub, ...prev.slice(idx + 1)];
+        saveToStorage(txns, lastSyncAt ?? Date.now(), categories, next);
+        return next;
+      });
+    },
+    [txns, lastSyncAt, categories],
+  );
+
+  const getSubscriptionById = useCallback(
+    (id: string) => subscriptions.find((s) => s.id === id),
+    [subscriptions],
+  );
+
+  const getSubscriptionMisses = useCallback(
+    (sub: Subscription, untilDate?: string) =>
+      computeMissedOccurrences(sub, untilDate ?? todayLocalISO()),
+    [],
   );
 
   // Prefetch and cache current-month budget
@@ -192,6 +236,7 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
       setTxns(persisted.txns);
       setCategories(persisted.categories || []);
       setLastSyncAt(persisted.lastSyncAt);
+      setSubscriptions(persisted.subscriptions || []);
     }
     // hydrate budget from its own storage
     try {
@@ -231,11 +276,11 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
       setTxns((prev) => {
         // Keep newest first to align with API ordering and UI expectations
         const next = [tx, ...prev].sort((a, b) => b.date.localeCompare(a.date));
-        saveToStorage(next, lastSyncAt ?? Date.now(), categories);
+        saveToStorage(next, lastSyncAt ?? Date.now(), categories, subscriptions);
         return next;
       });
     },
-    [lastSyncAt, categories],
+    [lastSyncAt, categories, subscriptions],
   );
 
   const removeLocal = useCallback(
@@ -243,11 +288,11 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
       setTxns((prev) => {
         const next = prev.filter((tx) => tx.id !== id);
         if (next.length === prev.length) return prev;
-        saveToStorage(next, lastSyncAt ?? Date.now(), categories);
+        saveToStorage(next, lastSyncAt ?? Date.now(), categories, subscriptions);
         return next;
       });
     },
-    [lastSyncAt, categories],
+    [lastSyncAt, categories, subscriptions],
   );
 
   const filter = useCallback(
@@ -305,6 +350,10 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
       removeLocal,
       categories,
       getCategories,
+      subscriptions,
+      upsertSubscription,
+      getSubscriptionById,
+      getSubscriptionMisses,
       budget,
       isBudgetLoading,
       refreshBudget,
@@ -321,6 +370,10 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
       removeLocal,
       categories,
       getCategories,
+      subscriptions,
+      upsertSubscription,
+      getSubscriptionById,
+      getSubscriptionMisses,
       budget,
       isBudgetLoading,
       refreshBudget,

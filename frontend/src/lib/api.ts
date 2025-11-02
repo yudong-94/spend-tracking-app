@@ -40,6 +40,7 @@ export type NewTransaction = {
   category: string;
   amount: number;
   description?: string;
+  subscriptionId?: string;
 };
 
 export type TransactionResponse = {
@@ -49,6 +50,7 @@ export type TransactionResponse = {
   category: string;
   description?: string;
   amount: number;
+  subscriptionId?: string;
 };
 
 export type BudgetResponse = {
@@ -179,4 +181,86 @@ export async function createBudgetOverride(input: {
   );
   if (!res.ok) throw new Error(`budgets POST failed: ${res.status}`);
   return res.json();
+}
+
+export type CadenceType = "weekly" | "monthly" | "yearly" | "custom";
+
+export type Subscription = {
+  id: string;
+  name: string;
+  amount: number;
+  cadenceType: CadenceType;
+  cadenceIntervalDays?: number;
+  categoryId: string;
+  startDate: string;
+  lastLoggedDate?: string;
+  endDate?: string;
+  notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type NewSubscription = {
+  id: string;
+  name: string;
+  amount: number;
+  cadenceType: CadenceType;
+  cadenceIntervalDays?: number;
+  categoryId: string;
+  startDate: string;
+  lastLoggedDate?: string;
+  endDate?: string;
+  notes?: string;
+};
+
+export async function listSubscriptions() {
+  const res = await fetch("/api/subscriptions", withAuth());
+  return jsonOrThrow<Subscription[]>(res);
+}
+
+export async function createSubscription(input: NewSubscription) {
+  const res = await fetch(
+    "/api/subscriptions",
+    withAuth({
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ...input,
+        lastLoggedDate: input.lastLoggedDate ?? input.startDate,
+      }),
+    }),
+  );
+  return jsonOrThrow<Subscription>(res);
+}
+
+export async function updateSubscription(input: Partial<NewSubscription> & { id: string }) {
+  const res = await fetch(
+    "/api/subscriptions",
+    withAuth({
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    }),
+  );
+  return jsonOrThrow<Subscription>(res);
+}
+
+export type LogSubscriptionResponse = {
+  transaction: TransactionResponse;
+  subscription: Subscription;
+};
+
+export async function logSubscriptionTransaction(payload: {
+  subscriptionId: string;
+  occurrenceDate: string;
+}) {
+  const res = await fetch(
+    "/api/subscriptions/log",
+    withAuth({
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }),
+  );
+  return jsonOrThrow<LogSubscriptionResponse>(res);
 }

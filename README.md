@@ -2,14 +2,17 @@
 
 Spend Tracker is a fast, low-cost personal finance app that stores data in Google Sheets and serves the API through Vercel Serverless Functions. The frontend is built with Vite, React, TypeScript, and Tailwind CSS, and visualizations are rendered with Recharts.
 
+It now includes end-to-end recurring subscription management: create plans while logging transactions, review upcoming charges, and catch up on missed occurrences directly from the app.
+
 See `GOOGLE_SHEETS_SETUP.md` for a detailed walkthrough on preparing your spreadsheet and Google service account.
 
 ## ✨ Features
 
 - Dashboard: month-to-date and year-to-date cards (income, expense, net) plus category breakdowns
 - Analytics: monthly/annual totals, savings rate, YoY pacing, and side-by-side period comparison
-- Transactions: instant search, multi-select category filters, quick ranges, inline edit/delete, and paginated tables
-- Add Transaction: keyboard-friendly form with most selected category chips and amount calculator
+- Transactions: instant search, multi-select category filters, quick ranges, inline edit/delete, recurring badge filter, and paginated tables
+- Add Transaction: keyboard-friendly form with favorite category chips, amount calculator, and a recurring toggle that creates linked subscriptions
+- Subscriptions: upcoming-charge summary, monthly/yearly totals by category, logging of missed occurrences, and inline edits that stay in sync with Sheets
 - Budget: automatic target based on the last 12 complete months, manual overrides, and cumulative pacing chart
 - Access control & caching: simple bearer-token gate, optimistic updates, and a localStorage-backed cache with manual refresh
 
@@ -26,10 +29,14 @@ See `GOOGLE_SHEETS_SETUP.md` for a detailed walkthrough on preparing your spread
 
 ## 🗂️ Google Sheets Tabs
 
-- Transactions (header row): `ID | Date | Amount | Type | Category | Description | Created At | Updated At`
+- Transactions (header row): `ID | Date | Amount | Type | Category | Description | Subscription ID | Created At | Updated At`
   - `Type` must be `income` or `expense` (lowercase)
   - `Amount` should use the Number format in Sheets
   - `Created At`/`Updated At` are timestamps maintained by the API
+  - `Subscription ID` can be left blank for non-recurring entries; the UI writes the subscription UUID when you link one
+- Subscriptions: `ID | Name | Amount | Cadence Type | Cadence Interval (Days) | Category ID | Start Date | Last Logged Date | End Date | Notes | Created At | Updated At`
+  - `Cadence Type` accepts `weekly`, `monthly`, `yearly`, or `custom` (use the interval column when custom)
+  - `Last Logged Date` is automatically updated when you log or backfill a subscription charge
 - Categories: `ID | Name | Type`
 - Budgets (optional but required for budget features): `Month (YYYY-MM) | Amount | Notes`
   - You can add multiple override rows per month; amounts are summed
@@ -47,6 +54,7 @@ Configure these variables in Vercel (Project → Settings → Environment Variab
 | `GOOGLE_SERVICE_ACCOUNT_JSON` | Entire service account JSON, stringified on one line (escape `\n` in `private_key`) | Yes | — |
 | `GOOGLE_SHEETS_ID` | Spreadsheet ID from the Google Sheets URL | Yes | — |
 | `GOOGLE_SHEETS_TAB` | Transactions tab name | Optional | `Transactions` |
+| `GOOGLE_SHEETS_SUBSCRIPTIONS_TAB` | Subscriptions tab name | Optional | `Subscriptions` |
 | `GOOGLE_SHEETS_BUDGETS_TAB` | Budgets tab name | Optional | `Budgets` |
 | `APP_ACCESS_TOKEN` | Shared secret used by both the API and UI access gate | Yes (recommended) | — |
 
@@ -111,6 +119,9 @@ frontend/
       sheets.ts            # Google Sheets helpers (read/append/update/delete)
       auth.ts              # Bearer-token validation against APP_ACCESS_TOKEN
     transactions.ts        # CRUD for transactions
+    subscriptions/
+      index.ts             # Subscription CRUD (Google Sheets backed)
+      log.ts               # Log a subscription occurrence + create transaction
     summary.ts             # Aggregate income/expense summaries
     breakdown.ts           # Category breakdown
     categories.ts          # Categories tab reader
@@ -130,15 +141,17 @@ frontend/
       colors.ts            # Shared color palette
       date-range.ts        # Quick-range presets & helpers
       format.ts            # Currency/number formatting
+      subscriptions.ts     # Recurrence helpers shared across the app
     pages/
       Dashboard.tsx
       Analytics.tsx
       Transactions.tsx
       AddTransaction.tsx
       Budget.tsx
+      Subscriptions.tsx
     state/
       auth.tsx             # Access token storage
-      data-cache.tsx       # Local cache, summaries, budget helpers
+      data-cache.tsx       # Local cache, summaries, subscriptions, budget helpers
 backend/                  # Optional Express API for custom integrations
 shared/                   # Shared types/utilities consumed by backend/frontend
 ```
@@ -150,9 +163,13 @@ shared/                   # Shared types/utilities consumed by backend/frontend
 All routes require `Authorization: Bearer <APP_ACCESS_TOKEN>` if the token is set.
 
 - `GET /api/transactions?start=YYYY-MM-DD&end=YYYY-MM-DD&type=income|expense&category=Cat&q=search`
-- `POST /api/transactions` → `{ date, type: "income"|"expense", category, amount, description? }`
-- `PUT /api/transactions` → `{ id, ...fields }` (partial updates)
+- `POST /api/transactions` → `{ date, type: "income"|"expense", category, amount, description?, subscriptionId? }`
+- `PUT /api/transactions` → `{ id, ...fields }` (partial updates; include `subscriptionId` to link/unlink)
 - `DELETE /api/transactions?id=spend-123`
+- `GET /api/subscriptions`
+- `POST /api/subscriptions` → `{ id, name, amount, cadenceType, cadenceIntervalDays?, categoryId, startDate, lastLoggedDate?, endDate?, notes? }`
+- `PATCH /api/subscriptions` → `{ id, ...fields }`
+- `POST /api/subscriptions/log` → `{ subscriptionId, occurrenceDate }`
 - `GET /api/summary?start=YYYY-MM-DD&end=YYYY-MM-DD`
 - `GET /api/breakdown?type=income|expense&start=YYYY-MM-DD&end=YYYY-MM-DD`
 - `GET /api/comparison?aStart=YYYY-MM-DD&aEnd=YYYY-MM-DD&bStart=YYYY-MM-DD&bEnd=YYYY-MM-DD`
@@ -160,13 +177,13 @@ All routes require `Authorization: Bearer <APP_ACCESS_TOKEN>` if the token is se
 - `GET /api/budget?month=YYYY-MM`
 - `POST /api/budget` → `{ amount: number, notes?: string, month?: YYYY-MM }`
 
-IDs are generated as `spend-####` when missing, and the API normalizes headers when reading from Sheets.
+IDs are generated as `spend-####` when missing, and the API normalizes headers when reading from Sheets. Subscription logging also creates the underlying transaction and updates `Last Logged Date` for you.
 
 ---
 
 ## 🧠 Caching & Refresh
 
-- Local data is cached in `localStorage` (transactions, categories, budget) for instant reloads
+- Local data is cached in `localStorage` (transactions, subscriptions, categories, budget) for instant reloads
 - Manual Refresh button invalidates the cache and refetches data
 - Optimistic updates keep the UI responsive when creating, editing, or deleting transactions
 
@@ -179,6 +196,7 @@ IDs are generated as `spend-####` when missing, and the API normalizes headers w
 - Quick date ranges (This Month, Last 30 Days, YTD, etc.) persist per user
 - Category dropdowns provide multi-select in Analytics/Transactions and single-select in Add Transaction
 - Dashboard charts show the top categories and group the rest as “Other”
+- Recurring transactions display a “Recurring” chip that links to an inline subscription editor; the dedicated Subscriptions page summarizes upcoming charges and missed occurrences with one-click logging
 
 ---
 
@@ -205,6 +223,6 @@ Storybook isn’t configured, but you can bootstrap it with `npx storybook@lates
 ## 🗺️ Roadmap
 
 - Budget variance alerts and target tracking
-- Recurring transaction helper
+- Subscription reminders (notifications and snooze rules)
 - CSV import/export
 - Optional OAuth-based authentication
