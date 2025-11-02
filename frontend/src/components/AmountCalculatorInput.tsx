@@ -183,7 +183,7 @@ function CalculatorPanel({
   const [pendingOp, setPendingOp] = useState<Operation | null>(null);
   const [repeatOp, setRepeatOp] = useState<Operation | null>(null);
   const [lastOperand, setLastOperand] = useState<number | null>(null);
-  const [overwriteEntry, setOverwriteEntry] = useState(false);
+  const [overwriteEntry, setOverwriteEntry] = useState(true);
   const skipEcho = useRef(false);
   const padNextValue = useRef(true);
 
@@ -215,7 +215,7 @@ function CalculatorPanel({
       return;
     }
     padNextValue.current = false;
-    setEntry((prev) => (prev === "0" ? digit : prev + digit));
+    setEntry((prev) => (isZeroString(prev) ? digit : prev + digit));
     setRepeatOp(null);
     setLastOperand(null);
   };
@@ -304,7 +304,7 @@ function CalculatorPanel({
     setPendingOp(null);
     setRepeatOp(null);
     setLastOperand(null);
-    setOverwriteEntry(false);
+    setOverwriteEntry(true);
   };
 
   const handleBackspace = () => {
@@ -396,6 +396,10 @@ function parseEntry(value: string): number | null {
 function roundToCents(value: number): number {
   if (!Number.isFinite(value)) return 0;
   return Math.round(value * 100) / 100;
+}
+
+function isZeroString(value: string): boolean {
+  return /^-?0(?:\.0*)?$/.test(value);
 }
 
 function formatValue(value: number, options: { pad?: boolean } = {}): string {
