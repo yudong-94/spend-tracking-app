@@ -1,10 +1,9 @@
 // frontend/src/pages/AddTransaction.tsx
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useDataCache } from "@/state/data-cache";
-import type { Tx } from "@/state/data-cache";
 import AmountCalculatorInput from "@/components/AmountCalculatorInput";
 import CategorySelect from "@/components/CategorySelect";
-import { createTransaction } from "@/lib/api";
+import { createTransaction, createSubscription, type CadenceType } from "@/lib/api";
 
 type FormTx = {
   Date: string;
@@ -14,19 +13,40 @@ type FormTx = {
   Description?: string;
 };
 
+type SubscriptionDraft = {
+  name: string;
+  cadenceType: CadenceType;
+  cadenceIntervalDays: string;
+  endDate: string;
+  notes: string;
+};
+
+const makeSubscriptionDefaults = (): SubscriptionDraft => ({
+  name: "",
+  cadenceType: "monthly",
+  cadenceIntervalDays: "",
+  endDate: "",
+  notes: "",
+});
+
+const generateSubscriptionId = () =>
+  typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : `sub-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
 export default function AddTransaction() {
-  const { categories, txns, refresh, addLocal } = useDataCache();
+  const { categories: categoryList, txns, refresh, addLocal, upsertSubscription } = useDataCache();
 
   // Sort: expenses A→Z, then income A→Z
   const sortedOptions = useMemo(() => {
-    const exp = categories
+    const exp = categoryList
       .filter((c) => c.type === "expense")
       .sort((a, b) => a.name.localeCompare(b.name));
-    const inc = categories
+    const inc = categoryList
       .filter((c) => c.type === "income")
       .sort((a, b) => a.name.localeCompare(b.name));
     return [...exp, ...inc];
-  }, [categories]);
+  }, [categoryList]);
 
   // Helper to get YYYY-MM-DD in local time (not UTC)
   const todayLocal = () => {
@@ -43,7 +63,58 @@ export default function AddTransaction() {
     Amount: 0,
     Description: "",
   });
-  const [errors, setErrors] = useState<{ category?: string; amount?: string }>({});
+  const [errors, setErrors] = useState<{
+    category?: string;
+    amount?: string;
+    subscriptionName?: string;
+    subscriptionCadence?: string;
+    subscriptionInterval?: string;
+  }>({});
+  const [isRecurring, setIsRecurring] = useState(false);
+  const [subscriptionForm, setSubscriptionForm] = useState<SubscriptionDraft>(() =>
+    makeSubscriptionDefaults(),
+  );
+  const [subscriptionNameDirty, setSubscriptionNameDirty] = useState(false);
+
+  useEffect(() => {
+    if (!isRecurring) return;
+    if (subscriptionNameDirty) return;
+    const inferred =
+      (form.Description || "").trim() || (form.Category ? form.Category.trim() : "");
+    if (!inferred) return;
+    setSubscriptionForm((prev) => (prev.name === inferred ? prev : { ...prev, name: inferred }));
+  }, [form.Description, form.Category, isRecurring, subscriptionNameDirty]);
+
+  useEffect(() => {
+    if (!isRecurring) {
+      setSubscriptionNameDirty(false);
+    }
+  }, [isRecurring]);
+
+  const updateSubscriptionForm = (patch: Partial<SubscriptionDraft>) => {
+    setSubscriptionForm((prev) => ({ ...prev, ...patch }));
+  };
+
+  const toggleRecurring = (next: boolean) => {
+    setIsRecurring(next);
+    if (next) {
+      const inferred =
+        (form.Description || "").trim() || (form.Category ? form.Category.trim() : "");
+      setSubscriptionForm((prev) => ({
+        ...prev,
+        name: prev.name || inferred,
+      }));
+    } else {
+      setSubscriptionForm(makeSubscriptionDefaults());
+      setSubscriptionNameDirty(false);
+      setErrors((prev) => ({
+        ...prev,
+        subscriptionName: undefined,
+        subscriptionCadence: undefined,
+        subscriptionInterval: undefined,
+      }));
+    }
+  };
 
   // Quick presets: last 6 used categories; fallback to first 6 expense cats if no history
   const frequentCategories = useMemo(() => {
@@ -91,41 +162,114 @@ export default function AddTransaction() {
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const nextErrors: { category?: string; amount?: string } = {};
-    const category = form.Category.trim();
-    if (!category) nextErrors.category = "Category is required";
+    const nextErrors: {
+      category?: string;
+      amount?: string;
+      subscriptionName?: string;
+      subscriptionCadence?: string;
+      subscriptionInterval?: string;
+    } = {};
+    const categoryName = form.Category.trim();
+    if (!categoryName) nextErrors.category = "Category is required";
 
     const Amount = Math.round((form.Amount || 0) * 100) / 100; // 2dp
     if (!Number.isFinite(form.Amount) || Amount <= 0) {
       nextErrors.amount = "Enter an amount greater than zero";
     }
 
-    if (Object.keys(nextErrors).length > 0) {
+    const categoryRecord = categoryName
+      ? categoryList.find((c) => c.name === categoryName && c.type === form.Type)
+      : undefined;
+    if (categoryName && !categoryRecord) {
+      nextErrors.category = "Choose a valid category";
+    }
+
+    let cadenceIntervalValue: number | undefined;
+    if (isRecurring) {
+      if (!subscriptionForm.name.trim()) {
+        nextErrors.subscriptionName = "Subscription name is required";
+      }
+      if (!subscriptionForm.cadenceType) {
+        nextErrors.subscriptionCadence = "Select a cadence";
+      }
+      if (subscriptionForm.cadenceType === "custom") {
+        const parsed = Number(subscriptionForm.cadenceIntervalDays);
+        if (!Number.isInteger(parsed) || parsed <= 0) {
+          nextErrors.subscriptionInterval = "Enter a days interval greater than zero";
+        } else {
+          cadenceIntervalValue = parsed;
+        }
+      }
+      if (!categoryRecord) {
+        nextErrors.category = "Unable to resolve the selected category";
+      }
+    }
+
+    if (
+      nextErrors.category ||
+      nextErrors.amount ||
+      nextErrors.subscriptionName ||
+      nextErrors.subscriptionCadence ||
+      nextErrors.subscriptionInterval
+    ) {
       setErrors(nextErrors);
       return;
     }
 
     setErrors({});
-    const { id } = await createTransaction({
-      date: form.Date,
-      type: form.Type,
-      category,
-      amount: Amount,
-      description: form.Description || undefined,
-    });
-    // Optimistic local cache add with returned id
-    addLocal({
-      id,
-      date: form.Date,
-      type: form.Type,
-      category,
-      amount: Amount,
-      description: form.Description || undefined,
-    });
-    setForm((f) => ({ ...f, Amount: 0, Description: "" }));
-    // Background refresh to sync with server state
-    void refresh?.();
-    alert("Saved!");
+
+    let subscriptionId: string | undefined;
+    if (isRecurring) {
+      subscriptionId = generateSubscriptionId();
+      try {
+        const created = await createSubscription({
+          id: subscriptionId,
+          name: subscriptionForm.name.trim(),
+          amount: Amount,
+          cadenceType: subscriptionForm.cadenceType,
+          cadenceIntervalDays: cadenceIntervalValue,
+          categoryId: categoryRecord?.id ?? "",
+          startDate: form.Date,
+          lastLoggedDate: form.Date,
+          endDate: subscriptionForm.endDate || undefined,
+          notes: subscriptionForm.notes.trim() ? subscriptionForm.notes.trim() : undefined,
+        });
+        upsertSubscription(created);
+      } catch (error) {
+        console.error(error);
+        alert("Failed to create subscription. Please try again.");
+        return;
+      }
+    }
+
+    try {
+      const { id } = await createTransaction({
+        date: form.Date,
+        type: form.Type,
+        category: categoryName,
+        amount: Amount,
+        description: form.Description || undefined,
+        subscriptionId,
+      });
+      addLocal({
+        id,
+        date: form.Date,
+        type: form.Type,
+        category: categoryName,
+        amount: Amount,
+        description: form.Description || undefined,
+        subscriptionId,
+      });
+      setForm((f) => ({ ...f, Amount: 0, Description: "" }));
+      if (isRecurring) {
+        toggleRecurring(false);
+      }
+      void refresh?.();
+      alert(isRecurring ? "Saved recurring transaction!" : "Saved!");
+    } catch (error) {
+      console.error(error);
+      alert("Failed to save transaction. Please try again.");
+    }
   };
 
   return (
@@ -228,6 +372,116 @@ export default function AddTransaction() {
             className="border p-2 rounded"
             rows={3}
           />
+        </div>
+
+        <div className="border rounded-lg p-4 bg-slate-50">
+          <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
+            <input
+              id="recurring-toggle"
+              type="checkbox"
+              checked={isRecurring}
+              onChange={(e) => toggleRecurring(e.target.checked)}
+              className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-500"
+            />
+            Log as recurring subscription
+          </label>
+
+          {isRecurring ? (
+            <div className="mt-4 grid gap-4">
+              <div className="grid gap-1">
+                <label className="text-sm">Subscription name</label>
+                <input
+                  type="text"
+                  value={subscriptionForm.name}
+                  onChange={(e) => {
+                    updateSubscriptionForm({ name: e.target.value });
+                    setSubscriptionNameDirty(true);
+                    setErrors((prev) => ({ ...prev, subscriptionName: undefined }));
+                  }}
+                  placeholder="Netflix, Rent, Gym membership…"
+                  className="border p-2 rounded"
+                />
+                {errors.subscriptionName ? (
+                  <p className="text-xs text-rose-600">{errors.subscriptionName}</p>
+                ) : null}
+              </div>
+
+              <div className="grid gap-1">
+                <label className="text-sm">Cadence</label>
+                <div className="flex flex-col gap-2 md:flex-row">
+                  <select
+                    value={subscriptionForm.cadenceType}
+                    onChange={(e) => {
+                      const nextCadence = e.target.value as CadenceType;
+                      updateSubscriptionForm({
+                        cadenceType: nextCadence,
+                        cadenceIntervalDays:
+                          nextCadence === "custom"
+                            ? subscriptionForm.cadenceIntervalDays || "30"
+                            : "",
+                      });
+                      setErrors((prev) => ({
+                        ...prev,
+                        subscriptionCadence: undefined,
+                        subscriptionInterval: undefined,
+                      }));
+                    }}
+                    className="border p-2 rounded md:w-60"
+                  >
+                    <option value="weekly">Weekly</option>
+                    <option value="monthly">Monthly</option>
+                    <option value="yearly">Yearly</option>
+                    <option value="custom">Custom days interval</option>
+                  </select>
+                  {subscriptionForm.cadenceType === "custom" ? (
+                    <input
+                      type="number"
+                      min={1}
+                      step={1}
+                      value={subscriptionForm.cadenceIntervalDays}
+                      onChange={(e) => {
+                        updateSubscriptionForm({ cadenceIntervalDays: e.target.value });
+                        setErrors((prev) => ({ ...prev, subscriptionInterval: undefined }));
+                      }}
+                      className="border p-2 rounded md:w-40"
+                      placeholder="Days"
+                    />
+                  ) : null}
+                </div>
+                {errors.subscriptionCadence ? (
+                  <p className="text-xs text-rose-600">{errors.subscriptionCadence}</p>
+                ) : null}
+                {errors.subscriptionInterval ? (
+                  <p className="text-xs text-rose-600">{errors.subscriptionInterval}</p>
+                ) : null}
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="grid gap-1">
+                  <label className="text-sm">End date (optional)</label>
+                  <input
+                    type="date"
+                    value={subscriptionForm.endDate}
+                    onChange={(e) => updateSubscriptionForm({ endDate: e.target.value })}
+                    className="border p-2 rounded"
+                  />
+                </div>
+                <div className="grid gap-1">
+                  <label className="text-sm">Notes (optional)</label>
+                  <textarea
+                    value={subscriptionForm.notes}
+                    onChange={(e) => updateSubscriptionForm({ notes: e.target.value })}
+                    className="border p-2 rounded"
+                    rows={2}
+                  />
+                </div>
+              </div>
+            </div>
+          ) : (
+            <p className="mt-2 text-xs text-slate-500">
+              Enable to create a recurring subscription linked to this transaction.
+            </p>
+          )}
         </div>
 
         <div>

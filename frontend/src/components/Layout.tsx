@@ -9,6 +9,7 @@ import {
   X,
   TrendingUp,
   PiggyBank,
+  CalendarClock,
   // DollarSign
 } from "lucide-react";
 
@@ -24,6 +25,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     { name: "Dashboard", href: "/", icon: Home },
     { name: "Analytics", href: "/analytics", icon: BarChart3 },
     { name: "Transactions", href: "/transactions", icon: List },
+    { name: "Subscriptions", href: "/subscriptions", icon: CalendarClock },
     { name: "Add Transaction", href: "/add", icon: Plus },
     { name: "Budget", href: "/budget", icon: PiggyBank },
   ];

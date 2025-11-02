@@ -12,10 +12,11 @@ function getCreds() {
   return JSON.parse(raw);
 }
 
-function getSheetIds() {
+function getSheetIds(forSheet?: string) {
   const spreadsheetId = process.env.GOOGLE_SHEETS_ID;
   if (!spreadsheetId) throw new Error("Missing GOOGLE_SHEETS_ID env var");
-  const sheetName = process.env.GOOGLE_SHEETS_TAB || "Transactions";
+  const defaultSheet = process.env.GOOGLE_SHEETS_TAB || "Transactions";
+  const sheetName = forSheet || defaultSheet;
   return { spreadsheetId, sheetName };
 }
 
@@ -23,7 +24,8 @@ export async function getSheetsClient() {
   const creds = getCreds();
   const auth = new google.auth.JWT(creds.client_email, undefined, creds.private_key, SCOPES);
   const sheets = google.sheets({ version: "v4", auth });
-  return { sheets, ...getSheetIds() };
+  const ids = getSheetIds();
+  return { sheets, ...ids };
 }
 
 /** read the header row for a given sheet name */
@@ -67,9 +69,9 @@ export async function readTableByName(sheetName: string) {
   return readTableCore(sheetName);
 }
 
-export async function appendRow(row: SheetRowObject) {
-  const { sheets, spreadsheetId, sheetName } = await getSheetsClient();
-  // Map to header order for resilience
+async function appendRowInternal(sheetName: string, row: SheetRowObject) {
+  const { sheets, spreadsheetId } = await getSheetsClient();
+  // Read headers
   const headerRes = await sheets.spreadsheets.values.get({
     spreadsheetId,
     range: `${sheetName}!1:1`,
@@ -84,19 +86,29 @@ export async function appendRow(row: SheetRowObject) {
   });
 }
 
-/** Update a row in the default Transactions sheet by `ID`. */
-export async function updateRowById(
-  id: string,
-  patch: Partial<SheetRowObject>,
-) {
-  const { sheets, spreadsheetId, sheetName } = await getSheetsClient();
-  // Read headers
+export async function appendRow(row: SheetRowObject) {
+  const { sheetName } = getSheetIds();
+  return appendRowInternal(sheetName, row);
+}
+
+export async function appendRowToSheet(sheetName: string, row: SheetRowObject) {
+  return appendRowInternal(sheetName, row);
+}
+
+type RowLookupResult = {
+  headers: string[];
+  rows: SheetMatrix;
+  foundIndex: number;
+  existing: SheetRowObject | null;
+};
+
+async function readRowsForUpdate(sheetName: string, id: string): Promise<RowLookupResult> {
+  const { sheets, spreadsheetId } = await getSheetsClient();
   const headerRes = await sheets.spreadsheets.values.get({
     spreadsheetId,
     range: `${sheetName}!1:1`,
   });
   const headers: string[] = (headerRes.data.values?.[0] || []).map((h) => String(h ?? "").trim());
-
   // Read all rows to find the row index
   const dataRes = await sheets.spreadsheets.values.get({
     spreadsheetId,
@@ -119,8 +131,13 @@ export async function updateRowById(
       break;
     }
   }
-  if (foundIndex === -1 || !existing) throw new Error("not_found");
+  return { headers, rows, foundIndex, existing };
+}
 
+async function updateRowByIdInternal(sheetName: string, id: string, patch: Partial<SheetRowObject>) {
+  const { sheets, spreadsheetId } = await getSheetsClient();
+  const { headers, foundIndex, existing } = await readRowsForUpdate(sheetName, id);
+  if (foundIndex === -1 || !existing) throw new Error("not_found");
   const now = new Date();
   const updated: SheetRowObject = { ...existing, ...patch };
   // Ensure ID preserved and timestamps handled
@@ -140,6 +157,16 @@ export async function updateRowById(
   });
 
   return updated;
+}
+
+/** Update a row in the default Transactions sheet by `ID`. */
+export async function updateRowById(id: string, patch: Partial<SheetRowObject>) {
+  const { sheetName } = getSheetIds();
+  return updateRowByIdInternal(sheetName, id, patch);
+}
+
+export async function updateRowByIdInSheet(sheetName: string, id: string, patch: Partial<SheetRowObject>) {
+  return updateRowByIdInternal(sheetName, id, patch);
 }
 
 /** Delete a row from the Transactions sheet by `ID`. */
@@ -219,23 +246,6 @@ export async function readSheetAsObjects(sheetName: string) {
     const obj: Record<string, string> = {};
     headers.forEach((h, i) => (obj[h] = String(r[i] ?? "")));
     return obj;
-  });
-}
-
-/** Append a row object to a specific sheet (maps by header order). */
-export async function appendRowToSheet(sheetName: string, row: SheetRowObject) {
-  const { sheets, spreadsheetId } = await getSheetsClient();
-  const headerRes = await sheets.spreadsheets.values.get({
-    spreadsheetId,
-    range: `${sheetName}!1:1`,
-  });
-  const headers = (headerRes.data.values?.[0] || []).map((h) => String(h ?? "").trim());
-  const values = headers.map((h) => row[h] ?? "");
-  await sheets.spreadsheets.values.append({
-    spreadsheetId,
-    range: `${sheetName}!A:Z`,
-    valueInputOption: "USER_ENTERED",
-    requestBody: { values: [values] },
   });
 }
 

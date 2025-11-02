@@ -15,6 +15,7 @@ type Tx = {
   category: string;
   description?: string;
   amount: number;
+  subscriptionId?: string;
 };
 
 // helper: parse amount safely
@@ -51,6 +52,7 @@ const normalize = (r: Record<string, unknown>): Tx => {
     category: String(get("Category") ?? "Uncategorized"),
     description: String(get("Description") ?? ""),
     amount: parseAmount(get("Amount")),
+    subscriptionId: String(get("Subscription ID") ?? "").trim() || undefined,
   };
 };
 
@@ -103,6 +105,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const type = typeRaw === "income" ? "income" : "expense";
       const category = pick("category");
       const description = pick("description") || "";
+      const subscriptionIdRaw = pick("subscriptionId");
+      const subscriptionId = typeof subscriptionIdRaw === "string" ? subscriptionIdRaw.trim() : "";
 
       // --- Generate ID if not provided
       let id: string | undefined = pick("id");
@@ -130,6 +134,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         Description: description,
         "Created At": now.toLocaleString(),
         "Updated At": now.toLocaleString(),
+        "Subscription ID": subscriptionId,
       };
 
       await appendRow(toSheetRow);
@@ -151,6 +156,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const pickedDescription = pick("description");
       if (pickedDescription !== undefined) patch["Description"] = String(pickedDescription ?? "");
       if (pick("amount") !== undefined) patch["Amount"] = parseAmount(pick("amount"));
+      const pickedSubscriptionId = pick("subscriptionId");
+      if (pickedSubscriptionId !== undefined) {
+        patch["Subscription ID"] = typeof pickedSubscriptionId === "string" ? pickedSubscriptionId : "";
+      }
       if (pick("type")) {
         const t = String(pick("type")).toLowerCase();
         patch["Type"] = t === "income" ? "income" : "expense";
