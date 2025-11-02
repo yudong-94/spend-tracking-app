@@ -1,7 +1,6 @@
 // frontend/src/pages/AddTransaction.tsx
 import { useMemo, useState } from "react";
 import { useDataCache } from "@/state/data-cache";
-import type { Tx } from "@/state/data-cache";
 import AmountCalculatorInput from "@/components/AmountCalculatorInput";
 import CategorySelect from "@/components/CategorySelect";
 import { createTransaction } from "@/lib/api";
@@ -45,43 +44,63 @@ export default function AddTransaction() {
   });
   const [errors, setErrors] = useState<{ category?: string; amount?: string }>({});
 
-  // Quick presets: last 6 used categories; fallback to first 6 expense cats if no history
-  const frequentCategories = useMemo(() => {
-    const counts = new Map<string, { name: string; type: Tx["type"]; count: number }>();
+  // Quick presets: keep top categories per type, fall back to alphabetical per-type lists
+  const frequentPresets = useMemo(() => {
+    const counts: Record<"income" | "expense", Map<string, { name: string; count: number }>> = {
+      income: new Map(),
+      expense: new Map(),
+    };
 
     for (const tx of txns) {
-      const type = tx.type;
+      if (tx.type !== "income" && tx.type !== "expense") continue;
       const rawName = tx.category ?? "";
       const name = typeof rawName === "string" ? rawName.trim() : "";
-      if (!name || (type !== "income" && type !== "expense")) continue;
-      const key = `${type}__${name.toLowerCase()}`;
-      const existing = counts.get(key);
+      if (!name) continue;
+      const mapForType = counts[tx.type];
+      const key = name.toLowerCase();
+      const existing = mapForType.get(key);
       if (existing) {
         existing.count += 1;
         continue;
       }
-      counts.set(key, { name, type, count: 1 });
+      mapForType.set(key, { name, count: 1 });
     }
 
-    const sorted = Array.from(counts.values()).sort((a, b) => {
-      if (b.count !== a.count) return b.count - a.count;
-      const nameCompare = a.name.localeCompare(b.name);
-      if (nameCompare !== 0) return nameCompare;
-      return a.type.localeCompare(b.type);
-    });
+    const toPresetList = (type: "income" | "expense") =>
+      Array.from(counts[type].values())
+        .sort((a, b) => {
+          if (b.count !== a.count) return b.count - a.count;
+          return a.name.localeCompare(b.name);
+        })
+        .slice(0, 6)
+        .map(({ name }) => ({ name, type }));
 
-    return sorted.slice(0, 6).map(({ name, type }) => ({ name, type }));
+    return {
+      income: toPresetList("income"),
+      expense: toPresetList("expense"),
+    };
   }, [txns]);
 
-  const presets = useMemo(() => {
-    if (frequentCategories.length) return frequentCategories;
+  const fallbackPresets = useMemo(
+    () => ({
+      income: sortedOptions
+        .filter((c) => c.type === "income")
+        .slice(0, 6)
+        .map((c) => ({ name: c.name, type: c.type })),
+      expense: sortedOptions
+        .filter((c) => c.type === "expense")
+        .slice(0, 6)
+        .map((c) => ({ name: c.name, type: c.type })),
+    }),
+    [sortedOptions],
+  );
 
-    // fallback – top expense categories A→Z
-    return sortedOptions
-      .filter((c) => c.type === "expense")
-      .slice(0, 6)
-      .map((c) => ({ name: c.name, type: c.type }));
-  }, [frequentCategories, sortedOptions]);
+  const selectedType = form.Type;
+  const presets = useMemo(() => {
+    const frequent = frequentPresets[selectedType];
+    if (frequent.length) return frequent;
+    return fallbackPresets[selectedType];
+  }, [fallbackPresets, frequentPresets, selectedType]);
 
   const setType = (t: "income" | "expense") => setForm((f) => ({ ...f, Type: t }));
   const setCategory = (name: string) => {

@@ -69,6 +69,16 @@ const formatTooltipValue: SimpleTooltipFormatter = (value) =>
 const ym = (d: string) => d.slice(0, 7);
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const MIN_Y_AXIS = 56; // lower bound for Y-axis width
+const MONTH_LABEL_FORMATTER = new Intl.DateTimeFormat(undefined, { month: "short", year: "numeric" });
+
+const formatMonthLabel = (value: string) => {
+  if (!value) return value;
+  const [yearStr, monthStr] = value.split("-");
+  const year = Number.parseInt(yearStr, 10);
+  const month = Number.parseInt(monthStr, 10);
+  if (Number.isNaN(year) || Number.isNaN(month) || month < 1 || month > 12) return value;
+  return MONTH_LABEL_FORMATTER.format(new Date(year, month - 1, 1));
+};
 
 type Tab = "monthly" | "annual" | "breakdown" | "compare";
 
@@ -180,6 +190,29 @@ export default function Analytics() {
   const hasIncomeData = useMemo(() => series.some((p) => p.income > 0), [series]);
   const hasExpenseData = useMemo(() => series.some((p) => p.expense > 0), [series]);
   const hasNetData = useMemo(() => series.some((p) => p.net !== 0), [series]);
+  const mobileMonthlySeries = useMemo(() => {
+    const recent = series.slice(-12);
+    recent.reverse(); // latest first for mobile list
+    return recent.map((p) => ({
+      id: p.month,
+      label: formatMonthLabel(p.month),
+      income: p.income ?? 0,
+      expense: p.expense ?? 0,
+      net: p.net ?? 0,
+    }));
+  }, [series]);
+  const mobileMonthlyIncomeMax = useMemo(
+    () => Math.max(0, ...mobileMonthlySeries.map((row) => row.income)),
+    [mobileMonthlySeries],
+  );
+  const mobileMonthlyExpenseMax = useMemo(
+    () => Math.max(0, ...mobileMonthlySeries.map((row) => row.expense)),
+    [mobileMonthlySeries],
+  );
+  const mobileMonthlyNetMax = useMemo(
+    () => Math.max(0, ...mobileMonthlySeries.map((row) => Math.abs(row.net))),
+    [mobileMonthlySeries],
+  );
 
   // KPI comparisons: vs last month and vs 12‑mo avg
   const kpiCompare = useMemo(() => {
@@ -286,6 +319,29 @@ export default function Analytics() {
     }
     return [...by.values()].sort((a, b) => a.year.localeCompare(b.year));
   }, [filtered]);
+  const mobileAnnualSeries = useMemo(() => {
+    const recent = annualSeries.slice(-10);
+    recent.reverse();
+    return recent.map((p) => ({
+      id: p.year,
+      label: p.year,
+      income: p.income ?? 0,
+      expense: p.expense ?? 0,
+      net: p.net ?? 0,
+    }));
+  }, [annualSeries]);
+  const mobileAnnualIncomeMax = useMemo(
+    () => Math.max(0, ...mobileAnnualSeries.map((row) => row.income)),
+    [mobileAnnualSeries],
+  );
+  const mobileAnnualExpenseMax = useMemo(
+    () => Math.max(0, ...mobileAnnualSeries.map((row) => row.expense)),
+    [mobileAnnualSeries],
+  );
+  const mobileAnnualNetMax = useMemo(
+    () => Math.max(0, ...mobileAnnualSeries.map((row) => Math.abs(row.net))),
+    [mobileAnnualSeries],
+  );
 
   // Annual savings rate (net / income)
   const annualRateData = useMemo(() => {
@@ -350,6 +406,50 @@ export default function Analytics() {
   const hasYoyData = useMemo(() =>
     yoyData.some((d) => ((d.thisYear ?? 0) !== 0) || ((d.lastYear ?? 0) !== 0)),
   [yoyData]);
+
+  const renderMobileList = (
+    rows: Array<{ id: string; label: string; value: number }>,
+    options: {
+      max: number;
+      getBarColor: (value: number) => string;
+      getValueClass?: (value: number) => string;
+    },
+  ) => {
+    if (!rows.length) {
+      return <div className="text-sm text-slate-500">No data</div>;
+    }
+
+    return (
+      <ul className="space-y-3">
+        {rows.map((row) => {
+          const pct =
+            options.max > 0 ? Math.min(100, (Math.abs(row.value) / options.max) * 100) : 0;
+          return (
+            <li key={row.id} className="space-y-1">
+              <div className="flex items-baseline justify-between text-sm">
+                <span className="text-slate-600">{row.label}</span>
+                <span
+                  className={`font-medium tabular-nums ${options.getValueClass?.(row.value) ?? ""}`}
+                >
+                  {fmtUSD(row.value)}
+                </span>
+              </div>
+              <div className="h-2 w-full overflow-hidden rounded bg-slate-200">
+                <div
+                  aria-hidden="true"
+                  className="h-full rounded"
+                  style={{
+                    width: `${pct}%`,
+                    backgroundColor: options.getBarColor(row.value),
+                  }}
+                />
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    );
+  };
 
   return (
     <div className="space-y-6">
@@ -668,172 +768,276 @@ export default function Analytics() {
 
       {/* Monthly Income */}
       {tab === "monthly" && hasIncomeData && (
-      <div className="p-4 rounded-lg border bg-white">
-        <h3 className="font-medium mb-2">Monthly total income</h3>
-        <div className="h-64">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={series} margin={{ left: 16, right: 8, top: 8, bottom: 8 }}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="month" />
-              <YAxis
-                width={Math.max(
-                  MIN_Y_AXIS,
-                  estimateYAxisWidthFromMax(
-                    Math.max(0, ...series.map((p) => p.income || 0)),
-                    fmtUSD,
-                  ),
-                )}
-                tickFormatter={(v: number) => fmtUSD(v)}
-              />
-          <Tooltip formatter={formatTooltipValue} />
-              <Bar dataKey="income" fill={COL.income} radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
+        <>
+          <div className="hidden md:block p-4 rounded-lg border bg-white">
+            <h3 className="font-medium mb-2">Monthly total income</h3>
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={series} margin={{ left: 16, right: 8, top: 8, bottom: 8 }}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="month" />
+                  <YAxis
+                    width={Math.max(
+                      MIN_Y_AXIS,
+                      estimateYAxisWidthFromMax(
+                        Math.max(0, ...series.map((p) => p.income || 0)),
+                        fmtUSD,
+                      ),
+                    )}
+                    tickFormatter={(v: number) => fmtUSD(v)}
+                  />
+                  <Tooltip formatter={formatTooltipValue} />
+                  <Bar dataKey="income" fill={COL.income} radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+          <div className="md:hidden p-4 rounded-lg border bg-white">
+            <h3 className="font-medium mb-2">Monthly total income</h3>
+            {renderMobileList(
+              mobileMonthlySeries.map((row) => ({
+                id: `${row.id}-income`,
+                label: row.label,
+                value: row.income,
+              })),
+              {
+                max: mobileMonthlyIncomeMax,
+                getBarColor: () => COL.income,
+                getValueClass: () => "text-emerald-600",
+              },
+            )}
+          </div>
+        </>
       )}
 
       {/* Monthly Expenses */}
       {tab === "monthly" && hasExpenseData && (
-      <div className="p-4 rounded-lg border bg-white">
-        <h3 className="font-medium mb-2">Monthly total expenses</h3>
-        <div className="h-64">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={series} margin={{ left: 16, right: 8, top: 8, bottom: 8 }}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="month" />
-              <YAxis
-                width={Math.max(
-                  MIN_Y_AXIS,
-                  estimateYAxisWidthFromMax(
-                    Math.max(0, ...series.map((p) => p.expense || 0)),
-                    fmtUSD,
-                  ),
-                )}
-                tickFormatter={(v: number) => fmtUSD(v)}
-              />
-          <Tooltip formatter={formatTooltipValue} />
-              <Bar dataKey="expense" fill={COL.expense} radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
+        <>
+          <div className="hidden md:block p-4 rounded-lg border bg-white">
+            <h3 className="font-medium mb-2">Monthly total expenses</h3>
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={series} margin={{ left: 16, right: 8, top: 8, bottom: 8 }}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="month" />
+                  <YAxis
+                    width={Math.max(
+                      MIN_Y_AXIS,
+                      estimateYAxisWidthFromMax(
+                        Math.max(0, ...series.map((p) => p.expense || 0)),
+                        fmtUSD,
+                      ),
+                    )}
+                    tickFormatter={(v: number) => fmtUSD(v)}
+                  />
+                  <Tooltip formatter={formatTooltipValue} />
+                  <Bar dataKey="expense" fill={COL.expense} radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+          <div className="md:hidden p-4 rounded-lg border bg-white">
+            <h3 className="font-medium mb-2">Monthly total expenses</h3>
+            {renderMobileList(
+              mobileMonthlySeries.map((row) => ({
+                id: `${row.id}-expense`,
+                label: row.label,
+                value: row.expense,
+              })),
+              {
+                max: mobileMonthlyExpenseMax,
+                getBarColor: () => COL.expense,
+                getValueClass: () => "text-rose-600",
+              },
+            )}
+          </div>
+        </>
       )}
 
       {/* Monthly Net */}
       {tab === "monthly" && hasNetData && (
-      <div className="p-4 rounded-lg border bg-white">
-        <h3 className="font-medium mb-2">Monthly net</h3>
-        <div className="h-64">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={series} margin={{ left: 16, right: 8, top: 8, bottom: 8 }}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="month" />
-              <YAxis
-                width={Math.max(
-                  MIN_Y_AXIS,
-                  estimateYAxisWidthFromMax(
-                    Math.max(0, ...series.map((p) => Math.abs(p.net || 0))),
-                    fmtUSD,
-                  ),
-                )}
-                tickFormatter={(v: number) => fmtUSD(v)}
-              />
-          <Tooltip formatter={formatTooltipValue} />
-              <Bar dataKey="net" fill={COL.net} radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
+        <>
+          <div className="hidden md:block p-4 rounded-lg border bg-white">
+            <h3 className="font-medium mb-2">Monthly net</h3>
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={series} margin={{ left: 16, right: 8, top: 8, bottom: 8 }}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="month" />
+                  <YAxis
+                    width={Math.max(
+                      MIN_Y_AXIS,
+                      estimateYAxisWidthFromMax(
+                        Math.max(0, ...series.map((p) => Math.abs(p.net || 0))),
+                        fmtUSD,
+                      ),
+                    )}
+                    tickFormatter={(v: number) => fmtUSD(v)}
+                  />
+                  <Tooltip formatter={formatTooltipValue} />
+                  <Bar dataKey="net" fill={COL.net} radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+          <div className="md:hidden p-4 rounded-lg border bg-white">
+            <h3 className="font-medium mb-2">Monthly net</h3>
+            {renderMobileList(
+              mobileMonthlySeries.map((row) => ({
+                id: `${row.id}-net`,
+                label: row.label,
+                value: row.net,
+              })),
+              {
+                max: mobileMonthlyNetMax,
+                getBarColor: (value) => (value >= 0 ? COL.income : COL.expense),
+                getValueClass: (value) =>
+                  value > 0 ? "text-emerald-600" : value < 0 ? "text-rose-600" : "text-slate-600",
+              },
+            )}
+          </div>
+        </>
       )}
 
       {/* Monthly: Combined monthly */}
       {tab === "monthly" && (hasIncomeData || hasExpenseData) && (
-      <div className="p-4 rounded-lg border bg-white">
-        <h3 className="font-medium mb-2">Monthly income vs expense (with net)</h3>
-        <CombinedMonthlyChart data={series} />
-      </div>
+        <div className="hidden md:block p-4 rounded-lg border bg-white">
+          <h3 className="font-medium mb-2">Monthly income vs expense (with net)</h3>
+          <CombinedMonthlyChart data={series} />
+        </div>
       )}
 
       {/* Annual Income */}
       {tab === "annual" && hasAnnualIncomeData && (
-      <div className="p-4 rounded-lg border bg-white">
-        <h3 className="font-medium mb-2">Annual total income</h3>
-        <div className="h-64">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={annualSeries} margin={{ left: 16, right: 8, top: 8, bottom: 8 }}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="year" />
-              <YAxis
-                width={Math.max(
-                  MIN_Y_AXIS,
-                  estimateYAxisWidthFromMax(
-                    Math.max(0, ...annualSeries.map((p) => p.income || 0)),
-                    fmtUSD,
-                  ),
-                )}
-                tickFormatter={(v: number) => fmtUSD(v)}
-              />
-          <Tooltip formatter={formatTooltipValue} />
-              <Bar dataKey="income" fill={COL.income} radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
+        <>
+          <div className="hidden md:block p-4 rounded-lg border bg-white">
+            <h3 className="font-medium mb-2">Annual total income</h3>
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={annualSeries} margin={{ left: 16, right: 8, top: 8, bottom: 8 }}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="year" />
+                  <YAxis
+                    width={Math.max(
+                      MIN_Y_AXIS,
+                      estimateYAxisWidthFromMax(
+                        Math.max(0, ...annualSeries.map((p) => p.income || 0)),
+                        fmtUSD,
+                      ),
+                    )}
+                    tickFormatter={(v: number) => fmtUSD(v)}
+                  />
+                  <Tooltip formatter={formatTooltipValue} />
+                  <Bar dataKey="income" fill={COL.income} radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+          <div className="md:hidden p-4 rounded-lg border bg-white">
+            <h3 className="font-medium mb-2">Annual total income</h3>
+            {renderMobileList(
+              mobileAnnualSeries.map((row) => ({
+                id: `${row.id}-income`,
+                label: row.label,
+                value: row.income,
+              })),
+              {
+                max: mobileAnnualIncomeMax,
+                getBarColor: () => COL.income,
+                getValueClass: () => "text-emerald-600",
+              },
+            )}
+          </div>
+        </>
       )}
 
       {/* Annual Expenses */}
       {tab === "annual" && hasAnnualExpenseData && (
-      <div className="p-4 rounded-lg border bg-white">
-        <h3 className="font-medium mb-2">Annual total expenses</h3>
-        <div className="h-64">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={annualSeries} margin={{ left: 16, right: 8, top: 8, bottom: 8 }}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="year" />
-              <YAxis
-                width={Math.max(
-                  MIN_Y_AXIS,
-                  estimateYAxisWidthFromMax(
-                    Math.max(0, ...annualSeries.map((p) => p.expense || 0)),
-                    fmtUSD,
-                  ),
-                )}
-                tickFormatter={(v: number) => fmtUSD(v)}
-              />
-          <Tooltip formatter={formatTooltipValue} />
-              <Bar dataKey="expense" fill={COL.expense} radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
+        <>
+          <div className="hidden md:block p-4 rounded-lg border bg-white">
+            <h3 className="font-medium mb-2">Annual total expenses</h3>
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={annualSeries} margin={{ left: 16, right: 8, top: 8, bottom: 8 }}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="year" />
+                  <YAxis
+                    width={Math.max(
+                      MIN_Y_AXIS,
+                      estimateYAxisWidthFromMax(
+                        Math.max(0, ...annualSeries.map((p) => p.expense || 0)),
+                        fmtUSD,
+                      ),
+                    )}
+                    tickFormatter={(v: number) => fmtUSD(v)}
+                  />
+                  <Tooltip formatter={formatTooltipValue} />
+                  <Bar dataKey="expense" fill={COL.expense} radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+          <div className="md:hidden p-4 rounded-lg border bg-white">
+            <h3 className="font-medium mb-2">Annual total expenses</h3>
+            {renderMobileList(
+              mobileAnnualSeries.map((row) => ({
+                id: `${row.id}-expense`,
+                label: row.label,
+                value: row.expense,
+              })),
+              {
+                max: mobileAnnualExpenseMax,
+                getBarColor: () => COL.expense,
+                getValueClass: () => "text-rose-600",
+              },
+            )}
+          </div>
+        </>
       )}
 
       {/* Annual Net */}
       {tab === "annual" && hasAnnualNetData && (
-      <div className="p-4 rounded-lg border bg-white">
-        <h3 className="font-medium mb-2">Annual net</h3>
-        <div className="h-64">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={annualSeries} margin={{ left: 16, right: 8, top: 8, bottom: 8 }}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="year" />
-              <YAxis
-                width={Math.max(
-                  MIN_Y_AXIS,
-                  estimateYAxisWidthFromMax(
-                    Math.max(0, ...annualSeries.map((p) => Math.abs(p.net || 0))),
-                    fmtUSD,
-                  ),
-                )}
-                tickFormatter={(v: number) => fmtUSD(v)}
-              />
-          <Tooltip formatter={formatTooltipValue} />
-              <Bar dataKey="net" fill={COL.net} radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
+        <>
+          <div className="hidden md:block p-4 rounded-lg border bg-white">
+            <h3 className="font-medium mb-2">Annual net</h3>
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={annualSeries} margin={{ left: 16, right: 8, top: 8, bottom: 8 }}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="year" />
+                  <YAxis
+                    width={Math.max(
+                      MIN_Y_AXIS,
+                      estimateYAxisWidthFromMax(
+                        Math.max(0, ...annualSeries.map((p) => Math.abs(p.net || 0))),
+                        fmtUSD,
+                      ),
+                    )}
+                    tickFormatter={(v: number) => fmtUSD(v)}
+                  />
+                  <Tooltip formatter={formatTooltipValue} />
+                  <Bar dataKey="net" fill={COL.net} radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+          <div className="md:hidden p-4 rounded-lg border bg-white">
+            <h3 className="font-medium mb-2">Annual net</h3>
+            {renderMobileList(
+              mobileAnnualSeries.map((row) => ({
+                id: `${row.id}-net`,
+                label: row.label,
+                value: row.net,
+              })),
+              {
+                max: mobileAnnualNetMax,
+                getBarColor: (value) => (value >= 0 ? COL.income : COL.expense),
+                getValueClass: (value) =>
+                  value > 0 ? "text-emerald-600" : value < 0 ? "text-rose-600" : "text-slate-600",
+              },
+            )}
+          </div>
+        </>
       )}
 
       {/* Annual Savings Rate */}
