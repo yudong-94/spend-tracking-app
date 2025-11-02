@@ -50,6 +50,7 @@ export default function TransactionsPage() {
     getSubscriptionById,
     getSubscriptionMisses,
     upsertSubscription,
+    subscriptions,
   } = useDataCache();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<number | null>(null);
@@ -60,7 +61,9 @@ export default function TransactionsPage() {
   const [end, setEnd] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
-  const [sortBy, setSortBy] = useState<"date" | "type" | "category" | "description" | "amount">(
+  const [sortBy, setSortBy] = useState<
+    "date" | "type" | "category" | "description" | "subscription" | "amount"
+  >(
     "date",
   );
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
@@ -71,6 +74,7 @@ export default function TransactionsPage() {
     category: string;
     description?: string;
     amount: number;
+    subscriptionId?: string | null;
   };
   const [draft, setDraft] = useState<DraftTx | null>(null);
   type SubscriptionEditState = {
@@ -108,6 +112,19 @@ export default function TransactionsPage() {
     [activeSubscription, getSubscriptionMisses],
   );
   const todayValue = useMemo(() => todayLocalISO(), []);
+  const subscriptionOptions = useMemo(
+    () =>
+      subscriptions
+        .slice()
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map((sub) => ({ id: sub.id, name: sub.name })),
+    [subscriptions],
+  );
+  const subscriptionNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    subscriptionOptions.forEach((opt) => map.set(opt.id, opt.name));
+    return map;
+  }, [subscriptionOptions]);
 
   const updateDraft = (patch: Partial<DraftTx>) => {
     setDraft((prev) => (prev ? { ...prev, ...patch } : prev));
@@ -351,6 +368,11 @@ export default function TransactionsPage() {
           return a.category.localeCompare(b.category) * dir;
         case "description":
           return (a.description || "").localeCompare(b.description || "") * dir;
+        case "subscription": {
+          const nameA = a.subscriptionId ? subscriptionNameById.get(a.subscriptionId) ?? "" : "";
+          const nameB = b.subscriptionId ? subscriptionNameById.get(b.subscriptionId) ?? "" : "";
+          return nameA.localeCompare(nameB) * dir;
+        }
         case "amount":
           return (a.amount - b.amount) * dir;
         default:
@@ -358,7 +380,7 @@ export default function TransactionsPage() {
       }
     });
     return arr;
-  }, [filtered, sortBy, sortDir]);
+  }, [filtered, sortBy, sortDir, subscriptionNameById]);
 
   // Reset/adjust pagination when filters change
   useEffect(() => {
@@ -543,6 +565,15 @@ export default function TransactionsPage() {
                         {r.description ? (
                           <div className="text-sm text-slate-600 mt-1">{r.description}</div>
                         ) : null}
+                        {r.subscriptionId ? (
+                          <button
+                            type="button"
+                            onClick={() => setActiveSubscriptionId(r.subscriptionId!)}
+                            className="mt-1 text-xs text-slate-600 underline decoration-dotted underline-offset-4 hover:text-slate-800"
+                          >
+                            {subscriptionNameById.get(r.subscriptionId) ?? "View subscription"}
+                          </button>
+                        ) : null}
                       </div>
                       <div className={`text-right font-semibold ${
                         r.type === "income" ? "text-emerald-600" : "text-rose-600"
@@ -581,6 +612,18 @@ export default function TransactionsPage() {
                         className="w-full"
                         placeholder="Category"
                       />
+                      <select
+                        className="border rounded px-2 py-1 text-sm w-full"
+                        value={draft?.subscriptionId ?? r.subscriptionId ?? ""}
+                        onChange={(e) => updateDraft({ subscriptionId: e.target.value })}
+                      >
+                        <option value="">No subscription</option>
+                        {subscriptionOptions.map((opt) => (
+                          <option key={opt.id} value={opt.id}>
+                            {opt.name}
+                          </option>
+                        ))}
+                      </select>
                       <input
                         className="border rounded px-2 py-1 text-sm w-full"
                         value={draft?.description ?? r.description ?? ""}
@@ -609,6 +652,7 @@ export default function TransactionsPage() {
                                 category: r.category,
                                 description: r.description,
                                 amount: r.amount,
+                                subscriptionId: r.subscriptionId ?? "",
                               });
                             }}
                           >
@@ -631,7 +675,11 @@ export default function TransactionsPage() {
                               if (!draft) return;
                               setSaving(true);
                               try {
-                                await updateTransaction({ id: r.id!, ...draft });
+                                await updateTransaction({
+                                  id: r.id!,
+                                  ...draft,
+                                  subscriptionId: draft.subscriptionId ?? "",
+                                });
                                 await refresh();
                                 setEditingId(null);
                                 setDraft(null);
@@ -680,6 +728,7 @@ export default function TransactionsPage() {
                   ["type", "Type"],
                   ["category", "Category"],
                   ["description", "Description"],
+                  ["subscription", "Subscription"],
                   ["amount", "Amount"],
                 ] as Array<[typeof sortBy, string]>).map(([key, label]) => (
                   <th key={key} className={`py-2 ${key === "amount" ? "px-3 text-right" : "pr-4"}`}>
@@ -789,6 +838,32 @@ export default function TransactionsPage() {
                         r.description
                       )}
                     </td>
+                    <td className="py-2 pr-4">
+                      {isEdit ? (
+                        <select
+                          className="border rounded px-2 py-1 text-sm w-48"
+                          value={draft?.subscriptionId ?? r.subscriptionId ?? ""}
+                          onChange={(e) => updateDraft({ subscriptionId: e.target.value })}
+                        >
+                          <option value="">No subscription</option>
+                          {subscriptionOptions.map((opt) => (
+                            <option key={opt.id} value={opt.id}>
+                              {opt.name}
+                            </option>
+                          ))}
+                        </select>
+                      ) : r.subscriptionId ? (
+                        <button
+                          type="button"
+                          onClick={() => setActiveSubscriptionId(r.subscriptionId!)}
+                          className="text-xs text-slate-600 underline decoration-dotted underline-offset-4 hover:text-slate-800"
+                        >
+                          {subscriptionNameById.get(r.subscriptionId) ?? "View subscription"}
+                        </button>
+                      ) : (
+                        <span className="text-slate-400">—</span>
+                      )}
+                    </td>
                     <td className="py-2 px-3 text-right font-medium">
                       {isEdit ? (
                         <AmountCalculatorInput
@@ -812,15 +887,19 @@ export default function TransactionsPage() {
                               className="px-2 py-1 rounded bg-slate-900 text-white text-xs disabled:opacity-50"
                               disabled={saving}
                               onClick={async () => {
-                                if (!draft) return;
-                                setSaving(true);
-                                try {
-                                  await updateTransaction({ id: r.id!, ...draft });
-                                  await refresh();
-                                  setEditingId(null);
-                                  setDraft(null);
-                                } catch (e) {
-                                  alert("Failed to save changes");
+                              if (!draft) return;
+                              setSaving(true);
+                              try {
+                                await updateTransaction({
+                                  id: r.id!,
+                                  ...draft,
+                                  subscriptionId: draft.subscriptionId ?? "",
+                                });
+                                await refresh();
+                                setEditingId(null);
+                                setDraft(null);
+                              } catch (e) {
+                                alert("Failed to save changes");
                                   console.error(e);
                                 } finally {
                                   setSaving(false);
@@ -858,6 +937,7 @@ export default function TransactionsPage() {
                                   category: r.category,
                                   description: r.description,
                                   amount: r.amount,
+                                  subscriptionId: r.subscriptionId ?? "",
                                 });
                               }}
                             >

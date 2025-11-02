@@ -6,7 +6,10 @@ import {
   updateRowById,
   deleteRowById,
   type SheetRowObject,
+  readTableByName,
+  updateRowByIdInSheet,
 } from "./_lib/sheets.js";
+import { SUBSCRIPTIONS_SHEET, normalizeSubscription } from "./subscriptions/_shared.js";
 
 type Tx = {
   id?: string;
@@ -166,7 +169,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       try {
-        await updateRowById(id, patch);
+        const updatedRow = await updateRowById(id, patch);
+        const subId = String(updatedRow["Subscription ID"] ?? "").trim();
+        const updatedDate = typeof updatedRow["Date"] === "string" ? updatedRow["Date"] : "";
+        if (subId && updatedDate) {
+          await maybeBumpSubscriptionLastLogged(subId, updatedDate);
+        }
         return res.status(200).json({ ok: true, id });
       } catch (error) {
         if (error instanceof Error && error.message === "not_found") {
@@ -205,4 +213,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const message = error instanceof Error ? error.message : "Server error";
     return res.status(500).json({ error: message });
   }
+}
+async function maybeBumpSubscriptionLastLogged(subscriptionId: string, date: string) {
+  if (!subscriptionId || !date) return;
+  const allSubs = await readTableByName(SUBSCRIPTIONS_SHEET);
+  const match = allSubs.find((row) => String(row.ID ?? row.id ?? "").trim() === subscriptionId);
+  if (!match) return;
+  const normalized = normalizeSubscription(match);
+  const prev = normalized.lastLoggedDate ? Date.parse(normalized.lastLoggedDate) : NaN;
+  const next = Date.parse(date);
+  if (!Number.isFinite(next)) return;
+  if (Number.isFinite(prev) && next <= prev) return;
+  await updateRowByIdInSheet(SUBSCRIPTIONS_SHEET, subscriptionId, {
+    "Last Logged Date": date,
+  });
 }

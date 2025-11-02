@@ -74,9 +74,51 @@ export default function SubscriptionsPage() {
     return map;
   }, [subscriptions, getSubscriptionMisses]);
 
+  const sortedSubscriptions = useMemo(() => {
+    return [...subscriptions].sort((a, b) => {
+      const missesA = missesById.get(a.id) ?? [];
+      const missesB = missesById.get(b.id) ?? [];
+      const nextA = missesA[0] ?? getNextDueDate(a) ?? a.lastLoggedDate ?? a.startDate ?? "";
+      const nextB = missesB[0] ?? getNextDueDate(b) ?? b.lastLoggedDate ?? b.startDate ?? "";
+      const tsA = nextA ? Date.parse(nextA) : Number.POSITIVE_INFINITY;
+      const tsB = nextB ? Date.parse(nextB) : Number.POSITIVE_INFINITY;
+      return tsA - tsB;
+    });
+  }, [subscriptions, missesById]);
+
+  const monthlySummary = useMemo(() => {
+    let total = 0;
+    const byCategory = new Map<string, number>();
+    sortedSubscriptions.forEach((sub) => {
+      if (sub.cadenceType !== "monthly") return;
+      if (sub.endDate && sub.endDate < today) return;
+      const categoryName =
+        categories.find((c) => c.id === sub.categoryId)?.name ?? "Uncategorized";
+      byCategory.set(categoryName, (byCategory.get(categoryName) ?? 0) + sub.amount);
+      total += sub.amount;
+    });
+    const breakdown = Array.from(byCategory.entries()).sort((a, b) => b[1] - a[1]);
+    return { total, breakdown };
+  }, [sortedSubscriptions, categories, today]);
+
+  const yearlySummary = useMemo(() => {
+    let total = 0;
+    const byCategory = new Map<string, number>();
+    sortedSubscriptions.forEach((sub) => {
+      if (sub.cadenceType !== "yearly") return;
+      if (sub.endDate && sub.endDate < today) return;
+      const categoryName =
+        categories.find((c) => c.id === sub.categoryId)?.name ?? "Uncategorized";
+      byCategory.set(categoryName, (byCategory.get(categoryName) ?? 0) + sub.amount);
+      total += sub.amount;
+    });
+    const breakdown = Array.from(byCategory.entries()).sort((a, b) => b[1] - a[1]);
+    return { total, breakdown };
+  }, [sortedSubscriptions, categories, today]);
+
   const needsLogging = useMemo(
     () =>
-      subscriptions
+      sortedSubscriptions
         .map((sub) => {
           const misses = missesById.get(sub.id);
           if (!misses || misses.length === 0) return null;
@@ -84,7 +126,7 @@ export default function SubscriptionsPage() {
         })
         .filter((x): x is { sub: Subscription; misses: string[] } => Boolean(x))
         .sort((a, b) => a.misses[0].localeCompare(b.misses[0])),
-    [subscriptions, missesById],
+    [sortedSubscriptions, missesById],
   );
 
   const startEdit = (sub: Subscription) => {
@@ -208,6 +250,51 @@ export default function SubscriptionsPage() {
     <div className="max-w-5xl space-y-6">
       <PageHeader lastUpdated={lastUpdated} onRefresh={onRefresh} isRefreshing={isRefreshing} />
 
+      <section className="grid gap-4 md:grid-cols-2">
+        <div className="rounded-lg border bg-white p-4 shadow-sm">
+          <div className="flex items-center justify-between text-sm text-slate-500">
+            <span>Monthly commitments</span>
+            <span>{monthlySummary.breakdown.length} categories</span>
+          </div>
+          <div className="mt-2 text-2xl font-semibold text-slate-900">
+            {fmtUSD(monthlySummary.total, 2)}
+          </div>
+          {monthlySummary.breakdown.length ? (
+            <ul className="mt-3 space-y-1 text-sm text-slate-600">
+              {monthlySummary.breakdown.map(([name, amount]) => (
+                <li key={name} className="flex justify-between">
+                  <span>{name}</span>
+                  <span>{fmtUSD(amount, 2)}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-3 text-xs text-slate-500">No active monthly subscriptions.</p>
+          )}
+        </div>
+        <div className="rounded-lg border bg-white p-4 shadow-sm">
+          <div className="flex items-center justify-between text-sm text-slate-500">
+            <span>Yearly commitments</span>
+            <span>{yearlySummary.breakdown.length} categories</span>
+          </div>
+          <div className="mt-2 text-2xl font-semibold text-slate-900">
+            {fmtUSD(yearlySummary.total, 2)}
+          </div>
+          {yearlySummary.breakdown.length ? (
+            <ul className="mt-3 space-y-1 text-sm text-slate-600">
+              {yearlySummary.breakdown.map(([name, amount]) => (
+                <li key={name} className="flex justify-between">
+                  <span>{name}</span>
+                  <span>{fmtUSD(amount, 2)}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-3 text-xs text-slate-500">No active yearly subscriptions.</p>
+          )}
+        </div>
+      </section>
+
       <section className="space-y-3">
         <h2 className="text-lg font-semibold text-slate-900">Needs logging</h2>
         {needsLogging.length === 0 ? (
@@ -253,13 +340,13 @@ export default function SubscriptionsPage() {
 
       <section className="space-y-3">
         <h2 className="text-lg font-semibold text-slate-900">All subscriptions</h2>
-        {subscriptions.length === 0 ? (
+        {sortedSubscriptions.length === 0 ? (
           <p className="text-sm text-slate-500">
             Create a subscription by adding a recurring transaction.
           </p>
         ) : (
           <div className="space-y-3">
-            {subscriptions.map((sub) => {
+            {sortedSubscriptions.map((sub) => {
               const misses = missesById.get(sub.id) ?? [];
               const nextDue =
                 misses.length > 0 ? misses[0] : getNextDueDate(sub) ?? sub.lastLoggedDate ?? null;
