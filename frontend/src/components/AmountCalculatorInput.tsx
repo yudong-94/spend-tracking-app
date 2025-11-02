@@ -336,6 +336,10 @@ function CalculatorPanel({
             className={`rounded border border-slate-200 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400 ${
               isCompact ? "px-2 py-1 text-xs" : "px-3 py-1.5 text-sm"
             } ${btn.className ?? ""}`}
+            onMouseDown={(event) => {
+              // Keep focus on the input so it doesn't briefly reformat while clicking buttons.
+              event.preventDefault();
+            }}
             onClick={btn.onPress}
           >
             {btn.label}
