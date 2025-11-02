@@ -178,17 +178,20 @@ function CalculatorPanel({
   onValueChange: (value: number) => void;
   isCompact: boolean;
 }) {
-  const [entry, setEntry] = useState<string>(() => formatValue(value));
+  const [entry, setEntry] = useState<string>(() => formatValue(value, { pad: true }));
   const [accumulator, setAccumulator] = useState<number | null>(null);
   const [pendingOp, setPendingOp] = useState<Operation | null>(null);
   const [repeatOp, setRepeatOp] = useState<Operation | null>(null);
   const [lastOperand, setLastOperand] = useState<number | null>(null);
   const [overwriteEntry, setOverwriteEntry] = useState(false);
   const skipEcho = useRef(false);
+  const padNextValue = useRef(true);
 
   useEffect(() => {
     skipEcho.current = true;
-    setEntry(formatValue(value));
+    const pad = padNextValue.current;
+    padNextValue.current = false;
+    setEntry(formatValue(value, { pad }));
   }, [value]);
 
   useEffect(() => {
@@ -204,12 +207,14 @@ function CalculatorPanel({
 
   const handleDigit = (digit: string) => {
     if (overwriteEntry) {
+      padNextValue.current = false;
       setEntry(digit);
       setOverwriteEntry(false);
       setRepeatOp(null);
       setLastOperand(null);
       return;
     }
+    padNextValue.current = false;
     setEntry((prev) => (prev === "0" ? digit : prev + digit));
     setRepeatOp(null);
     setLastOperand(null);
@@ -217,12 +222,14 @@ function CalculatorPanel({
 
   const handleDecimal = () => {
     if (overwriteEntry) {
+      padNextValue.current = false;
       setEntry("0.");
       setOverwriteEntry(false);
       setRepeatOp(null);
       setLastOperand(null);
       return;
     }
+    padNextValue.current = false;
     setEntry((prev) => {
       if (prev.includes(".")) return prev;
       return prev + ".";
@@ -232,6 +239,7 @@ function CalculatorPanel({
   };
 
   const handleToggleSign = () => {
+    padNextValue.current = false;
     setEntry((prev) => {
       if (prev.startsWith("-")) return prev.slice(1) || "0";
       if (prev === "0" || prev === "") return prev;
@@ -242,12 +250,14 @@ function CalculatorPanel({
   const handleOperator = (nextOp: Operation) => {
     const current = parseEntry(entry) ?? 0;
     if (accumulator === null || pendingOp === null) {
-      setAccumulator(current);
+      setAccumulator(roundToCents(current));
     } else {
       const result = compute(accumulator, current, pendingOp);
-      setAccumulator(result);
-      setEntry(formatValue(result));
-      onValueChange(result);
+      const rounded = roundToCents(result);
+      setAccumulator(rounded);
+      padNextValue.current = true;
+      setEntry(formatValue(rounded, { pad: true }));
+      onValueChange(rounded);
     }
     setPendingOp(nextOp);
     setRepeatOp(null);
@@ -262,9 +272,11 @@ function CalculatorPanel({
       const left = accumulator ?? current ?? 0;
       const right = current ?? lastOperand ?? 0;
       const result = compute(left, right, pendingOp);
-      setEntry(formatValue(result));
-      onValueChange(result);
-      setAccumulator(result);
+      const rounded = roundToCents(result);
+      padNextValue.current = true;
+      setEntry(formatValue(rounded, { pad: true }));
+      onValueChange(rounded);
+      setAccumulator(rounded);
       setRepeatOp(pendingOp);
       setLastOperand(right);
       setPendingOp(null);
@@ -276,15 +288,18 @@ function CalculatorPanel({
       const right = lastOperand;
       const left = parseEntry(entry) ?? value;
       const result = compute(left, right, repeatOp);
-      setEntry(formatValue(result));
-      onValueChange(result);
-      setAccumulator(result);
+      const rounded = roundToCents(result);
+      padNextValue.current = true;
+      setEntry(formatValue(rounded, { pad: true }));
+      onValueChange(rounded);
+      setAccumulator(rounded);
       setOverwriteEntry(true);
     }
   };
 
   const handleClear = () => {
-    setEntry("0");
+    padNextValue.current = true;
+    setEntry("0.00");
     setAccumulator(null);
     setPendingOp(null);
     setRepeatOp(null);
@@ -293,6 +308,7 @@ function CalculatorPanel({
   };
 
   const handleBackspace = () => {
+    padNextValue.current = false;
     setEntry((prev) => {
       if (overwriteEntry) {
         setOverwriteEntry(false);
@@ -377,7 +393,15 @@ function parseEntry(value: string): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function formatValue(value: number): string {
-  if (!Number.isFinite(value)) return "0";
+function roundToCents(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.round(value * 100) / 100;
+}
+
+function formatValue(value: number, options: { pad?: boolean } = {}): string {
+  if (!Number.isFinite(value)) return options.pad ? "0.00" : "0";
+  if (options.pad) {
+    return roundToCents(value).toFixed(2);
+  }
   return String(value);
 }
