@@ -184,12 +184,18 @@ function CalculatorPanel({
   const [repeatOp, setRepeatOp] = useState<Operation | null>(null);
   const [lastOperand, setLastOperand] = useState<number | null>(null);
   const [overwriteEntry, setOverwriteEntry] = useState(false);
+  const skipEcho = useRef(false);
 
   useEffect(() => {
+    skipEcho.current = true;
     setEntry(formatValue(value));
   }, [value]);
 
   useEffect(() => {
+    if (skipEcho.current) {
+      skipEcho.current = false;
+      return;
+    }
     const parsed = parseEntry(entry);
     if (parsed !== null) {
       onValueChange(parsed);
