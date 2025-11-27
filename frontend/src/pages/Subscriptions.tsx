@@ -9,7 +9,11 @@ import {
   type Subscription,
 } from "@/lib/api";
 import { fmtUSD } from "@/lib/format";
-import { getNextDueDate, todayLocalISO } from "@/lib/subscriptions";
+import {
+  getNextDueDate,
+  previousOccurrenceFrom,
+  todayLocalISO,
+} from "@/lib/subscriptions";
 
 type EditState = {
   id: string;
@@ -19,6 +23,8 @@ type EditState = {
   cadenceIntervalDays: string;
   categoryId: string;
   categoryName: string;
+  startDate: string;
+  nextDueDate: string;
   endDate: string;
   notes: string;
 };
@@ -36,6 +42,13 @@ const cadenceLabel = (sub: Subscription) => {
     default:
       return "";
   }
+};
+
+const isValidIsoDate = (value: string) => {
+  if (!value) return false;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = Date.parse(`${value}T00:00:00Z`);
+  return Number.isFinite(parsed);
 };
 
 export default function SubscriptionsPage() {
@@ -60,6 +73,7 @@ export default function SubscriptionsPage() {
     amount?: string;
     category?: string;
     cadenceInterval?: string;
+    nextDueDate?: string;
   } | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
 
@@ -131,6 +145,11 @@ export default function SubscriptionsPage() {
 
   const startEdit = (sub: Subscription) => {
     const category = categories.find((c) => c.id === sub.categoryId);
+    const misses = missesById.get(sub.id) ?? [];
+    const nextDue =
+      misses.length > 0
+        ? misses[0]
+        : getNextDueDate(sub) ?? sub.lastLoggedDate ?? sub.startDate ?? "";
     setEditingId(sub.id);
     setEditForm({
       id: sub.id,
@@ -143,6 +162,8 @@ export default function SubscriptionsPage() {
           : "",
       categoryId: sub.categoryId,
       categoryName: category?.name ?? "",
+      startDate: sub.startDate,
+      nextDueDate: nextDue ?? "",
       endDate: sub.endDate ?? "",
       notes: sub.notes ?? "",
     });
@@ -161,8 +182,13 @@ export default function SubscriptionsPage() {
 
   const saveEdit = async () => {
     if (!editForm) return;
-    const errors: { name?: string; amount?: string; category?: string; cadenceInterval?: string } =
-      {};
+    const errors: {
+      name?: string;
+      amount?: string;
+      category?: string;
+      cadenceInterval?: string;
+      nextDueDate?: string;
+    } = {};
     const name = editForm.name.trim();
     if (!name) errors.name = "Name is required";
 
@@ -185,6 +211,37 @@ export default function SubscriptionsPage() {
       }
     }
 
+    const nextDueDateValue = editForm.nextDueDate.trim();
+    const cadenceIntervalForNextDue =
+      editForm.cadenceType === "custom" ? cadenceIntervalNumber : undefined;
+    let lastLoggedDateToPersist: string | undefined;
+
+    if (!nextDueDateValue) {
+      errors.nextDueDate = "Next due date is required";
+    } else if (!isValidIsoDate(nextDueDateValue)) {
+      errors.nextDueDate = "Enter a valid date";
+    } else if (editForm.startDate && editForm.startDate > nextDueDateValue) {
+      errors.nextDueDate = "Next due date must be on or after the start date";
+    } else if (editForm.cadenceType === "custom" && cadenceIntervalForNextDue === undefined) {
+      errors.cadenceInterval =
+        errors.cadenceInterval ?? "Custom cadence requires a positive day interval";
+    } else if (!editForm.startDate) {
+      errors.nextDueDate = "Subscription is missing a start date";
+    } else if (nextDueDateValue === editForm.startDate) {
+      lastLoggedDateToPersist = "";
+    } else {
+      const previousOccurrence = previousOccurrenceFrom(
+        nextDueDateValue,
+        editForm.cadenceType,
+        cadenceIntervalForNextDue,
+      );
+      if (!previousOccurrence) {
+        errors.nextDueDate = "Unable to calculate a previous occurrence for that date";
+      } else {
+        lastLoggedDateToPersist = previousOccurrence;
+      }
+    }
+
     if (Object.keys(errors).length > 0) {
       setEditErrors(errors);
       return;
@@ -199,6 +256,7 @@ export default function SubscriptionsPage() {
         cadenceType: editForm.cadenceType,
         cadenceIntervalDays: cadenceIntervalNumber,
         categoryId: editForm.categoryId,
+        lastLoggedDate: lastLoggedDateToPersist,
         endDate: editForm.endDate || undefined,
         notes: editForm.notes.trim() ? editForm.notes.trim() : undefined,
       });
@@ -477,6 +535,23 @@ export default function SubscriptionsPage() {
 
                           <div className="grid gap-3 md:grid-cols-2">
                             <div className="grid gap-1">
+                              <label className="text-sm">Next due date</label>
+                              <input
+                                type="date"
+                                value={editForm.nextDueDate}
+                                onChange={(e) => {
+                                  handleEditChange({ nextDueDate: e.target.value });
+                                  setEditErrors((prev) =>
+                                    prev ? { ...prev, nextDueDate: undefined } : prev,
+                                  );
+                                }}
+                                className="border rounded p-2"
+                              />
+                              {editErrors?.nextDueDate ? (
+                                <p className="text-xs text-rose-600">{editErrors.nextDueDate}</p>
+                              ) : null}
+                            </div>
+                            <div className="grid gap-1">
                               <label className="text-sm">End date (optional)</label>
                               <input
                                 type="date"
@@ -485,15 +560,15 @@ export default function SubscriptionsPage() {
                                 className="border rounded p-2"
                               />
                             </div>
-                            <div className="grid gap-1">
-                              <label className="text-sm">Notes (optional)</label>
-                              <textarea
-                                value={editForm.notes}
-                                onChange={(e) => handleEditChange({ notes: e.target.value })}
-                                className="border rounded p-2"
-                                rows={2}
-                              />
-                            </div>
+                          </div>
+                          <div className="grid gap-1">
+                            <label className="text-sm">Notes (optional)</label>
+                            <textarea
+                              value={editForm.notes}
+                              onChange={(e) => handleEditChange({ notes: e.target.value })}
+                              className="border rounded p-2"
+                              rows={2}
+                            />
                           </div>
                         </div>
                       ) : (
