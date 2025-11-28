@@ -20,7 +20,11 @@ import {
   type CadenceType,
   type Subscription,
 } from "@/lib/api";
-import { getNextDueDate, todayLocalISO } from "@/lib/subscriptions";
+import {
+  getNextDueDate,
+  previousOccurrenceFrom,
+  todayLocalISO,
+} from "@/lib/subscriptions";
 
 const describeCadence = (sub: Subscription) => {
   switch (sub.cadenceType) {
@@ -39,6 +43,13 @@ const describeCadence = (sub: Subscription) => {
 
 const parseTypeValue = (value: string): "" | "income" | "expense" =>
   value === "income" || value === "expense" ? value : "";
+
+const isValidIsoDate = (value: string) => {
+  if (!value) return false;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = Date.parse(`${value}T00:00:00Z`);
+  return Number.isFinite(parsed);
+};
 
 export default function TransactionsPage() {
   const {
@@ -85,6 +96,8 @@ export default function TransactionsPage() {
     cadenceIntervalDays: string;
     categoryId: string;
     categoryName: string;
+    startDate: string;
+    nextDueDate: string;
     endDate: string;
     notes: string;
   };
@@ -99,6 +112,7 @@ export default function TransactionsPage() {
     amount?: string;
     category?: string;
     cadenceInterval?: string;
+    nextDueDate?: string;
   } | null>(null);
   const [subSaving, setSubSaving] = useState(false);
   const [subLogging, setSubLogging] = useState(false);
@@ -133,6 +147,13 @@ export default function TransactionsPage() {
   useEffect(() => {
     if (!activeSubscription) return;
     const category = categoryOptions.find((c) => c.id === activeSubscription.categoryId);
+    const nextDue =
+      subscriptionMisses.length > 0
+        ? subscriptionMisses[0]
+        : getNextDueDate(activeSubscription) ??
+          activeSubscription.lastLoggedDate ??
+          activeSubscription.startDate ??
+          "";
     setSubEdit({
       id: activeSubscription.id,
       name: activeSubscription.name,
@@ -144,11 +165,13 @@ export default function TransactionsPage() {
           : "",
       categoryId: activeSubscription.categoryId,
       categoryName: category?.name ?? "",
+      startDate: activeSubscription.startDate,
+      nextDueDate: nextDue ?? "",
       endDate: activeSubscription.endDate ?? "",
       notes: activeSubscription.notes ?? "",
     });
     setSubEditErrors(null);
-  }, [activeSubscription, categoryOptions]);
+  }, [activeSubscription, categoryOptions, subscriptionMisses]);
 
   useEffect(() => {
     if (!activeSubscriptionId) {
@@ -174,6 +197,7 @@ export default function TransactionsPage() {
       amount?: string;
       category?: string;
       cadenceInterval?: string;
+      nextDueDate?: string;
     } = {};
 
     const name = subEdit.name.trim();
@@ -198,6 +222,37 @@ export default function TransactionsPage() {
       }
     }
 
+    const nextDueDateValue = subEdit.nextDueDate.trim();
+    const cadenceIntervalForNextDue =
+      subEdit.cadenceType === "custom" ? cadenceIntervalNumber : undefined;
+    let lastLoggedDateToPersist: string | undefined;
+
+    if (!nextDueDateValue) {
+      errors.nextDueDate = "Next due date is required";
+    } else if (!isValidIsoDate(nextDueDateValue)) {
+      errors.nextDueDate = "Enter a valid date";
+    } else if (subEdit.startDate && subEdit.startDate > nextDueDateValue) {
+      errors.nextDueDate = "Next due date must be on or after the start date";
+    } else if (subEdit.cadenceType === "custom" && cadenceIntervalForNextDue === undefined) {
+      errors.cadenceInterval =
+        errors.cadenceInterval ?? "Custom cadence requires a positive day interval";
+    } else if (!subEdit.startDate) {
+      errors.nextDueDate = "Subscription is missing a start date";
+    } else if (nextDueDateValue === subEdit.startDate) {
+      lastLoggedDateToPersist = "";
+    } else {
+      const previousOccurrence = previousOccurrenceFrom(
+        nextDueDateValue,
+        subEdit.cadenceType,
+        cadenceIntervalForNextDue,
+      );
+      if (!previousOccurrence) {
+        errors.nextDueDate = "Unable to calculate a previous occurrence for that date";
+      } else {
+        lastLoggedDateToPersist = previousOccurrence;
+      }
+    }
+
     if (Object.keys(errors).length > 0) {
       setSubEditErrors(errors);
       return;
@@ -212,6 +267,7 @@ export default function TransactionsPage() {
         cadenceType: subEdit.cadenceType,
         cadenceIntervalDays: cadenceIntervalNumber,
         categoryId: subEdit.categoryId,
+        lastLoggedDate: lastLoggedDateToPersist,
         endDate: subEdit.endDate || undefined,
         notes: subEdit.notes.trim() ? subEdit.notes.trim() : undefined,
       });
@@ -1127,6 +1183,23 @@ export default function TransactionsPage() {
 
                   <div className="grid gap-3 md:grid-cols-2">
                     <div className="grid gap-1">
+                      <label className="text-sm">Next due date</label>
+                      <input
+                        type="date"
+                        value={subEdit.nextDueDate}
+                        onChange={(e) => {
+                          updateSubEdit({ nextDueDate: e.target.value });
+                          setSubEditErrors((prev) =>
+                            prev ? { ...prev, nextDueDate: undefined } : prev,
+                          );
+                        }}
+                        className="border rounded p-2"
+                      />
+                      {subEditErrors?.nextDueDate ? (
+                        <p className="text-xs text-rose-600">{subEditErrors.nextDueDate}</p>
+                      ) : null}
+                    </div>
+                    <div className="grid gap-1">
                       <label className="text-sm">End date (optional)</label>
                       <input
                         type="date"
@@ -1135,15 +1208,15 @@ export default function TransactionsPage() {
                         className="border rounded p-2"
                       />
                     </div>
-                    <div className="grid gap-1">
-                      <label className="text-sm">Notes (optional)</label>
-                      <textarea
-                        value={subEdit.notes}
-                        onChange={(e) => updateSubEdit({ notes: e.target.value })}
-                        className="border rounded p-2"
-                        rows={2}
-                      />
-                    </div>
+                  </div>
+                  <div className="grid gap-1">
+                    <label className="text-sm">Notes (optional)</label>
+                    <textarea
+                      value={subEdit.notes}
+                      onChange={(e) => updateSubEdit({ notes: e.target.value })}
+                      className="border rounded p-2"
+                      rows={2}
+                    />
                   </div>
                 </div>
 

@@ -59,6 +59,26 @@ export const nextOccurrenceFrom = (
   }
 };
 
+export const previousOccurrenceFrom = (
+  isoDate: string,
+  cadenceType: CadenceType,
+  interval?: number,
+): string => {
+  switch (cadenceType) {
+    case "weekly":
+      return addDays(isoDate, -7);
+    case "monthly":
+      return addMonths(isoDate, -1);
+    case "yearly":
+      return addYears(isoDate, -1);
+    case "custom":
+      if (!interval || interval <= 0) return "";
+      return addDays(isoDate, -interval);
+    default:
+      return "";
+  }
+};
+
 export const todayLocalISO = () => toLocalDate(new Date());
 
 export const computeMissedOccurrences = (sub: Subscription, untilDate?: string): string[] => {
