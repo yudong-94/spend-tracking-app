@@ -18,7 +18,6 @@ import {
   Legend,
 } from "recharts";
 import { estimateYAxisWidthFromMax, percentFormatter } from "@/lib/chart";
-import CombinedMonthlyChart from "@/components/CombinedMonthlyChart";
 import ComparisonTab from "@/components/ComparisonTab";
 import {
   QUICK_RANGE_OPTIONS,
@@ -945,14 +944,6 @@ export default function Analytics() {
             )}
           </div>
         </>
-      )}
-
-      {/* Monthly: Combined monthly */}
-      {tab === "monthly" && (hasIncomeData || hasExpenseData) && (
-        <div className="hidden md:block p-4 rounded-lg border bg-white">
-          <h3 className="font-medium mb-2">Monthly income vs expense (with net)</h3>
-          <CombinedMonthlyChart data={series} />
-        </div>
       )}
 
       {/* Annual Income */}
