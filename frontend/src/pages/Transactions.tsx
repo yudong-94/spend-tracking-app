@@ -365,6 +365,13 @@ export default function TransactionsPage() {
     setEnd(nextEnd);
     setPage(1);
   };
+  const clearFilters = () => {
+    setQ("");
+    setType("");
+    setCategories([]);
+    setShowRecurringOnly(false);
+    applyQuickRange("all");
+  };
 
   async function onRefresh() {
     setIsRefreshing(true);
@@ -529,7 +536,7 @@ export default function TransactionsPage() {
           />
           <label htmlFor="recurring-only">Recurring only</label>
         </div>
-        <div className="flex flex-wrap gap-2 basis-full">
+        <div className="flex flex-wrap items-center gap-2 basis-full">
           {QUICK_RANGE_OPTIONS.map((opt) => (
             <button
               key={opt.key}
@@ -545,6 +552,13 @@ export default function TransactionsPage() {
               {opt.label}
             </button>
           ))}
+          <button
+            type="button"
+            onClick={clearFilters}
+            className="rounded-full border border-slate-200 px-3 py-1 text-sm text-slate-600 transition hover:bg-slate-50"
+          >
+            Clear filters
+          </button>
         </div>
       </div>
 
@@ -566,6 +580,7 @@ export default function TransactionsPage() {
         applyQuickRange={applyQuickRange}
         recurringOnly={showRecurringOnly}
         setRecurringOnly={setShowRecurringOnly}
+        onClearFilters={clearFilters}
       />
 
       {/* Totals */}
@@ -1287,6 +1302,7 @@ function MobileFilters({
   applyQuickRange,
   recurringOnly,
   setRecurringOnly,
+  onClearFilters,
 }: {
   q: string;
   setQ: (v: string) => void;
@@ -1304,6 +1320,7 @@ function MobileFilters({
   applyQuickRange: (key: QuickRangeKey) => void;
   recurringOnly: boolean;
   setRecurringOnly: (v: boolean) => void;
+  onClearFilters: () => void;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -1383,6 +1400,16 @@ function MobileFilters({
             />
             Recurring only
           </label>
+          <button
+            type="button"
+            onClick={() => {
+              onClearFilters();
+              setOpen(false);
+            }}
+            className="w-full rounded border border-slate-200 px-3 py-2 text-sm text-slate-600 transition hover:bg-slate-50"
+          >
+            Clear filters
+          </button>
         </div>
       )}
     </div>
