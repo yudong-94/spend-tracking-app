@@ -173,6 +173,10 @@ export default function Analytics() {
     setStart(nextStart);
     setEnd(nextEnd);
   };
+  const clearFilters = () => {
+    applyQuickRange("all");
+    setCategories([]);
+  };
 
   const categoryOptions = useMemo(() => getCategories(), [getCategories]);
   const selectedCategoryDetails = useMemo(() => {
@@ -565,7 +569,7 @@ export default function Analytics() {
                 placeholder="All Categories"
               />
             </div>
-            <div className="flex flex-wrap gap-2 basis-full">
+            <div className="flex flex-wrap items-center gap-2 basis-full">
               {QUICK_RANGE_OPTIONS.map((opt) => (
                 <button
                   key={opt.key}
@@ -581,6 +585,13 @@ export default function Analytics() {
                   {opt.label}
                 </button>
               ))}
+              <button
+                type="button"
+                onClick={clearFilters}
+                className="rounded-full border border-slate-200 px-3 py-1 text-sm text-slate-600 transition hover:bg-slate-50"
+              >
+                Clear filters
+              </button>
             </div>
           </div>
         )}
@@ -600,6 +611,7 @@ export default function Analytics() {
         quickRange={quickRange}
         setQuickRange={setQuickRange}
         applyQuickRange={applyQuickRange}
+        onClearFilters={clearFilters}
       />
 
       {selectedCategoryDetails.length > 0 && tab !== "compare" ? (
@@ -1311,6 +1323,7 @@ function MobileAnalyticsFilters({
   quickRange,
   setQuickRange,
   applyQuickRange,
+  onClearFilters,
 }: {
   start: string;
   setStart: (v: string) => void;
@@ -1324,6 +1337,7 @@ function MobileAnalyticsFilters({
   quickRange: QuickRangeKey | "custom";
   setQuickRange: (key: QuickRangeKey | "custom") => void;
   applyQuickRange: (key: QuickRangeKey) => void;
+  onClearFilters: () => void;
 }) {
   const [showFilterPanel, setShowFilterPanel] = useState(false);
   const showFilters = tab !== "compare";
@@ -1404,6 +1418,16 @@ function MobileAnalyticsFilters({
                 className="w-full"
                 placeholder="All Categories"
               />
+              <button
+                type="button"
+                onClick={() => {
+                  onClearFilters();
+                  setShowFilterPanel(false);
+                }}
+                className="w-full rounded border border-slate-200 px-3 py-2 text-sm text-slate-600 transition hover:bg-slate-50"
+              >
+                Clear filters
+              </button>
             </div>
           )}
         </>
