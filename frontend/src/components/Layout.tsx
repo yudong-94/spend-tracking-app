@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
   Home,
@@ -12,6 +12,7 @@ import {
   CalendarClock,
   // DollarSign
 } from "lucide-react";
+import { useDataCache } from "@/state/data-cache";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -20,6 +21,16 @@ interface LayoutProps {
 const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const location = useLocation();
+  const { subscriptions, getSubscriptionMisses } = useDataCache();
+  const pendingSubscriptionCount = useMemo(
+    () =>
+      subscriptions.reduce((total, sub) => {
+        const misses = getSubscriptionMisses(sub);
+        return total + misses.length;
+      }, 0),
+    [subscriptions, getSubscriptionMisses],
+  );
+  const badgeLabel = pendingSubscriptionCount > 99 ? "99+" : String(pendingSubscriptionCount);
 
   const navigation = [
     { name: "Dashboard", href: "/", icon: Home },
@@ -68,7 +79,12 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                   }`}
                 >
                   <Icon className="mr-3 h-5 w-5" />
-                  {item.name}
+                  <span className="flex-1">{item.name}</span>
+                  {item.href === "/subscriptions" && pendingSubscriptionCount > 0 ? (
+                    <span className="ml-2 inline-flex min-w-[1.5rem] justify-center rounded-full bg-rose-600 px-2 py-0.5 text-xs font-semibold text-white">
+                      {badgeLabel}
+                    </span>
+                  ) : null}
                 </Link>
               );
             })}
@@ -99,7 +115,12 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                   }`}
                 >
                   <Icon className="mr-3 h-5 w-5" />
-                  {item.name}
+                  <span className="flex-1">{item.name}</span>
+                  {item.href === "/subscriptions" && pendingSubscriptionCount > 0 ? (
+                    <span className="ml-2 inline-flex min-w-[1.5rem] justify-center rounded-full bg-rose-600 px-2 py-0.5 text-xs font-semibold text-white">
+                      {badgeLabel}
+                    </span>
+                  ) : null}
                 </Link>
               );
             })}
