@@ -121,9 +121,9 @@ function CategoryChart({
                   fill={color}
                   radius={[0, 4, 4, 0]}
                   cursor={onCategoryClick ? "pointer" : undefined}
-                  onClick={(barData) => {
+                  onClick={(barData: { payload?: (typeof chartRows)[number] }) => {
                     if (!onCategoryClick) return;
-                    const payload = barData && "payload" in barData ? (barData.payload as typeof chartRows[number]) : null;
+                    const payload = barData?.payload;
                     if (!payload || payload.isAggregate) return;
                     onCategoryClick(payload.rawCategory);
                   }}
