@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useDataCache } from "@/state/data-cache";
 import PageHeader from "@/components/PageHeader";
 import {
