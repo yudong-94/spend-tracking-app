@@ -264,3 +264,64 @@ export async function logSubscriptionTransaction(payload: {
   );
   return jsonOrThrow<LogSubscriptionResponse>(res);
 }
+
+export type BenefitCadenceType = "weekly" | "monthly" | "quarterly" | "semi-annual" | "yearly" | "custom";
+
+export type Benefit = {
+  id: string;
+  name: string;
+  amount: number;
+  cadenceType: BenefitCadenceType;
+  cadenceIntervalDays?: number;
+  startDate: string;
+  validPeriodStart: string;
+  validPeriodEnd: string;
+  used: boolean;
+  creditCard?: string;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type NewBenefit = {
+  id: string;
+  name: string;
+  amount: number;
+  cadenceType: BenefitCadenceType;
+  cadenceIntervalDays?: number;
+  startDate: string;
+  creditCard?: string;
+};
+
+export async function listBenefits() {
+  const res = await fetch("/api/benefits", withAuth());
+  return jsonOrThrow<Benefit[]>(res);
+}
+
+export async function createBenefit(input: NewBenefit) {
+  const res = await fetch(
+    "/api/benefits",
+    withAuth({
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    }),
+  );
+  return jsonOrThrow<Benefit>(res);
+}
+
+export async function updateBenefit(input: Partial<NewBenefit> & { id: string; used?: boolean }) {
+  const res = await fetch(
+    "/api/benefits",
+    withAuth({
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    }),
+  );
+  return jsonOrThrow<Benefit>(res);
+}
+
+export async function deleteBenefit(id: string) {
+  const res = await fetch(buildUrl("/api/benefits", { id }), withAuth({ method: "DELETE" }));
+  return jsonOrThrow<{ ok: true; id: string }>(res);
+}

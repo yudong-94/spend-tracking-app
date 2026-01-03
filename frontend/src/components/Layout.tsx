@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
   Home,
@@ -10,9 +10,11 @@ import {
   TrendingUp,
   PiggyBank,
   CalendarClock,
+  Gift,
   // DollarSign
 } from "lucide-react";
 import { useDataCache } from "@/state/data-cache";
+import { listBenefits, type Benefit } from "@/lib/api";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -22,6 +24,22 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const location = useLocation();
   const { subscriptions, getSubscriptionMisses } = useDataCache();
+  const [benefits, setBenefits] = useState<Benefit[]>([]);
+
+  // Load benefits for badge count
+  useEffect(() => {
+    const loadBenefits = async () => {
+      try {
+        const data = await listBenefits();
+        setBenefits(data);
+      } catch (error) {
+        // Silently fail - badge just won't show
+        console.debug("Failed to load benefits for badge", error);
+      }
+    };
+    void loadBenefits();
+  }, [location.pathname]); // Reload when navigation changes
+
   const pendingSubscriptionCount = useMemo(
     () =>
       subscriptions.reduce((total, sub) => {
@@ -30,13 +48,28 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       }, 0),
     [subscriptions, getSubscriptionMisses],
   );
-  const badgeLabel = pendingSubscriptionCount > 99 ? "99+" : String(pendingSubscriptionCount);
+
+  const unusedBenefitsCount = useMemo(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    return benefits.filter(
+      (benefit) =>
+        !benefit.used &&
+        benefit.validPeriodStart &&
+        benefit.validPeriodEnd &&
+        today >= benefit.validPeriodStart &&
+        today <= benefit.validPeriodEnd,
+    ).length;
+  }, [benefits]);
+
+  const subscriptionBadgeLabel = pendingSubscriptionCount > 99 ? "99+" : String(pendingSubscriptionCount);
+  const benefitsBadgeLabel = unusedBenefitsCount > 99 ? "99+" : String(unusedBenefitsCount);
 
   const navigation = [
     { name: "Dashboard", href: "/", icon: Home },
     { name: "Analytics", href: "/analytics", icon: BarChart3 },
     { name: "Transactions", href: "/transactions", icon: List },
     { name: "Subscriptions", href: "/subscriptions", icon: CalendarClock },
+    { name: "Benefits", href: "/benefits", icon: Gift },
     { name: "Add Transaction", href: "/add", icon: Plus },
     { name: "Budget", href: "/budget", icon: PiggyBank },
   ];
@@ -82,7 +115,12 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                   <span className="flex-1">{item.name}</span>
                   {item.href === "/subscriptions" && pendingSubscriptionCount > 0 ? (
                     <span className="ml-2 inline-flex min-w-[1.5rem] justify-center rounded-full bg-rose-600 px-2 py-0.5 text-xs font-semibold text-white">
-                      {badgeLabel}
+                      {subscriptionBadgeLabel}
+                    </span>
+                  ) : null}
+                  {item.href === "/benefits" && unusedBenefitsCount > 0 ? (
+                    <span className="ml-2 inline-flex min-w-[1.5rem] justify-center rounded-full bg-amber-600 px-2 py-0.5 text-xs font-semibold text-white">
+                      {benefitsBadgeLabel}
                     </span>
                   ) : null}
                 </Link>
@@ -118,7 +156,12 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                   <span className="flex-1">{item.name}</span>
                   {item.href === "/subscriptions" && pendingSubscriptionCount > 0 ? (
                     <span className="ml-2 inline-flex min-w-[1.5rem] justify-center rounded-full bg-rose-600 px-2 py-0.5 text-xs font-semibold text-white">
-                      {badgeLabel}
+                      {subscriptionBadgeLabel}
+                    </span>
+                  ) : null}
+                  {item.href === "/benefits" && unusedBenefitsCount > 0 ? (
+                    <span className="ml-2 inline-flex min-w-[1.5rem] justify-center rounded-full bg-amber-600 px-2 py-0.5 text-xs font-semibold text-white">
+                      {benefitsBadgeLabel}
                     </span>
                   ) : null}
                 </Link>

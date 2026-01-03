@@ -1,5 +1,6 @@
 // frontend/src/pages/AddTransaction.tsx
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useDataCache } from "@/state/data-cache";
 import AmountCalculatorInput from "@/components/AmountCalculatorInput";
 import CategorySelect from "@/components/CategorySelect";
@@ -36,6 +37,7 @@ const generateSubscriptionId = () =>
 
 export default function AddTransaction() {
   const { categories: categoryList, txns, refresh, addLocal, upsertSubscription } = useDataCache();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   // Sort: expenses A→Z, then income A→Z
   const sortedOptions = useMemo(() => {
@@ -56,13 +58,26 @@ export default function AddTransaction() {
     return local.toISOString().slice(0, 10);
   };
 
+  // Pre-fill form from URL parameters (e.g., when coming from Benefits page)
+  const urlType = searchParams.get("type");
+  const urlCategory = searchParams.get("category");
+  const urlAmount = searchParams.get("amount");
+  const urlDescription = searchParams.get("description");
+
   const [form, setForm] = useState<FormTx>({
     Date: todayLocal(),
-    Type: "expense",
-    Category: "",
-    Amount: 0,
-    Description: "",
+    Type: (urlType === "income" ? "income" : "expense") as "income" | "expense",
+    Category: urlCategory || "",
+    Amount: urlAmount ? parseFloat(urlAmount) || 0 : 0,
+    Description: urlDescription || "",
   });
+
+  // Clear URL params after reading them
+  useEffect(() => {
+    if (urlType || urlCategory || urlAmount || urlDescription) {
+      setSearchParams({}, { replace: true });
+    }
+  }, [urlType, urlCategory, urlAmount, urlDescription, setSearchParams]);
   const [errors, setErrors] = useState<{
     category?: string;
     amount?: string;

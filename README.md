@@ -13,6 +13,7 @@ See `GOOGLE_SHEETS_SETUP.md` for a detailed walkthrough on preparing your spread
 - Transactions: instant search, multi-select category filters, quick ranges, inline edit/delete, recurring badge filter, and paginated tables
 - Add Transaction: keyboard-friendly form with favorite category chips, amount calculator, and a recurring toggle that creates linked subscriptions
 - Subscriptions: upcoming-charge summary, monthly/yearly totals by category, logging of missed occurrences, and inline edits that stay in sync with Sheets
+- Benefits: track credit card benefits (e.g., Uber credits, Lululemon credits) with cadence-based valid periods and usage tracking
 - Budget: automatic target based on the last 12 complete months, manual overrides, and cumulative pacing chart
 - Access control & caching: simple bearer-token gate, optimistic updates, and a localStorage-backed cache with manual refresh
 
@@ -37,6 +38,10 @@ See `GOOGLE_SHEETS_SETUP.md` for a detailed walkthrough on preparing your spread
 - Subscriptions: `ID | Name | Amount | Cadence Type | Cadence Interval (Days) | Category ID | Start Date | Last Logged Date | End Date | Notes | Created At | Updated At`
   - `Cadence Type` accepts `weekly`, `monthly`, `yearly`, or `custom` (use the interval column when custom)
   - `Last Logged Date` is automatically updated when you log or backfill a subscription charge
+- Benefits: `ID | Name | Amount | Cadence Type | Cadence Interval (Days) | Start Date | Valid Period Start | Valid Period End | Used | Credit Card | Created At | Updated At`
+  - `Cadence Type` accepts `weekly`, `monthly`, `quarterly`, `yearly`, or `custom` (use the interval column when custom)
+  - `Valid Period Start` and `Valid Period End` automatically refresh based on cadence and current date
+  - `Used` is a checkbox that resets to `false` when a new period starts
 - Categories: `ID | Name | Type`
 - Budgets (optional but required for budget features): `Month (YYYY-MM) | Amount | Notes`
   - You can add multiple override rows per month; amounts are summed
@@ -55,6 +60,7 @@ Configure these variables in Vercel (Project → Settings → Environment Variab
 | `GOOGLE_SHEETS_ID` | Spreadsheet ID from the Google Sheets URL | Yes | — |
 | `GOOGLE_SHEETS_TAB` | Transactions tab name | Optional | `Transactions` |
 | `GOOGLE_SHEETS_SUBSCRIPTIONS_TAB` | Subscriptions tab name | Optional | `Subscriptions` |
+| `GOOGLE_SHEETS_BENEFITS_TAB` | Benefits tab name | Optional | `Benefits` |
 | `GOOGLE_SHEETS_BUDGETS_TAB` | Budgets tab name | Optional | `Budgets` |
 | `APP_ACCESS_TOKEN` | Shared secret used by both the API and UI access gate | Yes (recommended) | — |
 
@@ -170,6 +176,10 @@ All routes require `Authorization: Bearer <APP_ACCESS_TOKEN>` if the token is se
 - `POST /api/subscriptions` → `{ id, name, amount, cadenceType, cadenceIntervalDays?, categoryId, startDate, lastLoggedDate?, endDate?, notes? }`
 - `PATCH /api/subscriptions` → `{ id, ...fields }`
 - `POST /api/subscriptions/log` → `{ subscriptionId, occurrenceDate }`
+- `GET /api/benefits`
+- `POST /api/benefits` → `{ id, name, amount, cadenceType, cadenceIntervalDays?, startDate }`
+- `PATCH /api/benefits` → `{ id, ...fields, used? }`
+- `DELETE /api/benefits?id=benefit-123`
 - `GET /api/summary?start=YYYY-MM-DD&end=YYYY-MM-DD`
 - `GET /api/breakdown?type=income|expense&start=YYYY-MM-DD&end=YYYY-MM-DD`
 - `GET /api/comparison?aStart=YYYY-MM-DD&aEnd=YYYY-MM-DD&bStart=YYYY-MM-DD&bEnd=YYYY-MM-DD`

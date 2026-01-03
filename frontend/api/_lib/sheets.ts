@@ -227,6 +227,64 @@ export async function deleteRowById(id: string) {
   });
 }
 
+/** Delete a row from any sheet by `ID`. */
+export async function deleteRowByIdInSheet(sheetName: string, id: string) {
+  const { sheets, spreadsheetId } = await getSheetsClient();
+
+  // Fetch headers to map ID column correctly
+  const headerRes = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: `${sheetName}!1:1`,
+  });
+  const headers: string[] = (headerRes.data.values?.[0] || []).map((h) => String(h).trim());
+
+  // Read all rows and locate the row index for the requested ID
+  const dataRes = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: `${sheetName}!A2:ZZZ`,
+  });
+  const rows = (dataRes.data.values ?? []) as SheetMatrix;
+  let foundIndex = -1;
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
+    const obj: SheetRowObject = {};
+    headers.forEach((h, idx) => {
+      obj[h] = (r[idx] ?? "") as SheetPrimitive;
+    });
+    const curId = String(obj["ID"] ?? obj["id"] ?? "").trim();
+    if (curId === id) {
+      foundIndex = i;
+      break;
+    }
+  }
+  if (foundIndex === -1) throw new Error("not_found");
+
+  // Lookup sheetId so we can issue a deleteDimension request
+  const meta = await sheets.spreadsheets.get({ spreadsheetId });
+  const sheet = meta.data.sheets?.find((s) => s.properties?.title === sheetName);
+  const sheetId = sheet?.properties?.sheetId;
+  if (sheetId === undefined) throw new Error("sheet_not_found");
+
+  const startIndex = foundIndex + 1; // +1 to skip header row
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId,
+    requestBody: {
+      requests: [
+        {
+          deleteDimension: {
+            range: {
+              sheetId,
+              dimension: "ROWS",
+              startIndex,
+              endIndex: startIndex + 1,
+            },
+          },
+        },
+      ],
+    },
+  });
+}
+
 /** Read any sheet into array of objects (header row determines keys). */
 export async function readSheetAsObjects(sheetName: string) {
   const { sheets, spreadsheetId } = await getSheetsClient();

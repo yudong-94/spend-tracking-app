@@ -231,9 +231,10 @@ export default function Analytics() {
   const hasExpenseData = useMemo(() => series.some((p) => p.expense > 0), [series]);
   const hasNetData = useMemo(() => series.some((p) => p.net !== 0), [series]);
   const mobileMonthlySeries = useMemo(() => {
-    const recent = series.slice(-12);
-    recent.reverse(); // latest first for mobile list
-    return recent.map((p) => ({
+    // Show all months, not just last 12
+    const all = [...series];
+    all.reverse(); // latest first for mobile list
+    return all.map((p) => ({
       id: p.month,
       label: formatMonthLabel(p.month),
       income: p.income ?? 0,
@@ -242,16 +243,16 @@ export default function Analytics() {
     }));
   }, [series]);
   const mobileMonthlyIncomeMax = useMemo(
-    () => Math.max(0, ...mobileMonthlySeries.map((row) => row.income)),
-    [mobileMonthlySeries],
+    () => Math.max(0, ...series.map((p) => p.income ?? 0)),
+    [series],
   );
   const mobileMonthlyExpenseMax = useMemo(
-    () => Math.max(0, ...mobileMonthlySeries.map((row) => row.expense)),
-    [mobileMonthlySeries],
+    () => Math.max(0, ...series.map((p) => p.expense ?? 0)),
+    [series],
   );
   const mobileMonthlyNetMax = useMemo(
-    () => Math.max(0, ...mobileMonthlySeries.map((row) => Math.abs(row.net))),
-    [mobileMonthlySeries],
+    () => Math.max(0, ...series.map((p) => Math.abs(p.net ?? 0))),
+    [series],
   );
 
   // KPI comparisons: vs last month and vs 12‑mo avg
@@ -470,34 +471,36 @@ export default function Analytics() {
     }
 
     return (
-      <ul className="space-y-3">
-        {rows.map((row) => {
-          const pct =
-            options.max > 0 ? Math.min(100, (Math.abs(row.value) / options.max) * 100) : 0;
-          return (
-            <li key={row.id} className="space-y-1">
-              <div className="flex items-baseline justify-between text-sm">
-                <span className="text-slate-600">{row.label}</span>
-                <span
-                  className={`font-medium tabular-nums ${options.getValueClass?.(row.value) ?? ""}`}
-                >
-                  {fmtUSD(row.value)}
-                </span>
-              </div>
-              <div className="h-2 w-full overflow-hidden rounded bg-slate-200">
-                <div
-                  aria-hidden="true"
-                  className="h-full rounded"
-                  style={{
-                    width: `${pct}%`,
-                    backgroundColor: options.getBarColor(row.value),
-                  }}
-                />
-              </div>
-            </li>
-          );
-        })}
-      </ul>
+      <div className="max-h-96 overflow-y-auto">
+        <ul className="space-y-3">
+          {rows.map((row) => {
+            const pct =
+              options.max > 0 ? Math.min(100, (Math.abs(row.value) / options.max) * 100) : 0;
+            return (
+              <li key={row.id} className="space-y-1">
+                <div className="flex items-baseline justify-between text-sm">
+                  <span className="text-slate-600">{row.label}</span>
+                  <span
+                    className={`font-medium tabular-nums ${options.getValueClass?.(row.value) ?? ""}`}
+                  >
+                    {fmtUSD(row.value)}
+                  </span>
+                </div>
+                <div className="h-2 w-full overflow-hidden rounded bg-slate-200">
+                  <div
+                    aria-hidden="true"
+                    className="h-full rounded"
+                    style={{
+                      width: `${pct}%`,
+                      backgroundColor: options.getBarColor(row.value),
+                    }}
+                  />
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
     );
   };
 
