@@ -107,8 +107,6 @@ export default function BenefitsPage() {
         today >= benefit.validPeriodStart &&
         today <= benefit.validPeriodEnd;
 
-      if (!isInValidPeriod) return; // Only count benefits within their valid period
-
       if (!byCard.has(cardName)) {
         byCard.set(cardName, {
           cardName,
@@ -116,8 +114,12 @@ export default function BenefitsPage() {
           unused: { count: 0, total: 0 },
         });
       }
-
       const cardData = byCard.get(cardName)!;
+
+      if (!isInValidPeriod) {
+        return; // Always show every card, but only count valid benefits
+      }
+
       if (benefit.used) {
         cardData.used.count += 1;
         cardData.used.total += benefit.amount;
@@ -725,4 +727,3 @@ export default function BenefitsPage() {
     </div>
   );
 }
-
