@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useDataCache } from "@/state/data-cache";
 import PageHeader from "@/components/PageHeader";
 import {
@@ -264,13 +265,31 @@ export default function BenefitsPage() {
     }
   };
 
+  const navigate = useNavigate();
+
   const handleToggleUsed = async (benefit: Benefit) => {
+    const newUsedState = !benefit.used;
+    
     try {
       await updateBenefit({
         id: benefit.id,
-        used: !benefit.used,
+        used: newUsedState,
       });
       await loadBenefits();
+
+      // If marking as used, navigate to Add Transaction with pre-filled data
+      if (newUsedState) {
+        const description = benefit.creditCard
+          ? `${benefit.creditCard} - ${benefit.name}`
+          : benefit.name;
+        const params = new URLSearchParams({
+          type: "income",
+          category: "Credit Card Rewards",
+          amount: benefit.amount.toFixed(2),
+          description: description,
+        });
+        navigate(`/add?${params.toString()}`);
+      }
     } catch (error) {
       console.error(error);
       alert("Failed to update benefit.");
