@@ -277,6 +277,7 @@ export type Benefit = {
   validPeriodStart: string;
   validPeriodEnd: string;
   used: boolean;
+  creditCard?: string;
   createdAt?: string;
   updatedAt?: string;
 };
@@ -288,6 +289,7 @@ export type NewBenefit = {
   cadenceType: BenefitCadenceType;
   cadenceIntervalDays?: number;
   startDate: string;
+  creditCard?: string;
 };
 
 export async function listBenefits() {

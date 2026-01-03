@@ -202,6 +202,7 @@ const validateCreateInput = (body: Record<string, unknown>): { ok: true; data: B
   const cadenceIntervalDaysRaw = parseNumber(body.cadenceIntervalDays);
   const cadenceIntervalDays = cadenceType === "custom" ? cadenceIntervalDaysRaw : undefined;
   const startDate = String(body.startDate ?? "").trim();
+  const creditCard = String(body.creditCard ?? "").trim() || undefined;
 
   if (!id) return { ok: false, error: "missing_id" };
   if (!name) return { ok: false, error: "missing_name" };
@@ -220,6 +221,7 @@ const validateCreateInput = (body: Record<string, unknown>): { ok: true; data: B
       cadenceType,
       cadenceIntervalDays,
       startDate,
+      creditCard,
     },
   };
 };
@@ -237,6 +239,7 @@ const validateUpdateInput = (
   if (body.used !== undefined) patch["Used"] = parseBoolean(body.used);
   if (body.validPeriodStart !== undefined) patch["Valid Period Start"] = parseDate(body.validPeriodStart);
   if (body.validPeriodEnd !== undefined) patch["Valid Period End"] = parseDate(body.validPeriodEnd);
+  if (body.creditCard !== undefined) patch["Credit Card"] = body.creditCard === null || body.creditCard === "" ? "" : String(body.creditCard);
 
   if (body.cadenceType !== undefined || body.cadenceIntervalDays !== undefined) {
     const cadenceType = parseCadenceType(body.cadenceType);
@@ -345,6 +348,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       "Valid Period Start": validPeriod.start,
       "Valid Period End": validPeriod.end,
       Used: false,
+      "Credit Card": result.data.creditCard ?? "",
       "Created At": now.toLocaleString(),
       "Updated At": now.toLocaleString(),
     };

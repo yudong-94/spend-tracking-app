@@ -18,6 +18,7 @@ type EditState = {
   cadenceType: BenefitCadenceType;
   cadenceIntervalDays: string;
   startDate: string;
+  creditCard: string;
 };
 
 const generateBenefitId = () =>
@@ -97,6 +98,7 @@ export default function BenefitsPage() {
           ? String(benefit.cadenceIntervalDays)
           : "",
       startDate: benefit.startDate,
+      creditCard: benefit.creditCard || "",
     });
     setEditErrors(null);
   };
@@ -111,6 +113,7 @@ export default function BenefitsPage() {
       cadenceType: "monthly",
       cadenceIntervalDays: "",
       startDate: today,
+      creditCard: "",
     });
     setEditErrors(null);
   };
@@ -171,6 +174,7 @@ export default function BenefitsPage() {
           cadenceType: editForm.cadenceType,
           cadenceIntervalDays: cadenceIntervalNumber,
           startDate: editForm.startDate,
+          creditCard: editForm.creditCard.trim() || undefined,
         };
         await createBenefit(newBenefit);
         await loadBenefits();
@@ -183,6 +187,7 @@ export default function BenefitsPage() {
           cadenceType: editForm.cadenceType,
           cadenceIntervalDays: cadenceIntervalNumber,
           startDate: editForm.startDate,
+          creditCard: editForm.creditCard.trim() || undefined,
         });
         await loadBenefits();
         setEditingId(null);
@@ -313,6 +318,19 @@ export default function BenefitsPage() {
                     <p className="text-xs text-rose-600">{editErrors.startDate}</p>
                   ) : null}
                 </div>
+              </div>
+
+              <div className="grid gap-1">
+                <label className="text-sm font-medium">Credit Card (optional)</label>
+                <input
+                  type="text"
+                  value={editForm.creditCard}
+                  onChange={(e) => {
+                    handleEditChange({ creditCard: e.target.value });
+                  }}
+                  className="rounded border border-slate-300 p-2"
+                  placeholder="e.g., Chase Sapphire Reserve"
+                />
               </div>
 
               <div className="grid gap-1">
@@ -525,6 +543,7 @@ export default function BenefitsPage() {
                           </div>
                           <div className="text-sm text-slate-600">
                             {fmtUSD(benefit.amount, 2)} · {cadenceLabel(benefit)}
+                            {benefit.creditCard ? ` · ${benefit.creditCard}` : ""}
                           </div>
                           <div className="text-xs text-slate-500">
                             Valid Period: {formatPeriod(benefit.validPeriodStart, benefit.validPeriodEnd)}

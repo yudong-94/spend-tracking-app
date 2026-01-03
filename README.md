@@ -38,7 +38,7 @@ See `GOOGLE_SHEETS_SETUP.md` for a detailed walkthrough on preparing your spread
 - Subscriptions: `ID | Name | Amount | Cadence Type | Cadence Interval (Days) | Category ID | Start Date | Last Logged Date | End Date | Notes | Created At | Updated At`
   - `Cadence Type` accepts `weekly`, `monthly`, `yearly`, or `custom` (use the interval column when custom)
   - `Last Logged Date` is automatically updated when you log or backfill a subscription charge
-- Benefits: `ID | Name | Amount | Cadence Type | Cadence Interval (Days) | Start Date | Valid Period Start | Valid Period End | Used | Created At | Updated At`
+- Benefits: `ID | Name | Amount | Cadence Type | Cadence Interval (Days) | Start Date | Valid Period Start | Valid Period End | Used | Credit Card | Created At | Updated At`
   - `Cadence Type` accepts `weekly`, `monthly`, `quarterly`, `yearly`, or `custom` (use the interval column when custom)
   - `Valid Period Start` and `Valid Period End` automatically refresh based on cadence and current date
   - `Used` is a checkbox that resets to `false` when a new period starts

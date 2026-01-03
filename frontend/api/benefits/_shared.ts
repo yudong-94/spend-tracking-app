@@ -13,6 +13,7 @@ export type BenefitRecord = {
   validPeriodStart: string;
   validPeriodEnd: string;
   used: boolean;
+  creditCard?: string;
   createdAt?: string;
   updatedAt?: string;
 };
@@ -57,6 +58,7 @@ export const normalizeBenefit = (raw: Record<string, unknown>): BenefitRecord =>
 
   const cadenceInterval = stripToNumber(get("Cadence Interval (Days)"));
 
+  const creditCardValue = String(get("Credit Card") ?? "").trim();
   const obj: BenefitRecord = {
     id: String(get("ID") ?? "").trim(),
     name: String(get("Name") ?? "").trim(),
@@ -67,6 +69,7 @@ export const normalizeBenefit = (raw: Record<string, unknown>): BenefitRecord =>
     validPeriodStart: toIsoDate(get("Valid Period Start")),
     validPeriodEnd: toIsoDate(get("Valid Period End")),
     used: parseBoolean(get("Used")),
+    creditCard: creditCardValue || undefined,
     createdAt: String(get("Created At") ?? "") || undefined,
     updatedAt: String(get("Updated At") ?? "") || undefined,
   };
@@ -81,5 +84,6 @@ export type BenefitCreateInput = {
   cadenceType: CadenceType;
   cadenceIntervalDays?: number;
   startDate: string;
+  creditCard?: string;
 };
 
