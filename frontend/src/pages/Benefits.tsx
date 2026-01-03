@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useDataCache } from "@/state/data-cache";
 import PageHeader from "@/components/PageHeader";
 import {
@@ -85,6 +85,54 @@ export default function BenefitsPage() {
   useEffect(() => {
     void loadBenefits();
   }, []);
+
+  const today = new Date().toISOString().slice(0, 10);
+
+  const creditCardSummary = useMemo(() => {
+    const byCard = new Map<
+      string,
+      {
+        cardName: string;
+        used: { count: number; total: number };
+        unused: { count: number; total: number };
+      }
+    >();
+
+    benefits.forEach((benefit) => {
+      const cardName = benefit.creditCard || "No card";
+      const isInValidPeriod =
+        benefit.validPeriodStart &&
+        benefit.validPeriodEnd &&
+        today >= benefit.validPeriodStart &&
+        today <= benefit.validPeriodEnd;
+
+      if (!isInValidPeriod) return; // Only count benefits within their valid period
+
+      if (!byCard.has(cardName)) {
+        byCard.set(cardName, {
+          cardName,
+          used: { count: 0, total: 0 },
+          unused: { count: 0, total: 0 },
+        });
+      }
+
+      const cardData = byCard.get(cardName)!;
+      if (benefit.used) {
+        cardData.used.count += 1;
+        cardData.used.total += benefit.amount;
+      } else {
+        cardData.unused.count += 1;
+        cardData.unused.total += benefit.amount;
+      }
+    });
+
+    return Array.from(byCard.values()).sort((a, b) => {
+      // Sort by card name, but put "No card" last
+      if (a.cardName === "No card") return 1;
+      if (b.cardName === "No card") return -1;
+      return a.cardName.localeCompare(b.cardName);
+    });
+  }, [benefits, today]);
 
   const startEdit = (benefit: Benefit) => {
     setEditingId(benefit.id);
@@ -251,6 +299,45 @@ export default function BenefitsPage() {
   return (
     <div className="max-w-5xl space-y-6">
       <PageHeader lastUpdated={lastUpdated} onRefresh={onRefresh} isRefreshing={isRefreshing} />
+
+      {creditCardSummary.length > 0 && (
+        <section className="grid gap-4 md:grid-cols-2">
+          {creditCardSummary.map((card) => {
+            const totalUsed = card.used.total;
+            const totalUnused = card.unused.total;
+            const totalBenefits = card.used.count + card.unused.count;
+
+            return (
+              <div key={card.cardName} className="rounded-lg border bg-white p-4 shadow-sm">
+                <div className="flex items-center justify-between text-sm text-slate-500">
+                  <span className="font-medium text-slate-700">{card.cardName}</span>
+                  <span>{totalBenefits} benefit{totalBenefits !== 1 ? "s" : ""}</span>
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-4">
+                  <div>
+                    <div className="text-xs text-slate-500">Used</div>
+                    <div className="mt-1 text-lg font-semibold text-slate-900">
+                      {fmtUSD(totalUsed, 2)}
+                    </div>
+                    <div className="mt-1 text-xs text-slate-600">
+                      {card.used.count} benefit{card.used.count !== 1 ? "s" : ""}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-slate-500">Unused</div>
+                    <div className="mt-1 text-lg font-semibold text-emerald-600">
+                      {fmtUSD(totalUnused, 2)}
+                    </div>
+                    <div className="mt-1 text-xs text-slate-600">
+                      {card.unused.count} benefit{card.unused.count !== 1 ? "s" : ""}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </section>
+      )}
 
       <section className="space-y-3">
         <div className="flex items-center justify-between">
