@@ -17,7 +17,14 @@ import {
 
 const parseCadenceType = (value: unknown): CadenceType => {
   const str = String(value ?? "").trim().toLowerCase();
-  if (str === "weekly" || str === "monthly" || str === "quarterly" || str === "yearly" || str === "custom")
+  if (
+    str === "weekly" ||
+    str === "monthly" ||
+    str === "quarterly" ||
+    str === "semi-annual" ||
+    str === "yearly" ||
+    str === "custom"
+  )
     return str as CadenceType;
   return "monthly";
 };
@@ -76,6 +83,10 @@ const calculateValidPeriod = (
         firstEnd.setUTCMonth(start.getUTCMonth() + 3);
         firstEnd.setUTCDate(0);
         break;
+      case "semi-annual":
+        firstEnd.setUTCMonth(start.getUTCMonth() + 6);
+        firstEnd.setUTCDate(0);
+        break;
       case "yearly":
         firstEnd.setUTCFullYear(start.getUTCFullYear() + 1);
         firstEnd.setUTCDate(0);
@@ -131,6 +142,18 @@ const calculateValidPeriod = (
       periodStart.setUTCMonth(start.getUTCMonth() + quartersPassed * 3);
       periodEnd = new Date(periodStart);
       periodEnd.setUTCMonth(periodStart.getUTCMonth() + 3);
+      periodEnd.setUTCDate(0);
+      break;
+    }
+    case "semi-annual": {
+      const monthsDiff =
+        (refDate.getUTCFullYear() - start.getUTCFullYear()) * 12 +
+        (refDate.getUTCMonth() - start.getUTCMonth());
+      const semiAnnualsPassed = Math.floor(monthsDiff / 6);
+      periodStart = new Date(start);
+      periodStart.setUTCMonth(start.getUTCMonth() + semiAnnualsPassed * 6);
+      periodEnd = new Date(periodStart);
+      periodEnd.setUTCMonth(periodStart.getUTCMonth() + 6);
       periodEnd.setUTCDate(0);
       break;
     }

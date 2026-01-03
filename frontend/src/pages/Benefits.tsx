@@ -33,6 +33,8 @@ const cadenceLabel = (benefit: Benefit) => {
       return "Monthly";
     case "quarterly":
       return "Quarterly";
+    case "semi-annual":
+      return "Semi-annual";
     case "yearly":
       return "Yearly";
     case "custom":
@@ -331,6 +333,7 @@ export default function BenefitsPage() {
                     <option value="weekly">Weekly</option>
                     <option value="monthly">Monthly</option>
                     <option value="quarterly">Quarterly</option>
+                    <option value="semi-annual">Semi-annual</option>
                     <option value="yearly">Yearly</option>
                     <option value="custom">Custom days interval</option>
                   </select>

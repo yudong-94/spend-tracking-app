@@ -265,7 +265,7 @@ export async function logSubscriptionTransaction(payload: {
   return jsonOrThrow<LogSubscriptionResponse>(res);
 }
 
-export type BenefitCadenceType = "weekly" | "monthly" | "quarterly" | "yearly" | "custom";
+export type BenefitCadenceType = "weekly" | "monthly" | "quarterly" | "semi-annual" | "yearly" | "custom";
 
 export type Benefit = {
   id: string;

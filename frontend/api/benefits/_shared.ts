@@ -1,7 +1,7 @@
 export const BENEFITS_SHEET =
   process.env.GOOGLE_SHEETS_BENEFITS_TAB || "Benefits";
 
-export type CadenceType = "weekly" | "monthly" | "quarterly" | "yearly" | "custom";
+export type CadenceType = "weekly" | "monthly" | "quarterly" | "semi-annual" | "yearly" | "custom";
 
 export type BenefitRecord = {
   id: string;
@@ -17,7 +17,7 @@ export type BenefitRecord = {
   updatedAt?: string;
 };
 
-const CADENCE_TYPES: CadenceType[] = ["weekly", "monthly", "quarterly", "yearly", "custom"];
+const CADENCE_TYPES: CadenceType[] = ["weekly", "monthly", "quarterly", "semi-annual", "yearly", "custom"];
 
 const stripToNumber = (value: unknown) =>
   typeof value === "number"
