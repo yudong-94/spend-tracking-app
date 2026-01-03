@@ -301,41 +301,64 @@ export default function BenefitsPage() {
       <PageHeader lastUpdated={lastUpdated} onRefresh={onRefresh} isRefreshing={isRefreshing} />
 
       {creditCardSummary.length > 0 && (
-        <section className="grid gap-4 md:grid-cols-2">
-          {creditCardSummary.map((card) => {
-            const totalUsed = card.used.total;
-            const totalUnused = card.unused.total;
-            const totalBenefits = card.used.count + card.unused.count;
+        <section className="rounded-lg border bg-white shadow-sm overflow-hidden">
+          <div className="px-4 py-3 border-b border-slate-200">
+            <h3 className="text-sm font-semibold text-slate-900">Benefits by Credit Card</h3>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-slate-50">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">
+                    Credit Card
+                  </th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold text-slate-700 uppercase tracking-wider">
+                    Used
+                  </th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold text-slate-700 uppercase tracking-wider">
+                    Unused
+                  </th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold text-slate-700 uppercase tracking-wider">
+                    Total
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200">
+                {creditCardSummary.map((card) => {
+                  const totalUsed = card.used.total;
+                  const totalUnused = card.unused.total;
+                  const totalAmount = totalUsed + totalUnused;
+                  const totalBenefits = card.used.count + card.unused.count;
 
-            return (
-              <div key={card.cardName} className="rounded-lg border bg-white p-4 shadow-sm">
-                <div className="flex items-center justify-between text-sm text-slate-500">
-                  <span className="font-medium text-slate-700">{card.cardName}</span>
-                  <span>{totalBenefits} benefit{totalBenefits !== 1 ? "s" : ""}</span>
-                </div>
-                <div className="mt-3 grid grid-cols-2 gap-4">
-                  <div>
-                    <div className="text-xs text-slate-500">Used</div>
-                    <div className="mt-1 text-lg font-semibold text-slate-900">
-                      {fmtUSD(totalUsed, 2)}
-                    </div>
-                    <div className="mt-1 text-xs text-slate-600">
-                      {card.used.count} benefit{card.used.count !== 1 ? "s" : ""}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-slate-500">Unused</div>
-                    <div className="mt-1 text-lg font-semibold text-emerald-600">
-                      {fmtUSD(totalUnused, 2)}
-                    </div>
-                    <div className="mt-1 text-xs text-slate-600">
-                      {card.unused.count} benefit{card.unused.count !== 1 ? "s" : ""}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+                  return (
+                    <tr key={card.cardName} className="hover:bg-slate-50">
+                      <td className="px-4 py-3 text-sm font-medium text-slate-900">
+                        {card.cardName}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-right">
+                        <div className="font-medium text-slate-900">{fmtUSD(totalUsed, 2)}</div>
+                        <div className="text-xs text-slate-500">
+                          {card.used.count} benefit{card.used.count !== 1 ? "s" : ""}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-right">
+                        <div className="font-medium text-emerald-600">{fmtUSD(totalUnused, 2)}</div>
+                        <div className="text-xs text-slate-500">
+                          {card.unused.count} benefit{card.unused.count !== 1 ? "s" : ""}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-right">
+                        <div className="font-semibold text-slate-900">{fmtUSD(totalAmount, 2)}</div>
+                        <div className="text-xs text-slate-500">
+                          {totalBenefits} benefit{totalBenefits !== 1 ? "s" : ""}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </section>
       )}
 
